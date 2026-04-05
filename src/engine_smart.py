@@ -1,0 +1,450 @@
+import numpy as np
+import pickle
+import random
+import math
+from collections import defaultdict
+from PIL import Image, ImageOps, ImageDraw
+from tqdm import tqdm
+from scipy.spatial.distance import cdist
+from scipy.spatial import cKDTree 
+import skimage.color
+
+class SmartEngine:
+    def __init__(self, index_path="data/smart_index.pkl"):
+        print(f"Loading Smart Index: {index_path}...")
+        try:
+            with open(index_path, "rb") as f:
+                data = pickle.load(f)
+            
+            self.paths = data["paths"]
+            self.features = data["features"] 
+            
+            self.settings = {
+                "allow_mirror": True,
+                "tile_size": 100,
+                "freq_penalty": 30.0,
+            }
+            print(f"Smart Engine Ready. Images: {len(self.paths)}")
+        except FileNotFoundError:
+            print("Error: Smart Index not found. Run 'Update / Create Index' in GUI.")
+            self.paths = []
+            self.features = []
+
+    # ==========================================
+    # MATEMATYKA KITE GRID (DLA EINSTEIN HAT)
+    # ==========================================
+    def _get_kite_poly(self, cx, cy, s, k):
+        """Zwraca 4 wierzchołki pojedynczego latawca na siatce heksagonalnej (Flat-Topped)."""
+        r3 = math.sqrt(3)
+        def P(idx):
+            angle = math.radians(idx * 60)
+            return (cx + s * math.cos(angle), cy + s * math.sin(angle))
+            
+        def M(idx):
+            angle = math.radians(idx * 60 + 30)
+            return (cx + s * r3/2 * math.cos(angle), cy + s * r3/2 * math.sin(angle))
+
+        # Latawiec: Środek Hex, Środek krawędzi (k-1), Wierzchołek (k), Środek krawędzi (k)
+        return [(cx, cy), M((k-1)%6), P(k), M(k)]
+
+    def _transform_kite_index(self, base_q, base_r, base_k, offset_q, offset_r, rot, flip):
+        """Topologiczna transformacja współrzędnych osiowych (q,r,k) latawca."""
+        q, r, k = base_q, base_r, base_k
+        
+        # 1. Odbicie lustrzane względem osi poziomej
+        if flip:
+            q, r = q, -q - r
+            k = (6 - k) % 6
+            
+        # 2. Rotacja (wielokrotności 60 stopni)
+        for _ in range(rot):
+            q, r = -r, q + r
+            k = (k + 1) % 6
+            
+        # 3. Przesunięcie
+        return (q + offset_q, r + offset_r, k)
+
+    # ==========================================
+    # STANDARDOWE KSZTAŁTY I MASKI
+    # ==========================================
+    def _get_shape_mask(self, shape_type, w, h, flipped=False, padding=1.0):
+        scale_aa = 4
+        W, H = int(w * scale_aa), int(h * scale_aa)
+        mask = Image.new("L", (W, H), 0)
+        draw = ImageDraw.Draw(mask)
+        cx, cy = W/2, H/2
+        
+        pad_w = W * (1 - padding) / 2
+        pad_h = H * (1 - padding) / 2
+        
+        if shape_type == "square" or shape_type == "rectangle_3x1" or shape_type == "brick_wall":
+            draw.rectangle((pad_w, pad_h, W-pad_w, H-pad_h), fill=255)
+        elif "hexagon" in shape_type and "romb" not in shape_type:
+            pts = [(cx, pad_h), (W-pad_w, H*0.25+pad_h/2), (W-pad_w, H*0.75-pad_h/2),
+                   (cx, H-pad_h), (pad_w, H*0.75-pad_h/2), (pad_w, H*0.25+pad_h/2)]
+            draw.polygon(pts, fill=255)
+        elif "romb" in shape_type and "hexagon" not in shape_type:
+            pts = [(cx, pad_h), (W-pad_w, cy), (cx, H-pad_h), (pad_w, cy)]
+            draw.polygon(pts, fill=255)
+        elif shape_type == "mask_top":
+            pts = [(cx, cy), (W - pad_w, H*0.25 + pad_h/2), (cx, 0 + pad_h), (0 + pad_w, H*0.25 + pad_h/2)]
+            draw.polygon(pts, fill=255)
+        elif shape_type == "mask_left":
+            pts = [(cx, cy), (0 + pad_w, H*0.25 + pad_h/2), (0 + pad_w, H*0.75 - pad_h/2), (cx, H - pad_h)]
+            draw.polygon(pts, fill=255)
+        elif shape_type == "mask_right":
+            pts = [(cx, cy), (cx, H - pad_h), (W - pad_w, H*0.75 - pad_h/2), (W - pad_w, H*0.25 + pad_h/2)]
+            draw.polygon(pts, fill=255)
+        elif shape_type == "triangle":
+            if not flipped: pts = [(cx, pad_h), (W-pad_w, H-pad_h), (pad_w, H-pad_h)]
+            else: pts = [(pad_w, pad_h), (W-pad_w, pad_h), (cx, H-pad_h)]
+            draw.polygon(pts, fill=255)
+
+        return mask.resize((w, h), Image.Resampling.LANCZOS)
+
+    def _smart_crop(self, img, target_w, target_h):
+        src_w, src_h = img.size
+        src_ratio = src_w / src_h; tgt_ratio = target_w / target_h
+        if src_ratio > tgt_ratio:
+            new_w = int(src_h * tgt_ratio); offset = (src_w - new_w) // 2
+            box = (offset, 0, offset + new_w, src_h)
+        else:
+            new_h = int(src_w / tgt_ratio); offset = (src_h - new_h) // 2
+            box = (0, offset, src_w, offset + new_h)
+        return img.crop(box).resize((target_w, target_h), Image.Resampling.LANCZOS)
+
+    def create_mosaic(self, target_path, output_path, resolution_key, shape_mode, tile_scale, border_mode=False):
+        if not self.paths:
+            print("ERROR: Index not loaded.")
+            return
+
+        res_map = {"2K": 1920, "4K": 3840, "8K": 7680, "16K": 15360}
+        target_long = res_map.get(resolution_key, 3840)
+        target = Image.open(target_path).convert("RGB")
+        img_w, img_h = target.size
+        scale_res = target_long / max(img_w, img_h)
+        target = target.resize((int(img_w * scale_res), int(img_h * scale_res)), Image.Resampling.LANCZOS)
+        target_w, target_h = target.size
+        
+        base_s = int(100 * tile_scale)
+        if base_s < 10: base_s = 10
+        render_padding = 0.94 if border_mode else 1.02 
+        
+        final_mosaic = Image.new("RGBA", (target_w, target_h), (0,0,0,255))
+        sectors_data = []
+
+        # ==========================================
+        # EINSTEIN HAT (TOPOLOGICAL EDGE-MATCHING POLYKITE)
+        # ==========================================
+        if shape_mode == "einstein_hat":
+            print(f"Mode: Einstein Hat (Math Polykite). Borders: {border_mode}")
+            
+            s = base_s # Długość boku pojedynczego heksagonu
+            r3 = math.sqrt(3)
+            
+            # 1. Ścisła definicja matematyczna Einstein Hat (8 Latawców na osiach HexGrida)
+            # q, r - współrzędne osiowe heksagonu. k - indeks latawca (0-5)
+            BASE_HAT = [
+                (0, 0, 0), (0, 0, 1), (0, 0, 2), (0, 0, 3), (0, 0, 5), # 5 latawców centrum
+                (0, 1, 4), (0, 1, 5),  # 2 latawce "głowy"
+                (1, 0, 3)              # 1 latawiec "stopy"
+            ]
+            
+            # 2. Generowanie wirtualnej siatki latawców na kartezjańskim płótnie obrazka
+            target_kites = set()
+            kite_centroids = {}
+            
+            range_q = int(target_w / (1.5 * s)) + 3
+            range_r = int(target_h / (r3 * s)) + 3
+            
+            print("Building perfect Kite Grid...")
+            for q in range(-range_q, range_q):
+                for r in range(-range_r, range_r):
+                    # Kartezjański środek heksagonu (Flat-topped hex grid)
+                    cx = 1.5 * s * q
+                    cy = r3 * s * (r + q / 2.0)
+                    
+                    if -2*s < cx < target_w + 2*s and -2*s < cy < target_h + 2*s:
+                        for k in range(6):
+                            poly = self._get_kite_poly(cx, cy, s, k)
+                            cent_x = sum(p[0] for p in poly) / 4
+                            cent_y = sum(p[1] for p in poly) / 4
+                            
+                            # Zachowaj tylko te latawce, które leżą w obrębie zdjęcia
+                            if 0 <= cent_x < target_w and 0 <= cent_y < target_h:
+                                target_kites.add((q, r, k))
+                            kite_centroids[(q, r, k)] = (cent_x, cent_y)
+
+            uncovered_targets = list(target_kites)
+            # Sortowanie spiralne od środka na zewnątrz (aby mozaika idealnie formowała się w centrum)
+            uncovered_targets.sort(key=lambda k: (kite_centroids[k][0] - target_w/2)**2 + (kite_centroids[k][1] - target_h/2)**2)
+            
+            occupied = set()
+            placed_hats = []
+            
+            # Wstępne mapowanie dla drastycznego przyspieszenia (Słownik: latawiec -> lista pasujących kapeluszy)
+            kite_to_hats = defaultdict(list)
+            for target_k in target_kites:
+                t_q, t_r, t_k = target_k
+                # Sprawdzamy wszystkie 96 orientacji
+                for rot in range(6):
+                    for flip in [False, True]:
+                        for b_idx in range(8):
+                            bq, br, bk = BASE_HAT[b_idx]
+                            # Obliczamy gdzie wylądowałby punkt zaczepienia
+                            trans_q, trans_r, trans_k = self._transform_kite_index(bq, br, bk, 0, 0, rot, flip)
+                            
+                            if trans_k == t_k:
+                                dq = t_q - trans_q
+                                dr = t_r - trans_r
+                                hat = tuple(self._transform_kite_index(x, y, z, dq, dr, rot, flip) for x, y, z in BASE_HAT)
+                                if hat not in kite_to_hats[target_k]:
+                                    kite_to_hats[target_k].append(hat)
+
+            # 3. Solver Zachłanny Krawędź-do-Krawędzi (Exact Cover Approximation)
+            for k_target in tqdm(uncovered_targets, desc="Assembling Hats Edge-to-Edge"):
+                if k_target in occupied:
+                    continue
+                
+                valid_hats = []
+                for hat in kite_to_hats[k_target]:
+                    if not any(k in occupied for k in hat):
+                        valid_hats.append(hat)
+                
+                if valid_hats:
+                    chosen_hat = random.choice(valid_hats) # Wariacja zapobiega powstawaniu powtarzalnych super-wzorów
+                    placed_hats.append(chosen_hat)
+                    for k in chosen_hat:
+                        occupied.add(k)
+                else:
+                    # Łatanie pojedynczych dziur powstających wyłącznie przy samym marginesie obrazu
+                    placed_hats.append((k_target,))
+                    occupied.add(k_target)
+
+            # 4. Ekstrakcja Kształtów, Masek i Kolorów
+            print("Rendering 8-Kite Hats...")
+            for i_hat, hat_kites in enumerate(placed_hats):
+                hat_polys = []
+                for q, r, k in hat_kites:
+                    cx = 1.5 * s * q
+                    cy = r3 * s * (r + q / 2.0)
+                    poly = self._get_kite_poly(cx, cy, s, k)
+                    hat_polys.append(poly)
+                
+                # Ognisko kapelusza (środek ciężkości całego 13-kąta)
+                all_pts = [p for poly in hat_polys for p in poly]
+                hat_cx = sum(p[0] for p in all_pts) / len(all_pts)
+                hat_cy = sum(p[1] for p in all_pts) / len(all_pts)
+                
+                for k_idx, poly in enumerate(hat_polys):
+                    # GROUT: Skalowanie latawców do ŚRODKA KAPELUSZA. 
+                    # Zapewnia to integralność wewnętrzną Kapelusza, a ramkę tworzy na obrysie figury.
+                    padded_poly = []
+                    for px, py in poly:
+                        nx = hat_cx + (px - hat_cx) * render_padding
+                        ny = hat_cy + (py - hat_cy) * render_padding
+                        # Odbicie do układu współrzędnych obrazka (0,0 w lewym górnym rogu)
+                        padded_poly.append((nx, target_h - ny))
+                        
+                    min_x = min(p[0] for p in padded_poly)
+                    max_x = max(p[0] for p in padded_poly)
+                    min_y = min(p[1] for p in padded_poly)
+                    max_y = max(p[1] for p in padded_poly)
+                    
+                    bw, bh = int(max_x - min_x), int(max_y - min_y)
+                    if bw <= 0 or bh <= 0: continue
+                    
+                    safe_box = (int(min_x), int(min_y), int(max_x), int(max_y))
+                    sb = (max(0, safe_box[0]), max(0, safe_box[1]), min(target_w, safe_box[2]), min(target_h, safe_box[3]))
+                    if sb[2] <= sb[0] or sb[3] <= sb[1]: continue
+                    
+                    s_img = target.crop(sb)
+                    if s_img.size != (bw, bh):
+                        tmp = Image.new("RGB", (bw, bh), (0,0,0))
+                        tmp.paste(s_img, (sb[0] - safe_box[0], sb[1] - safe_box[1]))
+                        s_img = tmp
+                        
+                    mat = s_img.resize((3, 3), Image.Resampling.BOX)
+                    lab = skimage.color.rgb2lab(np.array(mat)/255.0).flatten()
+                    lab[0::3] /= 100.0; lab[1::3] = (lab[1::3]+128)/255.0; lab[2::3] = (lab[2::3]+128)/255.0
+                    
+                    # Rysowanie idealnie dopasowanej maski latawca
+                    mask_kite = Image.new("L", (bw, bh), 0)
+                    draw_k = ImageDraw.Draw(mask_kite)
+                    shifted_poly = [(p[0] - min_x, p[1] - min_y) for p in padded_poly]
+                    draw_k.polygon(shifted_poly, fill=255)
+                    
+                    sectors_data.append({
+                        "meta": (i_hat, int(min_x), int(min_y), mask_kite, bw, bh, len(hat_kites) > 1),
+                        "feature": lab.astype(np.float32)
+                    })
+
+        # ==========================================
+        # STANDARD GRID (HexagonRomb, Square etc.) - BEZ ZMIAN
+        # ==========================================
+        else:
+            print(f"Mode: Grid ({shape_mode}). Borders: {border_mode}")
+            tile_w, tile_h = base_s, base_s
+            step_x, step_y = base_s, base_s
+            offset_odd_row_x = 0
+            
+            if shape_mode == "rectangle_3x1": tile_h=base_s//3; step_y=tile_h
+            elif shape_mode == "brick_wall": tile_h=base_s//2; step_y=tile_h; offset_odd_row_x=base_s//2
+            elif "hexagon" in shape_mode or shape_mode == "hexagon_romb":
+                tile_w=base_s; tile_h=int(base_s*1.155)
+                step_x=tile_w; step_y=int(tile_h*0.75); offset_odd_row_x=tile_w//2
+            elif shape_mode == "triangle": tile_w=base_s; tile_h=int(base_s*0.866); step_x=tile_w//2; step_y=tile_h
+            elif shape_mode == "romb": tile_w=base_s; tile_h=int(base_s*1.5); step_x=tile_w; step_y=int(tile_h*0.5); offset_odd_row_x=int(tile_w*0.5)
+
+            cols = (target_w // step_x) + 2
+            rows = (target_h // step_y) + 2
+            
+            mask_norm = self._get_shape_mask(shape_mode, tile_w, tile_h, False, padding=render_padding)
+            mask_flip = self._get_shape_mask(shape_mode, tile_w, tile_h, True, padding=render_padding)
+            
+            if shape_mode == "hexagon_romb":
+                mask_left = self._get_shape_mask("mask_left", tile_w, tile_h, padding=render_padding)
+                mask_right = self._get_shape_mask("mask_right", tile_w, tile_h, padding=render_padding)
+                mask_top = self._get_shape_mask("mask_top", tile_w, tile_h, padding=render_padding)
+
+            print("Scanning grid...")
+            for r in range(rows):
+                for c in range(cols):
+                    pos_x = c * step_x
+                    pos_y = r * step_y
+                    is_flipped = False
+                    
+                    if shape_mode in ["brick_wall", "hexagon", "hexagon_romb", "romb"]:
+                        if r % 2 == 1: pos_x += offset_odd_row_x
+                    elif shape_mode == "triangle":
+                        if (c+r)%2==1: is_flipped = True
+
+                    if shape_mode == "hexagon_romb":
+                        off_d = tile_w // 4
+                        sample_offsets = [(-off_d, off_d), (off_d, off_d), (0, -off_d)]
+                        masks = [mask_left, mask_right, mask_top]
+                        for k in range(3):
+                            spx = int(pos_x + tile_w/2 + sample_offsets[k][0] - tile_w/2)
+                            spy = int(pos_y + tile_h/2 + sample_offsets[k][1] - tile_h/2)
+                            if spx > target_w or spy > target_h: continue
+                            safe = (max(0, spx), max(0, spy), min(target_w, spx+tile_w), min(target_h, spy+tile_h))
+                            if safe[2]<=safe[0]: continue
+                            s_img = target.crop(safe)
+                            if s_img.size != (tile_w, tile_h):
+                                tmp = Image.new("RGB", (tile_w, tile_h), (0,0,0)); tmp.paste(s_img, (0,0)); s_img = tmp
+                            mat = s_img.resize((3, 3), Image.Resampling.BOX)
+                            lab = skimage.color.rgb2lab(np.array(mat)/255.0).flatten()
+                            lab[0::3]/=100.0; lab[1::3]=(lab[1::3]+128)/255.0; lab[2::3]=(lab[2::3]+128)/255.0
+                            
+                            sectors_data.append({
+                                "meta": (r, int(pos_x), int(pos_y), masks[k], tile_w, tile_h, False),
+                                "feature": lab.astype(np.float32)
+                            })
+                        continue
+
+                    px, py = int(pos_x), int(pos_y)
+                    if px > target_w or py > target_h: continue
+                    safe = (max(0, px), max(0, py), min(target_w, px+tile_w), min(target_h, py+tile_h))
+                    if safe[2]<=safe[0]: continue
+                    s_img = target.crop(safe)
+                    if s_img.size != (tile_w, tile_h):
+                        tmp = Image.new("RGB", (tile_w, tile_h), (0,0,0)); tmp.paste(s_img, (0,0)); s_img = tmp
+                    mat = s_img.resize((3, 3), Image.Resampling.BOX)
+                    lab = skimage.color.rgb2lab(np.array(mat)/255.0).flatten()
+                    lab[0::3]/=100.0; lab[1::3]=(lab[1::3]+128)/255.0; lab[2::3]=(lab[2::3]+128)/255.0
+                    
+                    current_mask = mask_flip if is_flipped else mask_norm
+                    sectors_data.append({
+                        "meta": (r, px, py, current_mask, tile_w, tile_h, False),
+                        "feature": lab.astype(np.float32)
+                    })
+
+        # ==========================================
+        # DOPASOWYWANIE ZDJĘĆ DO KAFELKÓW (WSPÓLNE)
+        # ==========================================
+        if not sectors_data:
+            print("No tiles generated.")
+            return
+
+        print(f"Building Spatial Tree for {len(sectors_data)} tiles...")
+        points = [(s["meta"][1] + s["meta"][4]/2.0, s["meta"][2] + s["meta"][5]/2.0) for s in sectors_data]
+        tree = cKDTree(points)
+        search_radius = base_s * 1.5
+        neighbors_map = tree.query_ball_tree(tree, r=search_radius)
+
+        print("Matching and generating final mosaic...")
+        tgt_features = np.array([x["feature"] for x in sectors_data])
+        used_counts = np.zeros(len(self.paths), dtype=np.int32)
+        sector_assignments = -1 * np.ones(len(sectors_data), dtype=np.int32)
+        
+        chunk_size = 500
+        allow_mirror = self.settings.get("allow_mirror", False)
+        
+        features_norm = self.features
+        features_flip = None
+        if allow_mirror:
+            reshaped = self.features.reshape(-1, 3, 3, 3)
+            flipped = reshaped[:, :, ::-1, :]
+            features_flip = flipped.reshape(-1, 27)
+
+        for i in tqdm(range(0, len(sectors_data), chunk_size)):
+            end = min(i + chunk_size, len(sectors_data))
+            chunk_tgt = tgt_features[i:end]
+            
+            dists_norm = cdist(chunk_tgt, features_norm, 'euclidean')
+            if allow_mirror:
+                dists_flip = cdist(chunk_tgt, features_flip, 'euclidean')
+            
+            top_k_norm = np.argpartition(dists_norm, 50, axis=1)[:, :50]
+            if allow_mirror:
+                top_k_flip = np.argpartition(dists_flip, 50, axis=1)[:, :50]
+            
+            for j in range(len(chunk_tgt)):
+                global_idx = i + j
+                meta = sectors_data[global_idx]["meta"]
+                
+                idx_id, px, py, mask, tw, th, is_hat = meta
+                
+                forbidden_indices = set()
+                my_neighbors = neighbors_map[global_idx]
+                for n_idx in my_neighbors:
+                    if n_idx == global_idx: continue
+                    # W obrębie tej samej figury (Kapelusza) ZAWSZE wymuszamy inne zdjęcie na latawcu!
+                    if is_hat:
+                        if sectors_data[n_idx]["meta"][0] == idx_id: 
+                            assigned = sector_assignments[n_idx]
+                            if assigned != -1: forbidden_indices.add(assigned)
+                    else:
+                        assigned = sector_assignments[n_idx]
+                        if assigned != -1: forbidden_indices.add(assigned)
+
+                candidates = []
+                for idx in top_k_norm[j]:
+                    score = dists_norm[j, idx] + (used_counts[idx]**2 * self.settings["freq_penalty"] * 0.001)
+                    if idx in forbidden_indices: score += 1000000.0
+                    candidates.append((score, idx, False))
+                
+                if allow_mirror:
+                    for idx in top_k_flip[j]:
+                        score = dists_flip[j, idx] + (used_counts[idx]**2 * self.settings["freq_penalty"] * 0.001)
+                        if idx in forbidden_indices: score += 1000000.0
+                        candidates.append((score, idx, True))
+                
+                candidates.sort(key=lambda x: x[0])
+                best_score, best_idx, should_mirror = candidates[0]
+                
+                used_counts[best_idx] += 1
+                sector_assignments[global_idx] = best_idx
+                
+                try:
+                    with Image.open(self.paths[best_idx]) as img:
+                        img = img.convert("RGBA")
+                        if should_mirror: img = ImageOps.mirror(img)
+                        
+                        img = self._smart_crop(img, tw, th)
+                        img.putalpha(mask)
+                        final_mosaic.alpha_composite(img, (px, py))
+                except Exception: pass
+
+        print(f"Saving to {output_path}...")
+        final_mosaic.convert("RGB").save(output_path, quality=95)

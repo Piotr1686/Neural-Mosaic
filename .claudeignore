@@ -1,0 +1,46 @@
+# Dane i modele — duże pliki, nigdy do kontekstu AI
+data/
+output/
+*.pkl
+*.pt
+*.pth
+*.onnx
+*.gguf
+*.bin
+*.safetensors
+
+# Python cache
+__pycache__/
+*.pyc
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Środowisko
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Notebooki
+notebooks/
+
+# Sekrety
+.env
+*.pem
+*.key
+
+# Git internals
+.git/
+
+# DVC
+.dvc/cache/
+.dvc/tmp/
+
+# Node.js
+node_modules/
+frontend/dist/
+
+# Claude Code
+.claude/settings.json
+.claude/settings.local.json

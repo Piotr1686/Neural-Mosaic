@@ -1,0 +1,2 @@
+conda activate mosaic
+python -m src.main
