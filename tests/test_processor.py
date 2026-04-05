@@ -1,18 +1,29 @@
+"""Hardware / environment sanity checks."""
 import pytest
-import numpy as np
 import torch
-from src.processor import TileProcessor
 
-def test_cuda_availability():
-    """Sprawdza, czy PyTorch widzi Twoją kartę RTX 3050."""
-    assert torch.cuda.is_available(), "CUDA nie jest dostępne! Sprawdź sterowniki."
 
-def test_mean_color_calculation():
-    """Sprawdza, czy algorytm poprawnie liczy średni kolor."""
-    # Tworzymy czysto czerwony obrazek 10x10
-    red_tile = np.zeros((10, 10, 3), dtype=np.uint8)
-    red_tile[:, :] = [255, 0, 0]
-    
-    # Średnia powinna być [255, 0, 0]
-    mean = red_tile.mean(axis=(0, 1))
-    assert np.array_equal(mean, [255, 0, 0])
+def test_torch_imports():
+    assert torch.__version__ is not None
+
+
+def test_cuda_available():
+    """RTX 3050 should be visible. Fails if drivers or CUDA toolkit are broken."""
+    assert torch.cuda.is_available(), "CUDA not available — check drivers"
+
+
+def test_cuda_device_name():
+    if not torch.cuda.is_available():
+        pytest.skip("CUDA not available")
+    name = torch.cuda.get_device_name(0)
+    assert isinstance(name, str) and len(name) > 0
+
+
+def test_cuda_memory_allocatable():
+    """Allocate a small tensor on GPU to verify VRAM is accessible."""
+    if not torch.cuda.is_available():
+        pytest.skip("CUDA not available")
+    t = torch.zeros(1024, 1024, device="cuda")
+    assert t.device.type == "cuda"
+    del t
+    torch.cuda.empty_cache()
