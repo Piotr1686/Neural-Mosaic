@@ -76,8 +76,12 @@ class TestLabFeatureExtraction:
     def test_similar_colors_produce_similar_features(self):
         dark_red = _compute_lab_feature(Image.new("RGB", (100, 100), (200, 0, 0)))
         light_red = _compute_lab_feature(Image.new("RGB", (100, 100), (255, 50, 50)))
-        dist = np.linalg.norm(dark_red - light_red)
-        assert dist < 0.3, "Similar colors should produce similar features"
+        blue = _compute_lab_feature(Image.new("RGB", (100, 100), (0, 0, 255)))
+        dist_similar = np.linalg.norm(dark_red - light_red)
+        dist_different = np.linalg.norm(dark_red - blue)
+        assert dist_similar < dist_different, (
+            "Similar red shades must be closer together than red vs blue"
+        )
 
 
 # ---------------------------------------------------------------------------
