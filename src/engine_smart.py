@@ -1,3 +1,13 @@
+"""
+src/engine_smart.py
+-------------------
+Colour-matched photomosaic engine (SmartEngine).
+
+Supports multiple tile geometries including the aperiodic Einstein Hat
+polykite shape.  Each sector of the target image is matched to the
+best-fitting tile from the pre-built CIELAB feature index with spatial
+anti-repetition enforcement.
+"""
 import numpy as np
 import pickle
 import random
@@ -6,8 +16,9 @@ from collections import defaultdict
 from PIL import Image, ImageOps, ImageDraw
 from tqdm import tqdm
 from scipy.spatial.distance import cdist
-from scipy.spatial import cKDTree 
+from scipy.spatial import cKDTree
 import skimage.color
+
 
 class SmartEngine:
     def __init__(self, index_path="data/smart_index.pkl"):
@@ -31,10 +42,19 @@ class SmartEngine:
             self.features = []
 
     # ==========================================
-    # MATEMATYKA KITE GRID (DLA EINSTEIN HAT)
+    # KITE GRID MATHEMATICS (EINSTEIN HAT)
     # ==========================================
     def _get_kite_poly(self, cx, cy, s, k):
-        """Zwraca 4 wierzchołki pojedynczego latawca na siatce heksagonalnej (Flat-Topped)."""
+        """Return the 4 vertices of a single kite on a flat-topped hexagonal grid.
+
+        Args:
+            cx, cy: Cartesian centre of the parent hexagon.
+            s:      Hexagon side length in pixels.
+            k:      Kite index within the hexagon (0–5).
+
+        Returns:
+            List of four (x, y) tuples: [hex_centre, edge_mid(k-1), vertex(k), edge_mid(k)].
+        """
         r3 = math.sqrt(3)
         def P(idx):
             angle = math.radians(idx * 60)
@@ -44,28 +64,38 @@ class SmartEngine:
             angle = math.radians(idx * 60 + 30)
             return (cx + s * r3/2 * math.cos(angle), cy + s * r3/2 * math.sin(angle))
 
-        # Latawiec: Środek Hex, Środek krawędzi (k-1), Wierzchołek (k), Środek krawędzi (k)
-        return [(cx, cy), M((k-1)%6), P(k), M(k)]
+        # Kite: hex centre → edge midpoint (k-1) → vertex (k) → edge midpoint (k)
+        return [(cx, cy), M((k-1) % 6), P(k), M(k)]
 
     def _transform_kite_index(self, base_q, base_r, base_k, offset_q, offset_r, rot, flip):
-        """Topologiczna transformacja współrzędnych osiowych (q,r,k) latawca."""
+        """Apply a topological transformation to kite axial coordinates (q, r, k).
+
+        Args:
+            base_q, base_r, base_k: Source kite coordinates.
+            offset_q, offset_r:     Translation in axial hex space.
+            rot:                    Number of 60-degree counter-clockwise rotations.
+            flip:                   Whether to mirror along the horizontal axis first.
+
+        Returns:
+            Transformed (q, r, k) tuple.
+        """
         q, r, k = base_q, base_r, base_k
-        
-        # 1. Odbicie lustrzane względem osi poziomej
+
+        # 1. Mirror reflection along the horizontal axis.
         if flip:
             q, r = q, -q - r
             k = (6 - k) % 6
-            
-        # 2. Rotacja (wielokrotności 60 stopni)
+
+        # 2. Rotation in multiples of 60 degrees.
         for _ in range(rot):
             q, r = -r, q + r
             k = (k + 1) % 6
-            
-        # 3. Przesunięcie
+
+        # 3. Translation.
         return (q + offset_q, r + offset_r, k)
 
     # ==========================================
-    # STANDARDOWE KSZTAŁTY I MASKI
+    # STANDARD SHAPES AND MASKS
     # ==========================================
     def _get_shape_mask(self, shape_type, w, h, flipped=False, padding=1.0):
         scale_aa = 4
@@ -134,116 +164,125 @@ class SmartEngine:
         sectors_data = []
 
         # ==========================================
-        # EINSTEIN HAT (TOPOLOGICAL EDGE-MATCHING POLYKITE)
+        # EINSTEIN HAT (APERIODIC EDGE-MATCHING POLYKITE)
         # ==========================================
-        if shape_mode == "einstein_hat":
-            print(f"Mode: Einstein Hat (Math Polykite). Borders: {border_mode}")
-            
-            s = base_s # Długość boku pojedynczego heksagonu
+        if shape_mode == "kite":
+            print(f"Mode: Einstein Hat (polykite). Borders: {border_mode}")
+
+            s  = base_s          # Side length of a single hexagon in pixels.
             r3 = math.sqrt(3)
-            
-            # 1. Ścisła definicja matematyczna Einstein Hat (8 Latawców na osiach HexGrida)
-            # q, r - współrzędne osiowe heksagonu. k - indeks latawca (0-5)
+
+            # 1. Mathematical definition of the Einstein Hat:
+            #    8 kites selected from a flat-topped hexagonal grid.
+            #    q, r = axial hex coordinates; k = kite index within hex (0–5).
             BASE_HAT = [
-                (0, 0, 0), (0, 0, 1), (0, 0, 2), (0, 0, 3), (0, 0, 5), # 5 latawców centrum
-                (0, 1, 4), (0, 1, 5),  # 2 latawce "głowy"
-                (1, 0, 3)              # 1 latawiec "stopy"
+                (0, 0, 0), (0, 0, 1), (0, 0, 2), (0, 0, 3), (0, 0, 5),  # 5 centre kites
+                (0, 1, 4), (0, 1, 5),   # 2 'head' kites
+                (1, 0, 3),              # 1 'foot' kite
             ]
-            
-            # 2. Generowanie wirtualnej siatki latawców na kartezjańskim płótnie obrazka
-            target_kites = set()
+
+            # 2. Generate a virtual kite grid over the image canvas.
+            target_kites  = set()
             kite_centroids = {}
-            
+
             range_q = int(target_w / (1.5 * s)) + 3
             range_r = int(target_h / (r3 * s)) + 3
-            
-            print("Building perfect Kite Grid...")
+
+            print("Building kite grid...")
             for q in range(-range_q, range_q):
                 for r in range(-range_r, range_r):
-                    # Kartezjański środek heksagonu (Flat-topped hex grid)
+                    # Cartesian centre of the hexagon (flat-topped hex grid formula).
                     cx = 1.5 * s * q
                     cy = r3 * s * (r + q / 2.0)
-                    
+
                     if -2*s < cx < target_w + 2*s and -2*s < cy < target_h + 2*s:
                         for k in range(6):
-                            poly = self._get_kite_poly(cx, cy, s, k)
+                            poly   = self._get_kite_poly(cx, cy, s, k)
                             cent_x = sum(p[0] for p in poly) / 4
                             cent_y = sum(p[1] for p in poly) / 4
-                            
-                            # Zachowaj tylko te latawce, które leżą w obrębie zdjęcia
+
+                            # Keep only kites whose centroid falls inside the image.
                             if 0 <= cent_x < target_w and 0 <= cent_y < target_h:
                                 target_kites.add((q, r, k))
                             kite_centroids[(q, r, k)] = (cent_x, cent_y)
 
             uncovered_targets = list(target_kites)
-            # Sortowanie spiralne od środka na zewnątrz (aby mozaika idealnie formowała się w centrum)
-            uncovered_targets.sort(key=lambda k: (kite_centroids[k][0] - target_w/2)**2 + (kite_centroids[k][1] - target_h/2)**2)
-            
-            occupied = set()
+            # Sort spirally from the centre outward so the mosaic fills densely from the middle.
+            uncovered_targets.sort(
+                key=lambda k: (kite_centroids[k][0] - target_w/2)**2
+                              + (kite_centroids[k][1] - target_h/2)**2
+            )
+
+            occupied   = set()
             placed_hats = []
-            
-            # Wstępne mapowanie dla drastycznego przyspieszenia (Słownik: latawiec -> lista pasujących kapeluszy)
+
+            # Pre-map each kite to the list of compatible hat placements for a ~10× speedup.
             kite_to_hats = defaultdict(list)
             for target_k in target_kites:
                 t_q, t_r, t_k = target_k
-                # Sprawdzamy wszystkie 96 orientacji
+                # Test all 96 orientations (6 rotations × 2 flips × 8 anchor kites).
                 for rot in range(6):
                     for flip in [False, True]:
                         for b_idx in range(8):
                             bq, br, bk = BASE_HAT[b_idx]
-                            # Obliczamy gdzie wylądowałby punkt zaczepienia
-                            trans_q, trans_r, trans_k = self._transform_kite_index(bq, br, bk, 0, 0, rot, flip)
-                            
+                            # Compute where this anchor kite would land after transformation.
+                            trans_q, trans_r, trans_k = self._transform_kite_index(
+                                bq, br, bk, 0, 0, rot, flip
+                            )
                             if trans_k == t_k:
                                 dq = t_q - trans_q
                                 dr = t_r - trans_r
-                                hat = tuple(self._transform_kite_index(x, y, z, dq, dr, rot, flip) for x, y, z in BASE_HAT)
+                                hat = tuple(
+                                    self._transform_kite_index(x, y, z, dq, dr, rot, flip)
+                                    for x, y, z in BASE_HAT
+                                )
                                 if hat not in kite_to_hats[target_k]:
                                     kite_to_hats[target_k].append(hat)
 
-            # 3. Solver Zachłanny Krawędź-do-Krawędzi (Exact Cover Approximation)
-            for k_target in tqdm(uncovered_targets, desc="Assembling Hats Edge-to-Edge"):
+            # 3. Greedy Edge-to-Edge Solver (Exact Cover approximation).
+            for k_target in tqdm(uncovered_targets, desc="Assembling hats edge-to-edge"):
                 if k_target in occupied:
                     continue
-                
-                valid_hats = []
-                for hat in kite_to_hats[k_target]:
-                    if not any(k in occupied for k in hat):
-                        valid_hats.append(hat)
-                
+
+                valid_hats = [
+                    hat for hat in kite_to_hats[k_target]
+                    if not any(k in occupied for k in hat)
+                ]
+
                 if valid_hats:
-                    chosen_hat = random.choice(valid_hats) # Wariacja zapobiega powstawaniu powtarzalnych super-wzorów
+                    # Random selection prevents repeating super-patterns.
+                    chosen_hat = random.choice(valid_hats)
                     placed_hats.append(chosen_hat)
                     for k in chosen_hat:
                         occupied.add(k)
                 else:
-                    # Łatanie pojedynczych dziur powstających wyłącznie przy samym marginesie obrazu
+                    # Patch isolated gaps that appear only at the image border.
                     placed_hats.append((k_target,))
                     occupied.add(k_target)
 
-            # 4. Ekstrakcja Kształtów, Masek i Kolorów
-            print("Rendering 8-Kite Hats...")
+            # 4. Shape, Mask and Colour Extraction.
+            print("Rendering 8-kite hats...")
             for i_hat, hat_kites in enumerate(placed_hats):
                 hat_polys = []
                 for q, r, k in hat_kites:
-                    cx = 1.5 * s * q
-                    cy = r3 * s * (r + q / 2.0)
+                    cx   = 1.5 * s * q
+                    cy   = r3 * s * (r + q / 2.0)
                     poly = self._get_kite_poly(cx, cy, s, k)
                     hat_polys.append(poly)
-                
-                # Ognisko kapelusza (środek ciężkości całego 13-kąta)
+
+                # Hat focal point: centroid of the full 13-sided polygon.
                 all_pts = [p for poly in hat_polys for p in poly]
-                hat_cx = sum(p[0] for p in all_pts) / len(all_pts)
-                hat_cy = sum(p[1] for p in all_pts) / len(all_pts)
-                
+                hat_cx  = sum(p[0] for p in all_pts) / len(all_pts)
+                hat_cy  = sum(p[1] for p in all_pts) / len(all_pts)
+
                 for k_idx, poly in enumerate(hat_polys):
-                    # GROUT: Skalowanie latawców do ŚRODKA KAPELUSZA. 
-                    # Zapewnia to integralność wewnętrzną Kapelusza, a ramkę tworzy na obrysie figury.
+                    # GROUT: Scale kites toward the HAT CENTRE so borders form at the
+                    # outline of the hat, not between individual kites.
                     padded_poly = []
                     for px, py in poly:
                         nx = hat_cx + (px - hat_cx) * render_padding
                         ny = hat_cy + (py - hat_cy) * render_padding
-                        # Odbicie do układu współrzędnych obrazka (0,0 w lewym górnym rogu)
+                        # Flip to image coordinate system (origin = top-left).
                         padded_poly.append((nx, target_h - ny))
                         
                     min_x = min(p[0] for p in padded_poly)
@@ -268,7 +307,7 @@ class SmartEngine:
                     lab = skimage.color.rgb2lab(np.array(mat)/255.0).flatten()
                     lab[0::3] /= 100.0; lab[1::3] = (lab[1::3]+128)/255.0; lab[2::3] = (lab[2::3]+128)/255.0
                     
-                    # Rysowanie idealnie dopasowanej maski latawca
+                    # Draw a pixel-perfect kite mask clipped to the bounding box.
                     mask_kite = Image.new("L", (bw, bh), 0)
                     draw_k = ImageDraw.Draw(mask_kite)
                     shifted_poly = [(p[0] - min_x, p[1] - min_y) for p in padded_poly]
@@ -280,7 +319,7 @@ class SmartEngine:
                     })
 
         # ==========================================
-        # STANDARD GRID (HexagonRomb, Square etc.) - BEZ ZMIAN
+        # STANDARD GRID (HexagonRomb, Square, Triangle, …)
         # ==========================================
         else:
             print(f"Mode: Grid ({shape_mode}). Borders: {border_mode}")
@@ -360,7 +399,7 @@ class SmartEngine:
                     })
 
         # ==========================================
-        # DOPASOWYWANIE ZDJĘĆ DO KAFELKÓW (WSPÓLNE)
+        # PHOTO-TO-TILE MATCHING (SHARED PASS)
         # ==========================================
         if not sectors_data:
             print("No tiles generated.")
@@ -409,7 +448,7 @@ class SmartEngine:
                 my_neighbors = neighbors_map[global_idx]
                 for n_idx in my_neighbors:
                     if n_idx == global_idx: continue
-                    # W obrębie tej samej figury (Kapelusza) ZAWSZE wymuszamy inne zdjęcie na latawcu!
+                    # Within the same hat, always force a different photo for each kite.
                     if is_hat:
                         if sectors_data[n_idx]["meta"][0] == idx_id: 
                             assigned = sector_assignments[n_idx]

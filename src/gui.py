@@ -1,4 +1,15 @@
+"""
+src/gui.py
+----------
+Main application window for NeuroMosaic built with CustomTkinter.
+
+Provides two tabs:
+  * Smart Photo Mosaic — colour-matched photomosaic using SmartEngine.
+  * Symbol Mosaic (Typo) — typography-based mosaic using TypoEngine.
+"""
 import os
+import subprocess
+import sys
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 import customtkinter as ctk
@@ -8,7 +19,6 @@ from datetime import datetime
 from pathlib import Path
 from .engine_smart import SmartEngine
 from .engine_typo import TypoEngine
-# Importujemy Indexer, żeby przycisk działał
 from .indexer_smart import SmartIndexer
 
 ctk.set_appearance_mode("Dark")
@@ -40,11 +50,11 @@ class App(ctk.CTk):
         self.logo = ctk.CTkLabel(self.sidebar, text="NEURAL\nMOSAIC", font=ctk.CTkFont(size=22, weight="bold"))
         self.logo.grid(row=0, column=0, padx=20, pady=(20, 10))
         
-        # --- SEKCJA INDEKSOWANIA ---
+        # --- INDEXING SECTION ---
         self.btn_load_smart = ctk.CTkButton(self.sidebar, text="Load Smart Index", fg_color="darkgreen", command=self.load_index)
         self.btn_load_smart.grid(row=1, column=0, padx=20, pady=(10, 5))
-        
-        # NOWY PRZYCISK: Update / Create Index
+
+        # Button: rebuild or update the Smart Index from the tile library.
         self.btn_update_smart = ctk.CTkButton(self.sidebar, text="Update / Create Index", fg_color="#1f538d", command=self.run_smart_indexer)
         self.btn_update_smart.grid(row=2, column=0, padx=20, pady=(5, 20))
         
@@ -88,13 +98,13 @@ class App(ctk.CTk):
         self.seg_scale_p.pack(pady=5)
 
         ctk.CTkLabel(frame, text="Tile Shape").pack(pady=(10,0))
-        # Wszystkie kształty
-        shapes = ["square", "rectangle_3x1", "brick_wall", "hexagon", "hexagon_romb", "romb", "triangle", "einstein_hat"]
+        # All available tile shapes.
+        shapes = ["square", "rectangle_3x1", "brick_wall", "hexagon", "hexagon_romb", "romb", "triangle", "kite"]
         self.combo_shape = ctk.CTkComboBox(frame, values=shapes)
         self.combo_shape.set("hexagon_romb")
         self.combo_shape.pack(pady=5)
         
-        # Checkboxy
+        # Checkboxes
         self.check_mirror = ctk.CTkCheckBox(frame, text="Allow Mirroring")
         self.check_mirror.select()
         self.check_mirror.pack(pady=(15, 5))
@@ -149,10 +159,10 @@ class App(ctk.CTk):
             self.console.see("end")
         self.after(0, _update)
 
-    # --- OBSŁUGA SILNIKA I INDEKSÓW ---
+    # --- ENGINE AND INDEX MANAGEMENT ---
 
     def run_smart_indexer(self):
-        """Uruchamia indeksowanie zdjęć"""
+        """Rebuild the Smart Index in a background thread."""
         def _run():
             self.log("Starting Smart Indexer... (Wait)")
             try:
@@ -194,7 +204,7 @@ class App(ctk.CTk):
     def scan_fonts(self):
         def _scan():
             self.log("Starting Font Scan...")
-            os.system("python -m src.indexer_typo")
+            subprocess.run([sys.executable, "-m", "src.indexer_typo"], check=False)
             self.log("Scan Complete! Click 'Load Typo Index'.")
         threading.Thread(target=_scan).start()
 
@@ -220,19 +230,19 @@ class App(ctk.CTk):
         out = self._get_auto_filename("Smart", ".jpg")
         if not out: return
         
-        # Pobieranie ustawień z GUI
+        # Read current settings from GUI controls.
         self.smart_engine.settings["allow_mirror"] = bool(self.check_mirror.get())
         res = self.combo_res_p.get()
         shape = self.combo_shape.get()
         scale = self.seg_scale_p.get()
-        border_mode = bool(self.check_border.get()) # Ramki
-        
-        if not scale: scale = "1.0"
+        border_mode = bool(self.check_border.get())  # Black grout borders
+
+        if not scale:
+            scale = "1.0"
         scale = float(scale)
-        
+
         def _run():
             try:
-                # Przekazujemy border_mode do silnika
                 self.smart_engine.create_mosaic(self.path_p, out, res, shape, tile_scale=scale, border_mode=border_mode)
                 self.log("DONE! Smart Mosaic saved.")
             except Exception as e: 

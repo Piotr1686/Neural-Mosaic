@@ -1,4 +1,11 @@
-# src/config.py
+"""
+src/config.py
+-------------
+Application-wide configuration for NeuroMosaic.
+
+Loads environment variables from a .env file and exposes them as typed
+fields on a frozen dataclass so every module imports from one place.
+"""
 import os
 from dataclasses import dataclass
 from pathlib import Path

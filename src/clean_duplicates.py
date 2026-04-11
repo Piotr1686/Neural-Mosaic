@@ -1,10 +1,19 @@
+"""
+src/clean_duplicates.py
+-----------------------
+MD5-based duplicate image remover for the tile library.
+
+Scans the configured library folders, computes a hash for every image,
+and moves any duplicates to a trash folder so they can be reviewed or
+deleted manually.  The original (first-seen) copy is always kept.
+"""
 import os
 import hashlib
 import shutil
 from pathlib import Path
 from tqdm import tqdm
 
-# KONFIGURACJA
+# --- CONFIGURATION ---
 FOLDERS_TO_SCAN = [
     Path("data/library_public/tiles"),
     Path("data/library_private/tiles")
@@ -12,11 +21,19 @@ FOLDERS_TO_SCAN = [
 TRASH_FOLDER = Path("data/duplicates_trash")
 
 def get_file_hash(filepath):
-    """Oblicza unikalny skrót MD5 dla pliku."""
+    """Compute the MD5 hash of a file.
+
+    Reads in 64 KB chunks to avoid loading large files into RAM entirely.
+
+    Args:
+        filepath: Path to the file to hash.
+
+    Returns:
+        Hex-string MD5 digest, or None if the file cannot be read.
+    """
     hasher = hashlib.md5()
     try:
         with open(filepath, 'rb') as f:
-            # Czytamy w kawałkach, żeby nie zapchać RAM przy dużych plikach
             buf = f.read(65536)
             while len(buf) > 0:
                 hasher.update(buf)
@@ -27,55 +44,49 @@ def get_file_hash(filepath):
 
 def main():
     print("--- DUPLICATE CLEANER (MD5) ---")
-    
-    # Tworzymy folder na śmieci
+
+    # Create the trash folder if it does not exist.
     if not TRASH_FOLDER.exists():
         os.makedirs(TRASH_FOLDER)
 
-    # 1. Zbieranie wszystkich plików
+    # 1. Collect all image files across configured folders.
     all_files = []
-    print("Skanowanie folderów...")
+    print("Scanning folders...")
     for folder in FOLDERS_TO_SCAN:
         if folder.exists():
-            # Szukamy obrazków
             for ext in ['*.jpg', '*.jpeg', '*.png', '*.bmp', '*.webp']:
                 all_files.extend(list(folder.rglob(ext)))
-    
-    print(f"Znaleziono łącznie {len(all_files)} plików. Analiza unikalności...")
+
+    print(f"Found {len(all_files)} files in total. Checking for duplicates...")
 
     unique_hashes = {}
     duplicates_count = 0
-    
-    # 2. Skanowanie hashów
+
+    # 2. Hash every file and move duplicates to the trash folder.
     for file_path in tqdm(all_files):
         file_hash = get_file_hash(file_path)
-        
+
         if file_hash is None:
             continue
 
         if file_hash in unique_hashes:
-            # TO JEST DUPLIKAT!
-            original = unique_hashes[file_hash]
-            
-            # Przenosimy do kosza
+            # Duplicate detected — move to trash with a unique name.
             try:
-                # Generujemy nową nazwę w koszu, żeby się nie nadpisały
                 new_name = f"{file_path.stem}_{duplicates_count}{file_path.suffix}"
                 dest = TRASH_FOLDER / new_name
-                
                 shutil.move(str(file_path), str(dest))
                 duplicates_count += 1
             except Exception as e:
-                print(f"Błąd przenoszenia {file_path}: {e}")
+                print(f"Error moving {file_path}: {e}")
         else:
-            # To jest oryginał (pierwsze wystąpienie)
+            # First occurrence — mark as the canonical original.
             unique_hashes[file_hash] = file_path
 
     print("-" * 30)
-    print(f"ZAKOŃCZONO.")
-    print(f"Przetworzono: {len(all_files)} plików.")
-    print(f"Znaleziono i usunięto duplikatów: {duplicates_count}")
-    print(f"Duplikaty są bezpieczne w folderze: {TRASH_FOLDER}")
+    print("DONE.")
+    print(f"Files processed : {len(all_files)}")
+    print(f"Duplicates moved: {duplicates_count}")
+    print(f"Trash folder    : {TRASH_FOLDER}")
     print("-" * 30)
 
 if __name__ == "__main__":

@@ -1,9 +1,19 @@
+"""
+src/engine_typo.py
+------------------
+Symbol (typographic) mosaic renderer.
+
+Replaces each grid cell of the target image with a glyph chosen from the
+pre-built typo index so that its ink density matches the local brightness of
+the source image.  Supports ASCII characters and CJK Unicode blocks.
+"""
 import numpy as np
 import pickle
 from PIL import Image, ImageDraw, ImageFont, ImageEnhance, ImageOps, ImageFilter
 import bisect
 import os
 import random
+
 
 class TypoEngine:
     def __init__(self, index_path="data/typo_index.pkl"):
@@ -15,31 +25,36 @@ class TypoEngine:
             with open(index_path, "rb") as f:
                 raw_lib = pickle.load(f)
             
-            # --- FILTRACJA HYBRYDOWA (ASCII + CJK) ---
+            # --- HYBRID FILTER (ASCII + CJK) ---
             self.library = []
-            # Lista bezpiecznych znaków ASCII
-            allowed_ascii = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,:;i!lI|'\"-+=oO0?/")
-            
+            # Safe ASCII character whitelist — visually distinct at small sizes.
+            allowed_ascii = set(
+                "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+                "0123456789.,:;i!lI|'\"-+=oO0?/"
+            )
+
             print("Applying Hybrid Filter (ASCII + Chinese/Japanese/Korean)...")
-            
+
             for item in raw_lib:
                 char = item["char"]
                 code = ord(char)
-                
-                # 1. Sprawdź czy to bezpieczne ASCII
-                is_ascii_safe = char in allowed_ascii
-                
-                # 2. Sprawdź czy to znak CJK (Chiński/Japoński/Koreański) po zakresie Unicode
-                # CJK Unified Ideographs (Hanzi/Kanji): 4E00-9FFF
-                # Hiragana: 3040-309F
-                # Katakana: 30A0-30FF
-                # Hangul (Korean): AC00-D7A3
-                is_cjk = (0x4E00 <= code <= 0x9FFF) or \
-                         (0x3040 <= code <= 0x309F) or \
-                         (0x30A0 <= code <= 0x30FF) or \
-                         (0xAC00 <= code <= 0xD7A3)
 
-                # Akceptujemy, jeśli spełnia którykolwiek z warunków
+                # 1. Check if the character is in the safe ASCII set.
+                is_ascii_safe = char in allowed_ascii
+
+                # 2. Check for CJK Unicode blocks (dense, visually rich glyphs).
+                #    CJK Unified Ideographs (Hanzi/Kanji): U+4E00–U+9FFF
+                #    Hiragana:                              U+3040–U+309F
+                #    Katakana:                              U+30A0–U+30FF
+                #    Hangul Syllables:                      U+AC00–U+D7A3
+                is_cjk = (
+                    (0x4E00 <= code <= 0x9FFF)
+                    or (0x3040 <= code <= 0x309F)
+                    or (0x30A0 <= code <= 0x30FF)
+                    or (0xAC00 <= code <= 0xD7A3)
+                )
+
+                # Accept the glyph if it satisfies either condition.
                 if is_ascii_safe or is_cjk:
                     self.library.append(item)
 
@@ -83,16 +98,17 @@ class TypoEngine:
         res_map = {"2K": 2500, "4K": 4500, "8K": 9000, "16K": 16000}
         target_res = res_map.get(res_key, 4500)
         
-        # Ustalanie rozmiaru komórki
+        # Determine base cell width based on output resolution.
         base_cell_w = 14
-        if res_key == "8K": base_cell_w = 20
+        if res_key == "8K":  base_cell_w = 20
         if res_key == "16K": base_cell_w = 35
-        
+
         cell_w = int(base_cell_w * scale)
-        if cell_w < 6: cell_w = 6
-        cell_h = int(cell_w * 1.6) 
-        
-        # Font nieco mniejszy niż komórka
+        if cell_w < 6:
+            cell_w = 6
+        cell_h = int(cell_w * 1.6)
+
+        # Font slightly smaller than the cell so glyphs don't clip.
         font_size = int(cell_h * 0.9)
         
         original = Image.open(input_path).convert("RGB")
@@ -156,7 +172,7 @@ class TypoEngine:
                 font_path = chosen["font"]
                 font_obj = self._get_font_object(font_path, font_size)
                 
-                # Centrowanie w komórce (działa też dla CJK)
+                # Centre the glyph in the cell (works for CJK characters too).
                 bbox = font_obj.getbbox(char)
                 if bbox:
                     cw = bbox[2] - bbox[0]
@@ -184,7 +200,7 @@ class TypoEngine:
 
         txt_path = os.path.splitext(output_path)[0] + ".txt"
         try:
-            # Używamy UTF-8, żeby zapisać znaki CJK
+            # UTF-8 encoding to preserve CJK characters in the text file.
             with open(txt_path, "w", encoding="utf-8") as f:
                 f.write("\n".join(ascii_lines))
             print(f"Saved UTF-8 Text: {txt_path}")
