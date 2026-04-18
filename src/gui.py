@@ -20,6 +20,7 @@ from pathlib import Path
 from .engine_smart import SmartEngine
 from .engine_typo import TypoEngine
 from .indexer_smart import SmartIndexer
+from .font_groups import GROUP_LABELS
 
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
@@ -29,7 +30,7 @@ FONTS_DIR = Path("assets/fonts")
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("NeuroMosaic 5.7 (Solid Geometry)")
+        self.title("Neural-Mosaic 5.7 (Solid Geometry)")
         self.geometry("1250x900")
         
         self.grid_columnconfigure(1, weight=1)
@@ -145,10 +146,40 @@ class App(ctk.CTk):
         self.seg_scale_t.set("1.0")
         self.seg_scale_t.pack(pady=5)
         
-        ctk.CTkLabel(frame, text="Style Mode").pack(pady=(10,0))
-        self.combo_mode = ctk.CTkComboBox(frame, values=["black_on_white", "white_on_black", "color_on_white"])
+        # --- FONT GROUPS ---
+        ctk.CTkLabel(frame, text="Font Groups (select one or more)",
+                     font=("Arial", 12, "bold")).pack(pady=(15, 5))
+
+        self.font_group_vars = {}
+        groups_frame = ctk.CTkFrame(frame, fg_color="transparent")
+        groups_frame.pack(pady=5, padx=20, fill="x")
+
+        # Default: D_latin_clean selected (safest choice for first-time users)
+        default_selected = {"D_latin_clean"}
+        for group_key, label in GROUP_LABELS.items():
+            var = ctk.BooleanVar(value=(group_key in default_selected))
+            cb = ctk.CTkCheckBox(groups_frame, text=label, variable=var)
+            cb.pack(anchor="w", pady=2)
+            self.font_group_vars[group_key] = var
+
+        ctk.CTkLabel(frame, text="Style Mode").pack(pady=(10, 0))
+        self.combo_mode = ctk.CTkComboBox(
+            frame,
+            values=["black_on_white", "white_on_black", "color_on_white", "color_on_black"]
+        )
+        self.combo_mode.set("black_on_white")
         self.combo_mode.pack(pady=5)
-        
+
+        ctk.CTkLabel(frame, text="Color Palette Size (color modes only)").pack(pady=(10, 0))
+        self.seg_palette = ctk.CTkSegmentedButton(frame, values=["8", "16", "32", "Full"])
+        self.seg_palette.set("16")
+        self.seg_palette.pack(pady=5)
+
+        ctk.CTkLabel(frame, text="Variation (lower = sharper, higher = organic)").pack(pady=(10, 0))
+        self.seg_variation = ctk.CTkSegmentedButton(frame, values=["5", "20", "50"])
+        self.seg_variation.set("20")
+        self.seg_variation.pack(pady=5)
+
         self.btn_run_t = ctk.CTkButton(frame, text="RENDER SYMBOL MOSAIC", fg_color="purple", height=50, command=self.run_typo)
         self.btn_run_t.pack(pady=30)
 
@@ -252,24 +283,52 @@ class App(ctk.CTk):
         threading.Thread(target=_run).start()
 
     def run_typo(self):
-        if not hasattr(self, 'path_t'): 
+        if not hasattr(self, 'path_t'):
             self.log("Error: Select Input Image first")
             return
         out = self._get_auto_filename("Symbol", ".png")
         if not out: return
-        
+
         res = self.combo_res_t.get()
         mode = self.combo_mode.get()
         scale = self.seg_scale_t.get()
         if not scale: scale = "1.0"
         scale = float(scale)
-        
+
+        # Gather selected font groups
+        selected_groups = [k for k, v in self.font_group_vars.items() if v.get()]
+        if not selected_groups:
+            self.log("ERROR: Select at least one Font Group!")
+            return
+
+        # Palette size
+        palette_raw = self.seg_palette.get()
+        palette_size = None if palette_raw == "Full" else int(palette_raw)
+
+        # Variation
+        variation = int(self.seg_variation.get())
+
         def _run():
             self.log(f"Starting Multi-Font Render...")
+            self.log(f"Groups: {', '.join(selected_groups)}")
             try:
-                self.typo_engine.process(self.path_t, out, res, mode, scale=scale)
+                from .engine_typo import TypoEngine
+                active_engine = TypoEngine(selected_groups=selected_groups)
+                if not active_engine.library:
+                    self.log("ERROR: No glyphs after filter. Select more groups.")
+                    return
+
+                active_engine.process(
+                    self.path_t, out, res, mode,
+                    scale=scale,
+                    variation=variation,
+                    palette_size=palette_size,
+                )
                 self.log("DONE! Symbol Mosaic saved.")
-            except Exception as e: self.log(f"Error: {e}")
+            except Exception as e:
+                self.log(f"Error: {e}")
+                import traceback
+                traceback.print_exc()
         threading.Thread(target=_run).start()
 
 if __name__ == "__main__":
