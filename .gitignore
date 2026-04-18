@@ -1,6 +1,9 @@
 # Python cache
 __pycache__/
 *.py[cod]
+*.egg-info/
+dist/
+build/
 
 # Virtual environments
 env/
@@ -34,5 +37,13 @@ CLAUDE.md
 
 # Editor / IDE
 .vscode/
+.idea/
 .history/
 *.code-workspace
+
+# --- Claude Code Session System ---
+# Odkomentuj jeśli nie chcesz commitować stanu sesji:
+# last_session.md
+CLAUDE.md.backup_*
+MEMORY.md.backup_*
+last_session.md.backup_*

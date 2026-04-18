@@ -1,23 +1,78 @@
 # NeuroMosaic
 
-> A desktop application that turns any photo into a high-resolution mosaic — assembled from thousands of real photographs or typographic glyphs.
+> Turn any photograph into a high-resolution mosaic — assembled from thousands of real images or typographic glyphs. Desktop app with real-time preview.
 
-![Python](https://img.shields.io/badge/Python-3.10-blue?logo=python)
-![License](https://img.shields.io/badge/License-MIT-green)
-![GUI](https://img.shields.io/badge/GUI-CustomTkinter-darkblue)
-![Resolution](https://img.shields.io/badge/Output-up%20to%2016K-orange)
+![Python](https://img.shields.io/badge/Python-3.10+-blue?style=flat-square&logo=python&logoColor=white&color=3776AB)
+![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
+![GUI](https://img.shields.io/badge/GUI-CustomTkinter-1a1a2e?style=flat-square)
+![Resolution](https://img.shields.io/badge/Output-up%20to%2016K-orange?style=flat-square)
+![Platform](https://img.shields.io/badge/Platform-Windows-0078D6?style=flat-square&logo=windows)
+![Last Commit](https://img.shields.io/github/last-commit/Piotr1686/neuromosaic?style=flat-square)
+![Repo Size](https://img.shields.io/github/repo-size/Piotr1686/neuromosaic?style=flat-square)
 
 ---
 
-## Overview
+## Gallery
+
+### Smart Photo Mosaic
+
+<p align="center">
+  <img src="assets/examples/source_portrait.jpg" width="30%" alt="Source" />
+  <img src="assets/examples/mosaic_portrait_square.jpg" width="30%" alt="Square tiles" />
+  <img src="assets/examples/mosaic_portrait_kite.jpg" width="30%" alt="Kite tiling" />
+</p>
+
+<p align="center">
+  <em>Left: source image · Center: square tiles · Right: kite tiling</em>
+</p>
+
+<details>
+<summary>🔍 Tile detail — click to expand</summary>
+<p align="center">
+  <img src="assets/examples/detail_square.jpg" width="45%" />
+  <img src="assets/examples/detail_kite.jpg" width="45%" />
+</p>
+</details>
+
+### Symbol Mosaic
+
+<p align="center">
+  <img src="assets/examples/symbol_bw.jpg" width="45%" alt="Black on white" />
+  <img src="assets/examples/symbol_color.jpg" width="45%" alt="Color on white" />
+</p>
+
+<details>
+<summary>🔍 Glyph detail — click to expand</summary>
+<p align="center">
+  <img src="assets/examples/symbol_detail.jpg" width="60%" />
+</p>
+</details>
+
+### GUI Demo
+
+<p align="center">
+  <img src="assets/demo.gif" width="80%" alt="NeuroMosaic GUI demo" />
+</p>
+
+---
+
+## Quick Start
+
+```bash
+git clone https://github.com/Piotr1686/neuromosaic.git
+cd neuromosaic
+pip install -r requirements.txt
+python -m src.gui
+```
+
+> **GPU acceleration:** For CUDA support, install the matching [PyTorch build](https://pytorch.org/get-started/locally/) first.
+> **Symbol Mosaic:** Place `.ttf` / `.otf` fonts in `assets/fonts/` before use. Free CJK fonts: [Noto Fonts](https://fonts.google.com/noto).
+
+---
+
+## Features
 
 NeuroMosaic is a standalone desktop tool with two independent creative engines, both accessible from a single dark-themed GUI. Load an image, configure a handful of options, and click **Render** — the application handles the rest in a background thread while keeping the interface fully responsive.
-
-![NeuroMosaic GUI](assets/preview.jpg)
-
----
-
-## Two Modes, One Window
 
 ### Smart Photo Mosaic
 
@@ -33,7 +88,7 @@ Reconstructs the target image by tiling it with photographs from your personal l
 | Allow Mirroring | Horizontally flips tiles on the fly, doubling the effective library size without using extra disk space |
 | Black Borders (Grout) | Adds a dark gap between tiles — simulates real mosaic grout lines |
 
-The `kite` shape implements the aperiodic **Einstein "hat" polykite** tiling — a mathematically unique geometry that never repeats periodically.
+The `kite` shape arranges tiles in a distinctive non-rectangular diamond geometry.
 
 **Anti-repetition system:** The engine enforces a hard neighbour constraint (no tile from the same source image may touch another) combined with a frequency penalty that gradually discourages reuse of popular tiles across the entire composition. Together these prevent any single photograph from dominating the output.
 
@@ -55,23 +110,43 @@ Font scanning is triggered from the GUI with a single click. Any `.ttf` or `.otf
 
 ---
 
-## Getting Started
+## How It Works
 
-### 1. Clone & install
+### Smart Engine — colour matching
+
+Every tile in the library is represented as a **27-dimensional feature vector**: a 3×3 grid of cells, each described by its mean LAB (L\*, a\*, b\*) values. This captures both the dominant colour and the spatial colour gradient across the tile. At render time a `cKDTree` finds the nearest neighbours for each sector of the target image in milliseconds, even with 300,000+ tiles indexed.
+
+### Typo Engine — brightness matching
+
+Each glyph is pre-rendered at the target tile size and its **normalised ink density** (fraction of dark pixels) is computed and stored. At render time the engine maps each cell's mean brightness to the closest glyph by density, then renders it in the chosen style mode.
+
+### Anti-repetition (Smart Engine)
+
+- **Hard constraint:** A tile's source file may not appear in any of the 4 direct neighbours of the current cell.
+- **Frequency penalty:** Each use of a source file increments a global counter. The penalised score is `raw_score + (usage_count × W_FREQ)`, which continuously pushes the engine toward less-used tiles.
+- Both constraints treat all mirrored variants of the same image as a single source identity.
+
+---
+
+## Building the Tile Library
+
+The included async downloader fetches public-domain artwork (Chicago Art Institute API) and Creative Commons images:
 
 ```bash
-git clone https://github.com/your-username/neural-mosaic.git
-cd neural-mosaic
-pip install -r requirements.txt
+python -m src.fast_downloader
 ```
 
-> GPU is recommended but not required. For CUDA support, install the PyTorch build that matches your hardware before running the above.
+After downloading, run the image optimizer to normalise sizes and remove corrupt files:
 
-### 2. Add fonts (Symbol Mosaic only)
+```bash
+python -m src.optimizer
+```
 
-The `assets/fonts/` directory is excluded from the repository due to file sizes. Place any `.ttf` or `.otf` fonts there before using the Symbol Mosaic tab. Free sources: [Google Fonts](https://fonts.google.com), [Noto Fonts](https://fonts.google.com/noto) (recommended for CJK support).
+Place your own photos directly in `data/library_private/tiles/` — they are indexed alongside the public library without any additional steps.
 
-### 3. Configure (optional)
+---
+
+## Configuration
 
 Copy `.env.example` to `.env` and adjust values for your setup:
 
@@ -79,13 +154,15 @@ Copy `.env.example` to `.env` and adjust values for your setup:
 cp .env.example .env
 ```
 
-Key settings: `TILE_SIZE`, `TARGET_SHORT_SIDE` (output resolution), `USE_CUDA`.
+Key settings:
 
-### 4. Launch the GUI
-
-```bash
-python -m src.gui
-```
+| Variable | Default | Description |
+|---|---|---|
+| `TILE_SIZE` | `75` | Base tile size in pixels |
+| `TARGET_SHORT_SIDE` | `18000` | Output short side in pixels (16K ≈ 18000) |
+| `USE_CUDA` | `True` | Enable CUDA GPU acceleration |
+| `GHOSTING_OPACITY` | `0.25` | Overlay opacity (0.0 = pure mosaic) |
+| `NUM_TILES` | `300000` | Maximum tiles loaded from index |
 
 ---
 
@@ -108,74 +185,31 @@ python -m src.gui
 
 ---
 
-## Building the Tile Library
-
-The included async downloader fetches public-domain artwork (Chicago Art Institute API) and Creative Commons images:
-
-```bash
-python -m src.fast_downloader
-```
-
-After downloading, run the image optimizer to normalise sizes and remove corrupt files:
-
-```bash
-python -m src.optimizer
-```
-
-Place your own photos directly in `data/library_private/tiles/` — they are indexed alongside the public library without any additional steps.
-
----
-
-## How It Works
-
-### Smart Engine — colour matching
-
-Every tile in the library is represented as a **27-dimensional feature vector**: a 3×3 grid of cells, each described by its mean LAB (L\*, a\*, b\*) values. This captures both the dominant colour and the spatial colour gradient across the tile. At render time a `cKDTree` finds the nearest neighbours for each sector of the target image in milliseconds, even with 300,000+ tiles indexed.
-
-### Typo Engine — brightness matching
-
-Each glyph is pre-rendered at the target tile size and its **normalised ink density** (fraction of dark pixels) is computed and stored. At render time the engine maps each cell's mean brightness to the closest glyph by density, then renders it in the chosen style mode.
-
-### Anti-repetition (Smart Engine)
-
-- **Hard constraint:** A tile's source file may not appear in any of the 4 direct neighbours of the current cell.
-- **Frequency penalty:** Each use of a source file increments a global counter. The penalised score is `raw_score + (usage_count × W_FREQ)`, which continuously pushes the engine toward less-used tiles.
-- Both constraints treat all mirrored variants of the same image as a single source identity.
-
----
-
-## Development
-
-NeuroMosaic grew from an iterative design conversation that explored several approaches before arriving at the current architecture:
-
-- **v1–v2:** Semantic matching with OpenAI CLIP (ViT-B/32) — perceptually aware but colour-inaccurate.
-- **v3–v4:** Hybrid CLIP + RGB scoring with VGG-19 structural analysis and tile transformations (mirroring, 90°/180°/270° rotation).
-- **v5 (current):** Replaced learned embeddings with direct LAB colour matching. This eliminated the GPU memory bottleneck of large neural models while producing sharper colour fidelity. The 3×3 LAB grid preserves the spatial structure awareness that motivated the earlier VGG approach.
-
-Each iteration kept the anti-repetition logic and the multi-shape tile geometry, which remain the most distinctive aspects of the engine.
-
----
-
 ## Project Structure
 
 ```
-neural-mosaic/
+neuromosaic/
 ├── src/
 │   ├── gui.py              # Entry point — CustomTkinter application
 │   ├── engine_smart.py     # Colour-matched photomosaic engine
 │   ├── engine_typo.py      # Typography / glyph mosaic engine
 │   ├── indexer_smart.py    # Builds data/smart_index.pkl
 │   ├── indexer_typo.py     # Builds data/typo_index.pkl
-│   ├── ai_core.py          # MiDaS depth model (lazy-loaded singleton)
+│   ├── ai_core.py          # [Legacy] MiDaS depth model — retained for future depth-aware features
 │   ├── downloader.py       # Async public-domain image fetcher
 │   ├── optimizer.py        # Image normalisation & cleanup
 │   └── config.py           # Settings dataclass (reads .env)
 ├── assets/
-│   └── fonts/              # Place .ttf / .otf fonts here
+│   ├── fonts/              # Place .ttf / .otf fonts here
+│   └── examples/           # Example mosaics and source images
 ├── data/
 │   ├── library_public/tiles/
 │   └── library_private/tiles/
 ├── tests/
+├── .env.example            # Configuration template
+├── .gitignore
+├── CONTRIBUTING.md
+├── Makefile
 └── requirements.txt
 ```
 
@@ -188,6 +222,61 @@ neural-mosaic/
 - `customtkinter`, `Pillow`, `numpy`, `scipy`, `scikit-image`, `tqdm`
 
 Full list: `requirements.txt`
+
+---
+
+## Performance
+
+Benchmarked on: i5-12500H · RTX 3050 Laptop 4 GB · 32 GB DDR4
+
+| Operation | GPU (CUDA) | CPU only |
+|---|---|---|
+| Index 10,000 tiles | — s | — s |
+| Index 50,000 tiles | — s | — s |
+| Render 4K · square tiles | — s | — s |
+| Render 8K · hexagon tiles | — s | — s |
+| Render 16K · kite tiles | — s | — s |
+| Symbol mosaic 8K · B&W | — s | — s |
+| Peak VRAM | — GB | N/A |
+| Peak RAM | — GB | — GB |
+
+> Values marked with — are placeholders. Run `python -m tests.benchmark` to generate values for your hardware.
+
+---
+
+## Development History
+
+NeuroMosaic grew from an iterative design conversation that explored several approaches before arriving at the current architecture:
+
+- **v1–v2:** Semantic matching with OpenAI CLIP (ViT-B/32) — perceptually aware but colour-inaccurate.
+- **v3–v4:** Hybrid CLIP + RGB scoring with VGG-19 structural analysis and tile transformations (mirroring, 90°/180°/270° rotation).
+- **v5 (current):** Replaced learned embeddings with direct LAB colour matching. This eliminated the GPU memory bottleneck of large neural models while producing sharper colour fidelity. The 3×3 LAB grid preserves the spatial structure awareness that motivated the earlier VGG approach.
+
+Each iteration kept the anti-repetition logic and the multi-shape tile geometry, which remain the most distinctive aspects of the engine.
+
+---
+
+## Roadmap
+
+- [ ] Real-time mosaic preview in GUI (downscaled)
+- [ ] Tile library browser with visual search
+- [ ] CLI mode for batch processing
+- [ ] Export to SVG (symbol mosaic)
+- [ ] Plugin system for custom tile shapes
+
+---
+
+## Contributing
+
+Contributions, issues, and feature requests are welcome.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines.
+
+---
+
+## Acknowledgements
+
+- [Art Institute of Chicago API](https://api.artic.edu/) — public domain artwork for the default tile library
+- [CustomTkinter](https://github.com/TomSchimansky/CustomTkinter) — modern dark-themed GUI framework
 
 ---
 
