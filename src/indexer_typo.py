@@ -7,6 +7,7 @@ Scans every .ttf/.otf file in FONTS_DIR, renders each supported glyph at
 SAMPLE_SIZE pixels, measures its ink density, and writes the resulting
 library to INDEX_FILE as a pickle so TypoEngine can load it at runtime.
 """
+import argparse
 import os
 import pickle
 import numpy as np
@@ -21,7 +22,7 @@ INDEX_FILE = Path("data/typo_index.pkl")
 SAMPLE_SIZE = 40  # Glyph render size (px) used for density analysis.
 
 
-def analyze_font(font_path):
+def analyze_font(font_path, full_cjk: bool = False):
     """Analyse a single font file and return character density data.
 
     Renders every supported glyph at SAMPLE_SIZE and measures its ink density
@@ -29,6 +30,9 @@ def analyze_font(font_path):
 
     Args:
         font_path: Path to a .ttf or .otf file.
+        full_cjk: If True, scan the full CJK Unified Ideographs block
+                  (U+4E00–U+9FFF, ~20K glyphs). If False, scan only
+                  a representative sample (default, much faster).
 
     Returns:
         List of dicts with keys: char, font, density, aspect.
@@ -41,16 +45,18 @@ def analyze_font(font_path):
         return []
 
     # Unicode ranges to probe.
+    cjk_end = 40960 if full_cjk else 20100  # U+9FFF vs sample
+
     ranges = [
-        (33,    126),   # Basic Latin (printable ASCII)
-        (161,   255),   # Latin-1 Supplement
-        (8592,  8703),  # Arrows
-        (8704,  8959),  # Mathematical Operators
-        (9472,  9631),  # Box Drawing
-        (9632,  9727),  # Block Elements
-        (5792,  5880),  # Runic
-        (12353, 12447), # Hiragana
-        (19968, 20100), # CJK Unified Ideographs (sample)
+        (33,    126),       # Basic Latin (printable ASCII)
+        (161,   255),       # Latin-1 Supplement
+        (8592,  8703),      # Arrows
+        (8704,  8959),      # Mathematical Operators
+        (9472,  9631),      # Box Drawing
+        (9632,  9727),      # Block Elements
+        (5792,  5880),      # Runic
+        (12353, 12447),     # Hiragana
+        (19968, cjk_end),   # CJK Unified Ideographs (sample or full)
     ]
 
     # Reuse a single canvas for all glyphs (white background).
@@ -97,9 +103,19 @@ def analyze_font(font_path):
     return chars_data
 
 
-def main():
-    """Entry point — scan all fonts and write the typo index to disk."""
+def main(full_cjk: bool = False):
+    """Entry point — scan all fonts and write the typo index to disk.
+
+    Args:
+        full_cjk: If True, scan the full CJK Unified Ideographs block
+                  (U+4E00–U+9FFF, ~20K glyphs). If False, scan only
+                  a representative sample (default, much faster).
+    """
     print("--- TYPO INDEXER: GLOBAL FONT SCAN ---")
+    if full_cjk:
+        print("Mode: FULL CJK (this will take significantly longer)")
+    else:
+        print("Mode: SAMPLE CJK (use --full-cjk for complete Unified Ideographs)")
 
     if not FONTS_DIR.exists():
         os.makedirs(FONTS_DIR)
@@ -112,7 +128,7 @@ def main():
 
     global_library = []
     for fpath in tqdm(font_files):
-        global_library.extend(analyze_font(fpath))
+        global_library.extend(analyze_font(fpath, full_cjk=full_cjk))
 
     if not global_library:
         print("No glyphs found. Check that your font files are valid.")
@@ -137,5 +153,13 @@ def main():
 
     print("SUCCESS! Font index created.")
 
+
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Scan fonts and build typo_index.pkl")
+    parser.add_argument(
+        "--full-cjk",
+        action="store_true",
+        help="Scan full CJK Unified Ideographs block (slower but more glyphs)",
+    )
+    args = parser.parse_args()
+    main(full_cjk=args.full_cjk)
