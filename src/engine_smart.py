@@ -3,8 +3,8 @@ src/engine_smart.py
 -------------------
 Colour-matched photomosaic engine (SmartEngine).
 
-Supports multiple tile geometries including the aperiodic Einstein Hat
-polykite shape.  Each sector of the target image is matched to the
+Supports multiple tile geometries including the kite (diamond) shape.
+Each sector of the target image is matched to the
 best-fitting tile from the pre-built CIELAB feature index with spatial
 anti-repetition enforcement.
 """
@@ -42,7 +42,7 @@ class SmartEngine:
             self.features = []
 
     # ==========================================
-    # KITE GRID MATHEMATICS (EINSTEIN HAT)
+    # KITE GRID MATHEMATICS
     # ==========================================
     def _get_kite_poly(self, cx, cy, s, k):
         """Return the 4 vertices of a single kite on a flat-topped hexagonal grid.
@@ -164,16 +164,15 @@ class SmartEngine:
         sectors_data = []
 
         # ==========================================
-        # EINSTEIN HAT (APERIODIC EDGE-MATCHING POLYKITE)
+        # KITE TILING (DIAMOND GEOMETRY)
         # ==========================================
         if shape_mode == "kite":
-            print(f"Mode: Einstein Hat (polykite). Borders: {border_mode}")
+            print(f"Mode: Kite tiling. Borders: {border_mode}")
 
             s  = base_s          # Side length of a single hexagon in pixels.
             r3 = math.sqrt(3)
 
-            # 1. Mathematical definition of the Einstein Hat:
-            #    8 kites selected from a flat-topped hexagonal grid.
+            # 1. Kite cluster definition — 8 kites from a flat-topped hexagonal grid.
             #    q, r = axial hex coordinates; k = kite index within hex (0–5).
             BASE_HAT = [
                 (0, 0, 0), (0, 0, 1), (0, 0, 2), (0, 0, 3), (0, 0, 5),  # 5 centre kites

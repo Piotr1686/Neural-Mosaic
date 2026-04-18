@@ -144,7 +144,7 @@ class TestGetShapeMask:
 
 
 # ---------------------------------------------------------------------------
-# _get_kite_poly / _transform_kite_index (Einstein Hat math)
+# _get_kite_poly / _transform_kite_index (kite geometry math)
 # ---------------------------------------------------------------------------
 
 class TestKiteMath:
