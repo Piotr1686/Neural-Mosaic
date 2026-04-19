@@ -76,7 +76,7 @@ NeuroMosaic is a standalone desktop tool with two independent creative engines, 
 
 ### Smart Photo Mosaic
 
-Reconstructs the target image by tiling it with photographs from your personal library. Matching is performed in **CIE-LAB colour space** using a 3×3 regional grid per tile, which preserves both overall hue and local colour transitions. A `cKDTree` index allows the engine to search hundreds of thousands of candidates in milliseconds.
+Reconstructs the target image by tiling it with photographs from your personal library. Matching is performed in **CIE-LAB colour space** using a 5×5 regional grid per tile, which preserves both overall hue and local colour transitions. A `cKDTree` index allows the engine to search hundreds of thousands of candidates in milliseconds.
 
 **What you can control in the GUI:**
 
@@ -87,6 +87,8 @@ Reconstructs the target image by tiling it with photographs from your personal l
 | Tile shape | `square` · `rectangle_3x1` · `brick_wall` · `hexagon` · `hexagon_romb` · `romb` · `triangle` · `kite` |
 | Allow Mirroring | Horizontally flips tiles on the fly, doubling the effective library size without using extra disk space |
 | Black Borders (Grout) | Adds a dark gap between tiles — simulates real mosaic grout lines |
+| Color Blend | 0%–30% — blends the original photo over the mosaic for softer colour transitions |
+| Tile Tint | 0%–40% — shifts each tile's colours toward the target sector mean for tighter colour accuracy |
 
 The `kite` shape arranges tiles in a distinctive non-rectangular diamond geometry.
 
@@ -114,7 +116,7 @@ Font scanning is triggered from the GUI with a single click. Any `.ttf` or `.otf
 
 ### Smart Engine — colour matching
 
-Every tile in the library is represented as a **27-dimensional feature vector**: a 3×3 grid of cells, each described by its mean LAB (L\*, a\*, b\*) values. This captures both the dominant colour and the spatial colour gradient across the tile. At render time a `cKDTree` finds the nearest neighbours for each sector of the target image in milliseconds, even with 300,000+ tiles indexed.
+Every tile in the library is represented as a **75-dimensional feature vector**: a 5×5 grid of cells, each described by its mean LAB (L\*, a\*, b\*) values. This captures both the dominant colour and the spatial colour gradient across the tile. At render time a `cKDTree` finds the nearest neighbours for each sector of the target image in milliseconds, even with 300,000+ tiles indexed.
 
 ### Typo Engine — brightness matching
 
@@ -250,7 +252,7 @@ NeuroMosaic grew from an iterative design conversation that explored several app
 
 - **v1–v2:** Semantic matching with OpenAI CLIP (ViT-B/32) — perceptually aware but colour-inaccurate.
 - **v3–v4:** Hybrid CLIP + RGB scoring with VGG-19 structural analysis and tile transformations (mirroring, 90°/180°/270° rotation).
-- **v5 (current):** Replaced learned embeddings with direct LAB colour matching. This eliminated the GPU memory bottleneck of large neural models while producing sharper colour fidelity. The 3×3 LAB grid preserves the spatial structure awareness that motivated the earlier VGG approach.
+- **v5 (current):** Replaced learned embeddings with direct LAB colour matching. This eliminated the GPU memory bottleneck of large neural models while producing sharper colour fidelity. The 5×5 LAB grid preserves the spatial structure awareness that motivated the earlier VGG approach.
 
 Each iteration kept the anti-repetition logic and the multi-shape tile geometry, which remain the most distinctive aspects of the engine.
 

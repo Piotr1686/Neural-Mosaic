@@ -28,8 +28,23 @@ class SmartEngine:
                 data = pickle.load(f)
             
             self.paths = data["paths"]
-            self.features = data["features"] 
-            
+            self.features = data["features"]
+
+            expected_dim = 75
+            if self.features.ndim == 2 and self.features.shape[1] != expected_dim:
+                actual_dim = self.features.shape[1]
+                print(f"ERROR: Index has {actual_dim}-dim features, "
+                      f"expected {expected_dim}. "
+                      f"Rendering DISABLED. Rebuild index: "
+                      f"GUI → 'Update / Create Index'")
+                self.paths = []
+                self.features = []
+                return
+
+            schema = data.get("schema_version", "unknown")
+            if schema != "5x5":
+                print(f"WARNING: Index schema '{schema}', expected '5x5'.")
+
             self.settings = {
                 "allow_mirror": True,
                 "tile_size": 100,
@@ -143,7 +158,7 @@ class SmartEngine:
             box = (0, offset, src_w, offset + new_h)
         return img.crop(box).resize((target_w, target_h), Image.Resampling.LANCZOS)
 
-    def create_mosaic(self, target_path, output_path, resolution_key, shape_mode, tile_scale, border_mode=False):
+    def create_mosaic(self, target_path, output_path, resolution_key, shape_mode, tile_scale, border_mode=False, blend_strength=0.0, tint_strength=0.0):
         if not self.paths:
             print("ERROR: Index not loaded.")
             return
@@ -302,7 +317,7 @@ class SmartEngine:
                         tmp.paste(s_img, (sb[0] - safe_box[0], sb[1] - safe_box[1]))
                         s_img = tmp
                         
-                    mat = s_img.resize((3, 3), Image.Resampling.BOX)
+                    mat = s_img.resize((5, 5), Image.Resampling.BOX)
                     lab = skimage.color.rgb2lab(np.array(mat)/255.0).flatten()
                     lab[0::3] /= 100.0; lab[1::3] = (lab[1::3]+128)/255.0; lab[2::3] = (lab[2::3]+128)/255.0
                     
@@ -370,7 +385,7 @@ class SmartEngine:
                             s_img = target.crop(safe)
                             if s_img.size != (tile_w, tile_h):
                                 tmp = Image.new("RGB", (tile_w, tile_h), (0,0,0)); tmp.paste(s_img, (0,0)); s_img = tmp
-                            mat = s_img.resize((3, 3), Image.Resampling.BOX)
+                            mat = s_img.resize((5, 5), Image.Resampling.BOX)
                             lab = skimage.color.rgb2lab(np.array(mat)/255.0).flatten()
                             lab[0::3]/=100.0; lab[1::3]=(lab[1::3]+128)/255.0; lab[2::3]=(lab[2::3]+128)/255.0
                             
@@ -387,7 +402,7 @@ class SmartEngine:
                     s_img = target.crop(safe)
                     if s_img.size != (tile_w, tile_h):
                         tmp = Image.new("RGB", (tile_w, tile_h), (0,0,0)); tmp.paste(s_img, (0,0)); s_img = tmp
-                    mat = s_img.resize((3, 3), Image.Resampling.BOX)
+                    mat = s_img.resize((5, 5), Image.Resampling.BOX)
                     lab = skimage.color.rgb2lab(np.array(mat)/255.0).flatten()
                     lab[0::3]/=100.0; lab[1::3]=(lab[1::3]+128)/255.0; lab[2::3]=(lab[2::3]+128)/255.0
                     
@@ -421,9 +436,9 @@ class SmartEngine:
         features_norm = self.features
         features_flip = None
         if allow_mirror:
-            reshaped = self.features.reshape(-1, 3, 3, 3)
+            reshaped = self.features.reshape(-1, 5, 5, 3)
             flipped = reshaped[:, :, ::-1, :]
-            features_flip = flipped.reshape(-1, 27)
+            features_flip = flipped.reshape(-1, 75)
 
         for i in tqdm(range(0, len(sectors_data), chunk_size)):
             end = min(i + chunk_size, len(sectors_data))
@@ -478,11 +493,34 @@ class SmartEngine:
                     with Image.open(self.paths[best_idx]) as img:
                         img = img.convert("RGBA")
                         if should_mirror: img = ImageOps.mirror(img)
-                        
+
                         img = self._smart_crop(img, tw, th)
+
+                        if tint_strength > 0.0:
+                            sector_box = (
+                                max(0, px), max(0, py),
+                                min(target_w, px + tw), min(target_h, py + th)
+                            )
+                            if sector_box[2] > sector_box[0] and sector_box[3] > sector_box[1]:
+                                sector_crop = target.crop(sector_box)
+                                sector_mean = np.array(
+                                    sector_crop.resize((1, 1), Image.Resampling.BOX).getpixel((0, 0)),
+                                    dtype=np.float32)[:3]
+                                tile_rgb = img.convert("RGB")
+                                tile_arr = np.array(tile_rgb, dtype=np.float32)
+                                tile_mean = tile_arr.mean(axis=(0, 1))
+                                shift = (sector_mean - tile_mean) * tint_strength
+                                tile_arr = np.clip(tile_arr + shift, 0, 255).astype(np.uint8)
+                                img = Image.fromarray(tile_arr).convert("RGBA")
+
                         img.putalpha(mask)
                         final_mosaic.alpha_composite(img, (px, py))
                 except Exception: pass
 
         print(f"Saving to {output_path}...")
-        final_mosaic.convert("RGB").save(output_path, quality=95)
+        mosaic_rgb = final_mosaic.convert("RGB")
+        if blend_strength > 0.0:
+            print(f"Applying Color Blend: {int(blend_strength * 100)}%...")
+            original_resized = target.resize(mosaic_rgb.size, Image.Resampling.LANCZOS)
+            mosaic_rgb = Image.blend(mosaic_rgb, original_resized, blend_strength)
+        mosaic_rgb.save(output_path, quality=95)

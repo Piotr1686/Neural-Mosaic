@@ -7,13 +7,17 @@
 
 ## Architektura
 
-[2026-04-18] **SmartEngine — dopasowanie kolorowe (LAB 3×3)**
-- Silnik w `src/engine_smart.py` używa 27-wymiarowego wektora cech (siatka 3×3 w przestrzeni CIELAB)
-- Indeks buduje `src/indexer_smart.py` → `data/smart_index.pkl`
+[2026-04-18, zaktualizowano 2026-04-18] **SmartEngine — dopasowanie kolorowe (LAB 5×5)**
+- Silnik w `src/engine_smart.py` używa 75-wymiarowego wektora cech (siatka 5×5 w przestrzeni CIELAB)
+- Indeks buduje `src/indexer_smart.py` → `data/smart_index.pkl`; schema_version="5x5", feature_dim=75
 - Dopasowanie przez `cKDTree` + `cdist` (euclidean), chunk_size=500, top-50 kandydatów
 - Spatial anti-repetition: `cKDTree` po współrzędnych kafelka, search_radius = 1.5×base_s
 - Obsługuje geometrie: square, rectangle_3x1, brick_wall, hexagon, hexagon_romb, triangle, romb, kite
 - Kite geometry = 8-kite "hat" z płaskiej siatki heksagonalnej (axial coords q, r, k)
+- LIBRARY_DIRS: data/library_starter/tiles, library_public, library_extended, library_private
+- Blokada renderowania przy niezgodnym indeksie (hard block jeśli dim≠75 lub schema≠"5x5")
+- Post-processing: Color Blend (0–30%, Image.blend) + Tile Tint (0–40%, RGB mean shift)
+- WAŻNE: po zmianie 3×3→5×5 istniejący smart_index.pkl jest niekompatybilny — wymaga przebudowy!
 
 [2026-04-18] **TypoEngine — font/symbol mosaic**
 - Silnik w `src/engine_typo.py`, indeks w `data/typo_index.pkl`

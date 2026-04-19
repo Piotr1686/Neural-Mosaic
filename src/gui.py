@@ -114,6 +114,20 @@ class App(ctk.CTk):
         self.check_border.deselect()
         self.check_border.pack(pady=5)
         
+        # --- POST-PROCESSING ---
+        ctk.CTkLabel(frame, text="POST-PROCESSING",
+                     font=("Arial", 12, "bold")).pack(pady=(20, 5))
+
+        ctk.CTkLabel(frame, text="Color Blend").pack(pady=(10, 0))
+        self.seg_blend = ctk.CTkSegmentedButton(frame, values=["0%", "10%", "20%", "30%"])
+        self.seg_blend.set("0%")
+        self.seg_blend.pack(pady=5)
+
+        ctk.CTkLabel(frame, text="Tile Tint").pack(pady=(10, 0))
+        self.seg_tint = ctk.CTkSegmentedButton(frame, values=["0%", "10%", "20%", "30%", "40%"])
+        self.seg_tint.set("0%")
+        self.seg_tint.pack(pady=5)
+
         self.btn_run_p = ctk.CTkButton(frame, text="RENDER SMART MOSAIC", fg_color="green", height=50, command=self.run_photo)
         self.btn_run_p.pack(pady=30)
 
@@ -272,9 +286,22 @@ class App(ctk.CTk):
             scale = "1.0"
         scale = float(scale)
 
+        blend_val = self.seg_blend.get()
+        blend_strength = int(blend_val.replace("%", "")) / 100.0
+        tint_val = self.seg_tint.get()
+        tint_strength = int(tint_val.replace("%", "")) / 100.0
+
+        if res in ("8K", "16K"):
+            self.log(f"NOTE: {res} rendering requires ~2-4 GB free RAM. "
+                     f"Close other applications for best performance.")
+
         def _run():
             try:
-                self.smart_engine.create_mosaic(self.path_p, out, res, shape, tile_scale=scale, border_mode=border_mode)
+                self.smart_engine.create_mosaic(
+                    self.path_p, out, res, shape,
+                    tile_scale=scale, border_mode=border_mode,
+                    blend_strength=blend_strength, tint_strength=tint_strength,
+                )
                 self.log("DONE! Smart Mosaic saved.")
             except Exception as e: 
                 self.log(f"Error: {e}")
