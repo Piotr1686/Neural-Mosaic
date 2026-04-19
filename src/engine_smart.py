@@ -426,6 +426,10 @@ class SmartEngine:
         neighbors_map = tree.query_ball_tree(tree, r=search_radius)
 
         print("Matching and generating final mosaic...")
+        if tint_strength > 0.0:
+            print(f"  Tile Tint active: {int(tint_strength * 100)}% (pixel lerp toward sector colour)")
+        if blend_strength > 0.0:
+            print(f"  Color Blend will be applied at save: {int(blend_strength * 100)}%")
         tgt_features = np.array([x["feature"] for x in sectors_data])
         used_counts = np.zeros(len(self.paths), dtype=np.int32)
         sector_assignments = -1 * np.ones(len(sectors_data), dtype=np.int32)
@@ -508,9 +512,14 @@ class SmartEngine:
                                     dtype=np.float32)[:3]
                                 tile_rgb = img.convert("RGB")
                                 tile_arr = np.array(tile_rgb, dtype=np.float32)
-                                tile_mean = tile_arr.mean(axis=(0, 1))
-                                shift = (sector_mean - tile_mean) * tint_strength
-                                tile_arr = np.clip(tile_arr + shift, 0, 255).astype(np.uint8)
+                                # Pixel-wise lerp toward sector_mean.
+                                # Previously: shift = (sector_mean - tile_mean) * tint_strength
+                                # was near-zero because the matcher already picked a tile with
+                                # similar colour — tile_mean ≈ sector_mean. The lerp below
+                                # guarantees a visible tint regardless of match quality:
+                                # tint=0.0 → full tile texture, 1.0 → solid sector colour.
+                                tile_arr = tile_arr * (1.0 - tint_strength) + sector_mean * tint_strength
+                                tile_arr = np.clip(tile_arr, 0, 255).astype(np.uint8)
                                 img = Image.fromarray(tile_arr).convert("RGBA")
 
                         img.putalpha(mask)
