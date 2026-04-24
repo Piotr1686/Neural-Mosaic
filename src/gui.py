@@ -82,12 +82,19 @@ class App(ctk.CTk):
         self._setup_typo_tab()
 
     def _setup_photo_tab(self):
-        frame = self.tab_photo
+        outer = self.tab_photo
+        outer.grid_columnconfigure(0, weight=1)
+        outer.grid_rowconfigure(0, weight=1)
+        outer.grid_rowconfigure(1, weight=0)
+
+        frame = ctk.CTkScrollableFrame(outer, fg_color="transparent")
+        frame.grid(row=0, column=0, sticky="nsew", padx=10, pady=(10, 0))
+
         ctk.CTkLabel(frame, text="REGIONAL COLOR MOSAIC", font=ctk.CTkFont(size=18, weight="bold")).pack(pady=10)
-        
+
         self.btn_input_p = ctk.CTkButton(frame, text="Select Input Image", command=self.select_input_p)
         self.btn_input_p.pack(pady=10)
-        
+
         self.combo_res_p = ctk.CTkComboBox(frame, values=["2K", "4K", "8K", "16K"])
         self.combo_res_p.set("4K")
         self.combo_res_p.pack(pady=5)
@@ -95,7 +102,7 @@ class App(ctk.CTk):
         # BUTTON PHOTO SCALE
         ctk.CTkLabel(frame, text="Tile Size Multiplier", font=("Arial", 12, "bold")).pack(pady=(15,0))
         self.seg_scale_p = ctk.CTkSegmentedButton(frame, values=["0.5", "0.75", "1.0", "1.75", "2.0"])
-        self.seg_scale_p.set("1.0") 
+        self.seg_scale_p.set("1.0")
         self.seg_scale_p.pack(pady=5)
 
         ctk.CTkLabel(frame, text="Tile Shape").pack(pady=(10,0))
@@ -104,16 +111,16 @@ class App(ctk.CTk):
         self.combo_shape = ctk.CTkComboBox(frame, values=shapes)
         self.combo_shape.set("hexagon_romb")
         self.combo_shape.pack(pady=5)
-        
+
         # Checkboxes
         self.check_mirror = ctk.CTkCheckBox(frame, text="Allow Mirroring")
         self.check_mirror.select()
         self.check_mirror.pack(pady=(15, 5))
-        
+
         self.check_border = ctk.CTkCheckBox(frame, text="Black Borders (Grout)")
         self.check_border.deselect()
         self.check_border.pack(pady=5)
-        
+
         # --- POST-PROCESSING ---
         ctk.CTkLabel(frame, text="POST-PROCESSING",
                      font=("Arial", 12, "bold")).pack(pady=(20, 5))
@@ -128,38 +135,53 @@ class App(ctk.CTk):
         self.seg_tint.set("0%")
         self.seg_tint.pack(pady=5)
 
-        self.btn_run_p = ctk.CTkButton(frame, text="RENDER SMART MOSAIC", fg_color="green", height=50, command=self.run_photo)
-        self.btn_run_p.pack(pady=30)
+        # RENDER button pinned outside the scroll area — always visible
+        self.btn_run_p = ctk.CTkButton(
+            outer,
+            text="RENDER SMART MOSAIC",
+            fg_color="green",
+            height=50,
+            font=ctk.CTkFont(size=14, weight="bold"),
+            command=self.run_photo,
+        )
+        self.btn_run_p.grid(row=1, column=0, sticky="ew", padx=20, pady=(10, 15))
 
     def _setup_typo_tab(self):
-        frame = self.tab_typo
+        outer = self.tab_typo
+        outer.grid_columnconfigure(0, weight=1)
+        outer.grid_rowconfigure(0, weight=1)
+        outer.grid_rowconfigure(1, weight=0)
+
+        frame = ctk.CTkScrollableFrame(outer, fg_color="transparent")
+        frame.grid(row=0, column=0, sticky="nsew", padx=10, pady=(10, 0))
+
         ctk.CTkLabel(frame, text="SYMBOL MOSAIC (GLOBAL FONTS)", font=ctk.CTkFont(size=18, weight="bold")).pack(pady=10)
-        
+
         self.btn_load_typo = ctk.CTkButton(frame, text="Load Typo Index (Fast)", command=self.load_typo_index)
         self.btn_load_typo.pack(pady=5)
-        
+
         self.lbl_typo_status = ctk.CTkLabel(frame, text="Status: Not Loaded", text_color="red")
         self.lbl_typo_status.pack(pady=(0, 10))
 
         self.btn_scan_fonts = ctk.CTkButton(frame, text="Update Database (Scan Assets)", fg_color="gray", width=200, command=self.scan_fonts)
         self.btn_scan_fonts.pack(pady=5)
-        
+
         ctk.CTkLabel(frame, text="--------------------------------").pack(pady=10)
-        
+
         self.btn_input_t = ctk.CTkButton(frame, text="Select Input Image", command=self.select_input_t)
         self.btn_input_t.pack(pady=10)
-        
+
         ctk.CTkLabel(frame, text="Output Resolution").pack()
         self.combo_res_t = ctk.CTkComboBox(frame, values=["4K", "8K", "16K"])
         self.combo_res_t.set("8K")
         self.combo_res_t.pack(pady=5)
-        
+
         # BUTTON TYPO SCALE
         ctk.CTkLabel(frame, text="Symbol Size Multiplier", font=("Arial", 12, "bold")).pack(pady=(15,0))
         self.seg_scale_t = ctk.CTkSegmentedButton(frame, values=["0.5", "0.75", "1.0", "1.75", "2.0"])
         self.seg_scale_t.set("1.0")
         self.seg_scale_t.pack(pady=5)
-        
+
         # --- FONT GROUPS ---
         ctk.CTkLabel(frame, text="Font Groups (select one or more)",
                      font=("Arial", 12, "bold")).pack(pady=(15, 5))
@@ -194,8 +216,16 @@ class App(ctk.CTk):
         self.seg_variation.set("20")
         self.seg_variation.pack(pady=5)
 
-        self.btn_run_t = ctk.CTkButton(frame, text="RENDER SYMBOL MOSAIC", fg_color="purple", height=50, command=self.run_typo)
-        self.btn_run_t.pack(pady=30)
+        # RENDER button pinned outside the scroll area — always visible
+        self.btn_run_t = ctk.CTkButton(
+            outer,
+            text="RENDER SYMBOL MOSAIC",
+            fg_color="purple",
+            height=50,
+            font=ctk.CTkFont(size=14, weight="bold"),
+            command=self.run_typo,
+        )
+        self.btn_run_t.grid(row=1, column=0, sticky="ew", padx=20, pady=(10, 15))
 
     def log(self, msg):
         print(msg)
