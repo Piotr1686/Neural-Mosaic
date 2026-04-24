@@ -10,6 +10,7 @@ Provides two tabs:
 import os
 import subprocess
 import sys
+import shutil
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 import customtkinter as ctk
@@ -19,8 +20,9 @@ from datetime import datetime
 from pathlib import Path
 from .engine_smart import SmartEngine
 from .engine_typo import TypoEngine
-from .indexer_smart import SmartIndexer
+from .indexer_smart import SmartIndexer, LIBRARY_DIRS
 from .font_groups import GROUP_LABELS
+from .downloader_v2 import PoliteDownloader, DEFAULT_OUTPUT_DIR
 
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
@@ -47,29 +49,66 @@ class App(ctk.CTk):
     def _init_sidebar(self):
         self.sidebar = ctk.CTkFrame(self, width=250, corner_radius=0)
         self.sidebar.grid(row=0, column=0, sticky="nsew")
-        
+
         self.logo = ctk.CTkLabel(self.sidebar, text="NEURAL\nMOSAIC", font=ctk.CTkFont(size=22, weight="bold"))
         self.logo.grid(row=0, column=0, padx=20, pady=(20, 10))
-        
+
         # --- INDEXING SECTION ---
         self.btn_load_smart = ctk.CTkButton(self.sidebar, text="Load Smart Index", fg_color="darkgreen", command=self.load_index)
         self.btn_load_smart.grid(row=1, column=0, padx=20, pady=(10, 5))
 
-        # Button: rebuild or update the Smart Index from the tile library.
         self.btn_update_smart = ctk.CTkButton(self.sidebar, text="Update / Create Index", fg_color="#1f538d", command=self.run_smart_indexer)
-        self.btn_update_smart.grid(row=2, column=0, padx=20, pady=(5, 20))
-        
-        ctk.CTkLabel(self.sidebar, text="OUTPUT SETTINGS", font=ctk.CTkFont(size=12, weight="bold")).grid(row=3, column=0, pady=(10,5))
-        
+        self.btn_update_smart.grid(row=2, column=0, padx=20, pady=(5, 10))
+
+        # --- TILE LIBRARY SECTION ---
+        ctk.CTkLabel(self.sidebar, text="TILE LIBRARY", font=ctk.CTkFont(size=12, weight="bold")).grid(row=3, column=0, pady=(10, 2))
+
+        self.lbl_library_status = ctk.CTkLabel(self.sidebar, text="EMPTY", text_color="red")
+        self.lbl_library_status.grid(row=4, column=0, pady=(0, 4))
+
+        self.btn_dl_starter = ctk.CTkButton(
+            self.sidebar, text="Download Starter (500 · ~25 MB)",
+            fg_color="#5a3e8a", width=220, command=self.download_starter,
+        )
+        self.btn_dl_starter.grid(row=5, column=0, padx=15, pady=2)
+
+        self.btn_dl_public = ctk.CTkButton(
+            self.sidebar, text="Download Gallery (5K · ~250 MB)",
+            fg_color="#5a3e8a", width=220, command=self.download_public,
+        )
+        self.btn_dl_public.grid(row=6, column=0, padx=15, pady=2)
+
+        self.btn_dl_extended = ctk.CTkButton(
+            self.sidebar, text="Download Extended (30K · ~2.5 GB)",
+            fg_color="#5a3e8a", width=220, command=self.download_extended,
+        )
+        self.btn_dl_extended.grid(row=7, column=0, padx=15, pady=2)
+
+        self.btn_import = ctk.CTkButton(
+            self.sidebar, text="Import Your Photos...",
+            fg_color="gray", width=220, command=self.import_photos,
+        )
+        self.btn_import.grid(row=8, column=0, padx=15, pady=(2, 6))
+
+        self.progress_dl = ctk.CTkProgressBar(self.sidebar, width=220)
+        self.progress_dl.set(0)
+        self.progress_dl.grid(row=9, column=0, padx=15, pady=(0, 8))
+        self.progress_dl.grid_remove()
+
+        # --- OUTPUT SETTINGS ---
+        ctk.CTkLabel(self.sidebar, text="OUTPUT SETTINGS", font=ctk.CTkFont(size=12, weight="bold")).grid(row=10, column=0, pady=(10, 5))
+
         self.btn_out_dir = ctk.CTkButton(self.sidebar, text="Set Output Folder", fg_color="gray", command=self.select_output_dir)
-        self.btn_out_dir.grid(row=4, column=0, padx=20, pady=5)
-        
+        self.btn_out_dir.grid(row=11, column=0, padx=20, pady=5)
+
         self.entry_project_name = ctk.CTkEntry(self.sidebar, placeholder_text="Project Name")
-        self.entry_project_name.grid(row=5, column=0, padx=20, pady=5)
-        
+        self.entry_project_name.grid(row=12, column=0, padx=20, pady=5)
+
         self.console = ctk.CTkTextbox(self.sidebar, width=220)
-        self.console.grid(row=6, column=0, padx=10, pady=20, sticky="nsew")
-        self.sidebar.grid_rowconfigure(6, weight=1)
+        self.console.grid(row=13, column=0, padx=10, pady=20, sticky="nsew")
+        self.sidebar.grid_rowconfigure(13, weight=1)
+
+        self._check_library_status()
 
     def _init_tabs(self):
         self.tabview = ctk.CTkTabview(self)
@@ -226,6 +265,81 @@ class App(ctk.CTk):
             command=self.run_typo,
         )
         self.btn_run_t.grid(row=1, column=0, sticky="ew", padx=20, pady=(10, 15))
+
+    # --- TILE LIBRARY ---
+
+    def _check_library_status(self):
+        all_dirs = list(LIBRARY_DIRS) + [DEFAULT_OUTPUT_DIR]
+        total = sum(
+            len(list(d.glob("*.jpg"))) + len(list(d.glob("*.png")))
+            for d in all_dirs if d.exists()
+        )
+        if total == 0:
+            text, color = "EMPTY", "red"
+        elif total < 500:
+            text, color = f"{total} images", "orange"
+        elif total < 5000:
+            text, color = f"{total} images", "yellow"
+        else:
+            text, color = f"{total} images", "green"
+        self.lbl_library_status.configure(text=text, text_color=color)
+
+    def _run_download(self, plan: str):
+        def _work():
+            self.after(0, self.progress_dl.grid)
+            self.after(0, lambda: self.progress_dl.configure(mode="indeterminate"))
+            self.after(0, self.progress_dl.start)
+            try:
+                dl = PoliteDownloader()
+                dl.on_progress = self.log
+                saved = dl.download(plan)
+                self.log(f"Download complete: {saved} images saved.")
+            except Exception as exc:
+                self.log(f"Download error: {exc}")
+            finally:
+                self.after(0, self.progress_dl.stop)
+                self.after(0, self.progress_dl.grid_remove)
+                self.after(0, self._check_library_status)
+        threading.Thread(target=_work, daemon=True).start()
+
+    def download_starter(self):
+        self._run_download("starter")
+
+    def download_public(self):
+        if not os.environ.get("OPENVERSE_CLIENT_ID"):
+            self.log("⚠ OPENVERSE_CLIENT_ID not set!")
+            self.log("Gallery requires an Openverse API key.")
+            self.log("Register: see .env.example for instructions.")
+            self.log("Starter (500 images) works without a key.")
+            return
+        self._run_download("public")
+
+    def download_extended(self):
+        if not os.environ.get("OPENVERSE_CLIENT_ID"):
+            self.log("⚠ OPENVERSE_CLIENT_ID not set!")
+            self.log("Extended requires an Openverse API key.")
+            self.log("Register: see .env.example for instructions.")
+            self.log("Starter (500 images) works without a key.")
+            return
+        self._run_download("extended")
+
+    def import_photos(self):
+        paths = filedialog.askopenfilenames(
+            filetypes=[("Images", "*.jpg *.jpeg *.png *.webp *.bmp"), ("All", "*.*")]
+        )
+        if not paths:
+            return
+        dest = DEFAULT_OUTPUT_DIR
+        dest.mkdir(parents=True, exist_ok=True)
+        copied = 0
+        for p in paths:
+            src = Path(p)
+            target = dest / src.name
+            if not target.exists():
+                shutil.copy2(src, target)
+                copied += 1
+        self.log(f"Imported {copied} photos to {dest}")
+        self._check_library_status()
 
     def log(self, msg):
         print(msg)
