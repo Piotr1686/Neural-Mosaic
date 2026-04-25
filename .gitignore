@@ -11,7 +11,8 @@ venv/
 .conda/
 
 # Data, outputs, inputs (large files)
-data/
+data/*
+!data/LICENSES.md
 output/
 input/
 
