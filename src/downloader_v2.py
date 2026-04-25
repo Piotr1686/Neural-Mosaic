@@ -85,6 +85,9 @@ class PoliteDownloader:
 
         self._request_count = 0
         self._tag_index = 0
+        self._tags = list(OPENVERSE_TAGS)  # mutable per-instance copy, shuffled each epoch
+
+        self.on_progress: Optional[Callable[[str], None]] = None
 
         # phash index: loaded from state or built from existing files
         self._hashes: list = []
@@ -92,8 +95,6 @@ class PoliteDownloader:
         self._state_path = STATE_FILE
 
         self._load_state()
-
-        self.on_progress: Optional[Callable[[str], None]] = None
 
     # -----------------------------------------------------------------------
     # Public API
@@ -149,13 +150,18 @@ class PoliteDownloader:
         fetched = 0
 
         while fetched < limit:
-            tag = OPENVERSE_TAGS[self._tag_index % len(OPENVERSE_TAGS)]
+            n = len(self._tags)
+            tag = self._tags[self._tag_index % n]
             self._tag_index += 1
+            if self._tag_index % n == 0:
+                random.shuffle(self._tags)  # new epoch — reshuffle for variety
+
             params = {
                 "q": tag,
                 "license": "cc0,pdm",
                 "page_size": page_size,
                 "page": random.randint(1, 10),
+                "size": "medium,large",
             }
             resp = self._get("https://api.openverse.org/v1/images/",
                              params=params, headers=headers)
@@ -176,7 +182,7 @@ class PoliteDownloader:
 
             results = resp.json().get("results", [])
             for item in results:
-                url = item.get("url") or item.get("thumbnail")
+                url = item.get("thumbnail") or item.get("url")  # thumbnail wystarczy dla kafelków
                 img_id = f"openverse_{item.get('id', '')}"
                 if url and img_id not in self._downloaded_ids:
                     yield url, img_id
@@ -415,25 +421,19 @@ class PoliteDownloader:
         shortest = min(w, h)
         if shortest < 200:
             return False
-        if shortest > 1200:
-            scale = 1200 / shortest
-            img = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
-        elif shortest < 400:
-            scale = 400 / shortest
+        if shortest > 600:
+            scale = 600 / shortest
             img = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
 
         if not self._passes_quality(img):
             return False
 
-        try:
-            from imagehash import phash as compute_phash
-            h_val = compute_phash(img)
-            for existing in self._hashes:
-                if (h_val - existing) < 5:
-                    return False
-            self._hashes.append(h_val)
-        except ImportError:
-            pass  # imagehash not installed — skip dedup
+        from imagehash import phash as compute_phash
+        h_val = compute_phash(img)
+        for existing in self._hashes:
+            if (h_val - existing) < 5:
+                return False
+        self._hashes.append(h_val)
 
         out_path = self.output_dir / f"{img_id}.jpg"
         img.save(out_path, "JPEG", quality=85)
@@ -503,6 +503,7 @@ class PoliteDownloader:
             try:
                 state = json.loads(self._state_path.read_text())
                 self._downloaded_ids = set(state.get("downloaded_ids", []))
+                self._tag_index = state.get("tag_index", 0)
                 hash_ints = state.get("phashes", [])
                 try:
                     import numpy as _np
@@ -512,20 +513,19 @@ class PoliteDownloader:
                 except Exception:
                     self._hashes = []
                 self._log(f"Resumed: {len(self._downloaded_ids)} IDs, "
-                          f"{len(self._hashes)} hashes loaded")
+                          f"{len(self._hashes)} hashes loaded, "
+                          f"tag_index={self._tag_index}")
             except Exception as exc:
                 logger.warning("Could not load state: %s", exc)
 
     def _save_state(self):
         try:
-            try:
-                from imagehash import ImageHash
-                hash_data = [h.hash.flatten().tolist() for h in self._hashes]
-            except Exception:
-                hash_data = []
+            from imagehash import ImageHash
+            hash_data = [h.hash.flatten().tolist() for h in self._hashes]
             state = {
                 "downloaded_ids": list(self._downloaded_ids),
                 "phashes": hash_data,
+                "tag_index": self._tag_index,
             }
             self._state_path.parent.mkdir(parents=True, exist_ok=True)
             self._state_path.write_text(json.dumps(state))

@@ -5,7 +5,7 @@
 - **Typ:** Desktop App + AI/ML
 - **Stack:** Python 3.10 (conda), torch 2.5.1, customtkinter 5.2.2, transformers 4.57.3, opencv-python 4.12, pillow 11.1.0, scikit-learn 1.7.2, scipy 1.15.3, numpy 2.0.1
 - **Środowisko:** Windows 11, Miniconda (Python 3.10), VS Code
-- **Cel bieżący:** Implementacja CLIP-based semantic tile matching w SmartEngine (branch `feature/semantic-clip`) — zamiana 3×3 LAB color features na CLIP embeddings dla semantycznego dopasowania kafelków; typo engine enhancements (font groups, color modes) zostały ukończone w poprzednich commitach
+- **Cel bieżący:** Dopracowanie SmartEngine (5×5 LAB color features + cKDTree) — budowa biblioteki kafelków i przygotowanie do kolejnych faz; typo engine enhancements (font groups, color modes) zostały ukończone w poprzednich commitach
 
 ## Zasady pracy
 - Zawsze sprawdzaj MEMORY.md przed podjęciem decyzji architektonicznej
@@ -31,13 +31,13 @@
 - **Symbol Mosaic (Typo)** — używa `TypoEngine`, wymaga `data/typo_index.pkl`
 
 **Silniki:**
-- `src/engine_smart.py` — color photo mosaic; dopasowanie przez siatkę 3x3 LAB + `cKDTree`; ładuje `data/smart_index.pkl`
+- `src/engine_smart.py` — color photo mosaic; dopasowanie przez siatkę 5×5 LAB (75-dim) + `cKDTree`; ładuje `data/smart_index.pkl`
 - `src/engine_typo.py` — font/symbol mosaic; renderuje glify jako kafelki; ładuje `data/typo_index.pkl`
 - `src/ai_core.py` — Singleton dla MiDaS DPT_Hybrid (depth estimation), lazy-loaded
 
 **Indeksery** (uruchom przed pierwszym użyciem lub przez przyciski GUI):
 ```bash
-python -m src.indexer_smart   # produkuje data/smart_index.pkl  (3x3 LAB features)
+python -m src.indexer_smart   # produkuje data/smart_index.pkl  (5x5 LAB features, 75-dim)
 python -m src.indexer_typo    # produkuje data/typo_index.pkl   (font glyph analysis)
 ```
 

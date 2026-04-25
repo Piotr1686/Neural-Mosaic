@@ -444,17 +444,19 @@ class SmartEngine:
             flipped = reshaped[:, :, ::-1, :]
             features_flip = flipped.reshape(-1, 75)
 
+        top_k = min(len(self.paths), 200)
+
         for i in tqdm(range(0, len(sectors_data), chunk_size)):
             end = min(i + chunk_size, len(sectors_data))
             chunk_tgt = tgt_features[i:end]
-            
+
             dists_norm = cdist(chunk_tgt, features_norm, 'euclidean')
             if allow_mirror:
                 dists_flip = cdist(chunk_tgt, features_flip, 'euclidean')
-            
-            top_k_norm = np.argpartition(dists_norm, 50, axis=1)[:, :50]
+
+            top_k_norm = np.argpartition(dists_norm, top_k - 1, axis=1)[:, :top_k]
             if allow_mirror:
-                top_k_flip = np.argpartition(dists_flip, 50, axis=1)[:, :50]
+                top_k_flip = np.argpartition(dists_flip, top_k - 1, axis=1)[:, :top_k]
             
             for j in range(len(chunk_tgt)):
                 global_idx = i + j

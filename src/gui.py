@@ -113,12 +113,32 @@ class App(ctk.CTk):
     def _init_tabs(self):
         self.tabview = ctk.CTkTabview(self)
         self.tabview.grid(row=0, column=1, padx=20, pady=20, sticky="nsew")
-        
+
         self.tab_photo = self.tabview.add("Smart Photo Mosaic")
         self.tab_typo = self.tabview.add("Symbol Mosaic (Typo)")
-        
+
         self._setup_photo_tab()
         self._setup_typo_tab()
+
+    def _make_quickstart_frame(self, parent, steps: list):
+        box = ctk.CTkFrame(parent, fg_color=("#d4d4e8", "#23233a"), corner_radius=8)
+        box.pack(fill="x", padx=10, pady=(0, 14))
+        ctk.CTkLabel(
+            box,
+            text="Quick Start",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color=("#555555", "#9999bb"),
+        ).pack(anchor="w", padx=12, pady=(8, 3))
+        for i, step in enumerate(steps, 1):
+            ctk.CTkLabel(
+                box,
+                text=f"  {i}.  {step}",
+                font=ctk.CTkFont(size=11),
+                text_color=("#333333", "#cccccc"),
+                justify="left",
+                anchor="w",
+            ).pack(anchor="w", padx=12, pady=1)
+        ctk.CTkLabel(box, text="").pack(pady=3)
 
     def _setup_photo_tab(self):
         outer = self.tab_photo
@@ -130,6 +150,15 @@ class App(ctk.CTk):
         frame.grid(row=0, column=0, sticky="nsew", padx=10, pady=(10, 0))
 
         ctk.CTkLabel(frame, text="REGIONAL COLOR MOSAIC", font=ctk.CTkFont(size=18, weight="bold")).pack(pady=10)
+
+        self._make_quickstart_frame(frame, [
+            "Download tiles  —  sidebar → Download Starter  (or Import Your Photos)",
+            "Build index  —  sidebar → Update / Create Index",
+            "Load index  —  sidebar → Load Smart Index",
+            "Select input image  (button below)",
+            "Set output folder & project name  (sidebar)",
+            "Configure settings and click  RENDER",
+        ])
 
         self.btn_input_p = ctk.CTkButton(frame, text="Select Input Image", command=self.select_input_p)
         self.btn_input_p.pack(pady=10)
@@ -195,6 +224,12 @@ class App(ctk.CTk):
         frame.grid(row=0, column=0, sticky="nsew", padx=10, pady=(10, 0))
 
         ctk.CTkLabel(frame, text="SYMBOL MOSAIC (GLOBAL FONTS)", font=ctk.CTkFont(size=18, weight="bold")).pack(pady=10)
+
+        self._make_quickstart_frame(frame, [
+            "Select input image  (button below)",
+            "Set output folder & project name  (sidebar)",
+            "Configure font/symbol settings and click  RENDER",
+        ])
 
         self.btn_load_typo = ctk.CTkButton(frame, text="Load Typo Index (Fast)", command=self.load_typo_index)
         self.btn_load_typo.pack(pady=5)
