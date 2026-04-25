@@ -20,6 +20,7 @@ import skimage.color
 LIBRARY_DIRS = [
     Path("data/library_starter/tiles"),
     Path("data/library_public/tiles"),
+    Path("data/library_public_2/tiles"),
     Path("data/library_extended/tiles"),
     Path("data/library_private/tiles"),
 ]
