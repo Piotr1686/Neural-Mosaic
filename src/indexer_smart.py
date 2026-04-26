@@ -5,6 +5,11 @@ Builds the SmartEngine colour index from the tile library.
 
 Each image is reduced to a 5×5 pixel grid and converted to CIELAB colour
 space, producing a 75-dimensional feature vector (25 pixels × 3 channels).
+The vector is extended to 79 dimensions by appending the mean-L values for
+the four border strips of the 5×5 grid (top row, right column, bottom row,
+left column), each scaled by EDGE_WEIGHT to give them meaningful influence
+during edge-aware matching.
+
 The resulting feature matrix and file paths are persisted to a pickle file
 so SmartEngine can load them instantly at runtime.
 """
@@ -24,6 +29,9 @@ LIBRARY_DIRS = [
     Path("data/library_extended/tiles"),
     Path("data/library_private/tiles"),
 ]
+
+# Must match EDGE_WEIGHT in engine_smart.py.
+EDGE_WEIGHT = 2.0
 
 
 class SmartIndexer:
@@ -73,7 +81,6 @@ class SmartIndexer:
         features = []
         valid_paths = []
 
-        # Feature extraction: 5×5 CIELAB grid → 75-dim vector per image.
         for path in tqdm(image_paths):
             try:
                 with Image.open(path) as img:
@@ -84,17 +91,25 @@ class SmartIndexer:
                     arr = np.array(matrix) / 255.0
 
                     # Convert RGB → CIELAB for perceptually uniform colour matching.
-                    lab = skimage.color.rgb2lab(arr).flatten()
+                    lab_5x5 = skimage.color.rgb2lab(arr)  # shape (5, 5, 3)
+                    lab = lab_5x5.flatten()
 
                     # Normalise to [0, 1] — must match engine_smart.py exactly.
-                    # L channel: 0..100  → 0..1
-                    lab[0::3] /= 100.0
-                    # a channel: -128..127 → 0..1
-                    lab[1::3] = (lab[1::3] + 128) / 255.0
-                    # b channel: -128..127 → 0..1
-                    lab[2::3] = (lab[2::3] + 128) / 255.0
+                    lab[0::3] /= 100.0                     # L: 0..100  → 0..1
+                    lab[1::3] = (lab[1::3] + 128) / 255.0  # a: -128..127 → 0..1
+                    lab[2::3] = (lab[2::3] + 128) / 255.0  # b: -128..127 → 0..1
 
-                    features.append(lab.astype(np.float32))
+                    # Edge features: mean L of the 4 border strips in the 5×5 grid,
+                    # scaled by EDGE_WEIGHT so they contribute ~15% of Euclidean distance.
+                    edge_feats = np.array([
+                        lab_5x5[0, :, 0].mean() / 100.0,   # top row
+                        lab_5x5[:, 4, 0].mean() / 100.0,   # right column
+                        lab_5x5[4, :, 0].mean() / 100.0,   # bottom row
+                        lab_5x5[:, 0, 0].mean() / 100.0,   # left column
+                    ], dtype=np.float32) * EDGE_WEIGHT
+
+                    vec = np.concatenate([lab.astype(np.float32), edge_feats])
+                    features.append(vec)
                     valid_paths.append(path)
 
             except Exception as e:
@@ -104,8 +119,8 @@ class SmartIndexer:
             data = {
                 "paths": valid_paths,
                 "features": np.array(features),
-                "schema_version": "5x5",
-                "feature_dim": 75,
+                "schema_version": "5x5_edge",
+                "feature_dim": 79,
             }
             with open(self.index_path, "wb") as f:
                 pickle.dump(data, f)

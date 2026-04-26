@@ -194,13 +194,22 @@ class App(ctk.CTk):
         self.combo_shape.pack(pady=5)
 
         # Checkboxes
-        self.check_mirror = ctk.CTkCheckBox(frame, text="Allow Mirroring")
+        self.check_mirror = ctk.CTkCheckBox(
+            frame, text="Allow Mirroring  (small library)",
+            command=self._on_mirror_toggled)
         self.check_mirror.select()
         self.check_mirror.pack(pady=(15, 5))
 
         self.check_border = ctk.CTkCheckBox(frame, text="Black Borders (Grout)")
         self.check_border.deselect()
         self.check_border.pack(pady=5)
+
+        self.check_edge_aware = ctk.CTkCheckBox(
+            frame, text="Edge-Aware Matching  (large library)",
+            command=self._on_edge_aware_toggled,
+            state="disabled")
+        self.check_edge_aware.deselect()
+        self.check_edge_aware.pack(pady=5)
 
         # --- POST-PROCESSING ---
         ctk.CTkLabel(frame, text="POST-PROCESSING",
@@ -462,6 +471,20 @@ class App(ctk.CTk):
         self.output_dir = filedialog.askdirectory()
         if self.output_dir: self.log(f"Output: {self.output_dir}")
 
+    def _on_mirror_toggled(self):
+        if self.check_mirror.get():
+            self.check_edge_aware.deselect()
+            self.check_edge_aware.configure(state="disabled")
+        else:
+            self.check_edge_aware.configure(state="normal")
+
+    def _on_edge_aware_toggled(self):
+        if self.check_edge_aware.get():
+            self.check_mirror.deselect()
+            self.check_mirror.configure(state="disabled")
+        else:
+            self.check_mirror.configure(state="normal")
+
     def select_input_p(self): self.path_p = filedialog.askopenfilename()
     def select_input_t(self): self.path_t = filedialog.askopenfilename()
 
@@ -481,6 +504,7 @@ class App(ctk.CTk):
         if not out: return
 
         self.smart_engine.settings["allow_mirror"] = bool(self.check_mirror.get())
+        self.smart_engine.settings["edge_aware"] = bool(self.check_edge_aware.get())
         res = self.combo_res_p.get()
         shape = self.combo_shape.get()
         scale = self.seg_scale_p.get()

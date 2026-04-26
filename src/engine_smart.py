@@ -4,9 +4,14 @@ src/engine_smart.py
 Colour-matched photomosaic engine (SmartEngine).
 
 Supports multiple tile geometries including the kite (diamond) shape.
-Each sector of the target image is matched to the
-best-fitting tile from the pre-built CIELAB feature index with spatial
-anti-repetition enforcement.
+Each sector of the target image is matched to the best-fitting tile from
+the pre-built CIELAB feature index with spatial anti-repetition enforcement.
+
+Index schema "5x5_edge" (79-dim) enables edge-aware matching: 4 extra
+features (mean L of each border strip) are appended to the standard 75-dim
+LAB vector and scaled by EDGE_WEIGHT so boundary lightness contributes ~15%
+of the total Euclidean distance. With edge_aware=False the engine silently
+slices the first 75 dimensions, so old and new indexes are both accepted.
 """
 import numpy as np
 import pickle
@@ -19,6 +24,9 @@ from scipy.spatial.distance import cdist
 from scipy.spatial import cKDTree
 import skimage.color
 
+# Must match EDGE_WEIGHT in indexer_smart.py.
+EDGE_WEIGHT = 2.0
+
 
 class SmartEngine:
     def __init__(self, index_path="data/smart_index.pkl"):
@@ -26,35 +34,57 @@ class SmartEngine:
         try:
             with open(index_path, "rb") as f:
                 data = pickle.load(f)
-            
+
             self.paths = data["paths"]
             self.features = data["features"]
 
-            expected_dim = 75
-            if self.features.ndim == 2 and self.features.shape[1] != expected_dim:
-                actual_dim = self.features.shape[1]
-                print(f"ERROR: Index has {actual_dim}-dim features, "
-                      f"expected {expected_dim}. "
-                      f"Rendering DISABLED. Rebuild index: "
-                      f"GUI → 'Update / Create Index'")
+            actual_dim = self.features.shape[1] if self.features.ndim == 2 else 0
+            if actual_dim not in (75, 79):
+                print(f"ERROR: Index has {actual_dim}-dim features, expected 75 or 79. "
+                      f"Rendering DISABLED. Rebuild index: GUI → 'Update / Create Index'")
                 self.paths = []
                 self.features = []
                 return
 
             schema = data.get("schema_version", "unknown")
-            if schema != "5x5":
-                print(f"WARNING: Index schema '{schema}', expected '5x5'.")
+            if schema not in ("5x5", "5x5_edge"):
+                print(f"WARNING: Index schema '{schema}', expected '5x5' or '5x5_edge'.")
 
             self.settings = {
                 "allow_mirror": True,
+                "edge_aware": False,
                 "tile_size": 100,
                 "freq_penalty": 30.0,
             }
-            print(f"Smart Engine Ready. Images: {len(self.paths)}")
+            print(f"Smart Engine Ready. Images: {len(self.paths)}  "
+                  f"schema: {schema}  dim: {actual_dim}")
         except FileNotFoundError:
             print("Error: Smart Index not found. Run 'Update / Create Index' in GUI.")
             self.paths = []
             self.features = []
+
+    # ==========================================
+    # FEATURE EXTRACTION HELPER
+    # ==========================================
+    def _compute_sector_feature(self, s_img, edge_aware):
+        """Return a 75-dim or 79-dim LAB feature vector for a tile-sized crop."""
+        mat = s_img.resize((5, 5), Image.Resampling.BOX)
+        arr = np.array(mat) / 255.0
+        lab_5x5 = skimage.color.rgb2lab(arr)  # (5, 5, 3)
+        lab = lab_5x5.flatten()
+        lab[0::3] /= 100.0
+        lab[1::3] = (lab[1::3] + 128) / 255.0
+        lab[2::3] = (lab[2::3] + 128) / 255.0
+        vec = lab.astype(np.float32)
+        if edge_aware:
+            edge_feats = np.array([
+                lab_5x5[0, :, 0].mean() / 100.0,   # top row
+                lab_5x5[:, 4, 0].mean() / 100.0,   # right column
+                lab_5x5[4, :, 0].mean() / 100.0,   # bottom row
+                lab_5x5[:, 0, 0].mean() / 100.0,   # left column
+            ], dtype=np.float32) * EDGE_WEIGHT
+            vec = np.concatenate([vec, edge_feats])
+        return vec
 
     # ==========================================
     # KITE GRID MATHEMATICS
@@ -74,12 +104,11 @@ class SmartEngine:
         def P(idx):
             angle = math.radians(idx * 60)
             return (cx + s * math.cos(angle), cy + s * math.sin(angle))
-            
+
         def M(idx):
             angle = math.radians(idx * 60 + 30)
             return (cx + s * r3/2 * math.cos(angle), cy + s * r3/2 * math.sin(angle))
 
-        # Kite: hex centre → edge midpoint (k-1) → vertex (k) → edge midpoint (k)
         return [(cx, cy), M((k-1) % 6), P(k), M(k)]
 
     def _transform_kite_index(self, base_q, base_r, base_k, offset_q, offset_r, rot, flip):
@@ -96,17 +125,14 @@ class SmartEngine:
         """
         q, r, k = base_q, base_r, base_k
 
-        # 1. Mirror reflection along the horizontal axis.
         if flip:
             q, r = q, -q - r
             k = (6 - k) % 6
 
-        # 2. Rotation in multiples of 60 degrees.
         for _ in range(rot):
             q, r = -r, q + r
             k = (k + 1) % 6
 
-        # 3. Translation.
         return (q + offset_q, r + offset_r, k)
 
     # ==========================================
@@ -118,10 +144,10 @@ class SmartEngine:
         mask = Image.new("L", (W, H), 0)
         draw = ImageDraw.Draw(mask)
         cx, cy = W/2, H/2
-        
+
         pad_w = W * (1 - padding) / 2
         pad_h = H * (1 - padding) / 2
-        
+
         if shape_type == "square" or shape_type == "rectangle_3x1" or shape_type == "brick_wall":
             draw.rectangle((pad_w, pad_h, W-pad_w, H-pad_h), fill=255)
         elif "hexagon" in shape_type and "romb" not in shape_type:
@@ -163,6 +189,14 @@ class SmartEngine:
             print("ERROR: Index not loaded.")
             return
 
+        # Resolve edge_aware against index capabilities.
+        edge_aware = self.settings.get("edge_aware", False)
+        has_edge_features = (self.features.ndim == 2 and self.features.shape[1] == 79)
+        if edge_aware and not has_edge_features:
+            print("WARNING: Edge-Aware requested but index is 75-dim. "
+                  "Rebuild index (Update / Create Index). Falling back to standard matching.")
+            edge_aware = False
+
         res_map = {"2K": 1920, "4K": 3840, "8K": 7680, "16K": 15360}
         target_long = res_map.get(resolution_key, 3840)
         target = Image.open(target_path).convert("RGB")
@@ -170,11 +204,11 @@ class SmartEngine:
         scale_res = target_long / max(img_w, img_h)
         target = target.resize((int(img_w * scale_res), int(img_h * scale_res)), Image.Resampling.LANCZOS)
         target_w, target_h = target.size
-        
+
         base_s = int(100 * tile_scale)
         if base_s < 10: base_s = 10
-        render_padding = 0.94 if border_mode else 1.02 
-        
+        render_padding = 0.94 if border_mode else 1.02
+
         final_mosaic = Image.new("RGBA", (target_w, target_h), (0,0,0,255))
         sectors_data = []
 
@@ -184,18 +218,15 @@ class SmartEngine:
         if shape_mode == "kite":
             print(f"Mode: Kite tiling. Borders: {border_mode}")
 
-            s  = base_s          # Side length of a single hexagon in pixels.
+            s  = base_s
             r3 = math.sqrt(3)
 
-            # 1. Kite cluster definition — 8 kites from a flat-topped hexagonal grid.
-            #    q, r = axial hex coordinates; k = kite index within hex (0–5).
             BASE_HAT = [
-                (0, 0, 0), (0, 0, 1), (0, 0, 2), (0, 0, 3), (0, 0, 5),  # 5 centre kites
-                (0, 1, 4), (0, 1, 5),   # 2 'head' kites
-                (1, 0, 3),              # 1 'foot' kite
+                (0, 0, 0), (0, 0, 1), (0, 0, 2), (0, 0, 3), (0, 0, 5),
+                (0, 1, 4), (0, 1, 5),
+                (1, 0, 3),
             ]
 
-            # 2. Generate a virtual kite grid over the image canvas.
             target_kites  = set()
             kite_centroids = {}
 
@@ -205,7 +236,6 @@ class SmartEngine:
             print("Building kite grid...")
             for q in range(-range_q, range_q):
                 for r in range(-range_r, range_r):
-                    # Cartesian centre of the hexagon (flat-topped hex grid formula).
                     cx = 1.5 * s * q
                     cy = r3 * s * (r + q / 2.0)
 
@@ -215,13 +245,11 @@ class SmartEngine:
                             cent_x = sum(p[0] for p in poly) / 4
                             cent_y = sum(p[1] for p in poly) / 4
 
-                            # Keep only kites whose centroid falls inside the image.
                             if 0 <= cent_x < target_w and 0 <= cent_y < target_h:
                                 target_kites.add((q, r, k))
                             kite_centroids[(q, r, k)] = (cent_x, cent_y)
 
             uncovered_targets = list(target_kites)
-            # Sort spirally from the centre outward so the mosaic fills densely from the middle.
             uncovered_targets.sort(
                 key=lambda k: (kite_centroids[k][0] - target_w/2)**2
                               + (kite_centroids[k][1] - target_h/2)**2
@@ -230,16 +258,13 @@ class SmartEngine:
             occupied   = set()
             placed_hats = []
 
-            # Pre-map each kite to the list of compatible hat placements for a ~10× speedup.
             kite_to_hats = defaultdict(list)
             for target_k in target_kites:
                 t_q, t_r, t_k = target_k
-                # Test all 96 orientations (6 rotations × 2 flips × 8 anchor kites).
                 for rot in range(6):
                     for flip in [False, True]:
                         for b_idx in range(8):
                             bq, br, bk = BASE_HAT[b_idx]
-                            # Compute where this anchor kite would land after transformation.
                             trans_q, trans_r, trans_k = self._transform_kite_index(
                                 bq, br, bk, 0, 0, rot, flip
                             )
@@ -253,7 +278,6 @@ class SmartEngine:
                                 if hat not in kite_to_hats[target_k]:
                                     kite_to_hats[target_k].append(hat)
 
-            # 3. Greedy Edge-to-Edge Solver (Exact Cover approximation).
             for k_target in tqdm(uncovered_targets, desc="Assembling hats edge-to-edge"):
                 if k_target in occupied:
                     continue
@@ -264,17 +288,14 @@ class SmartEngine:
                 ]
 
                 if valid_hats:
-                    # Random selection prevents repeating super-patterns.
                     chosen_hat = random.choice(valid_hats)
                     placed_hats.append(chosen_hat)
                     for k in chosen_hat:
                         occupied.add(k)
                 else:
-                    # Patch isolated gaps that appear only at the image border.
                     placed_hats.append((k_target,))
                     occupied.add(k_target)
 
-            # 4. Shape, Mask and Colour Extraction.
             print("Rendering 8-kite hats...")
             for i_hat, hat_kites in enumerate(placed_hats):
                 hat_polys = []
@@ -284,52 +305,43 @@ class SmartEngine:
                     poly = self._get_kite_poly(cx, cy, s, k)
                     hat_polys.append(poly)
 
-                # Hat focal point: centroid of the full 13-sided polygon.
                 all_pts = [p for poly in hat_polys for p in poly]
                 hat_cx  = sum(p[0] for p in all_pts) / len(all_pts)
                 hat_cy  = sum(p[1] for p in all_pts) / len(all_pts)
 
                 for k_idx, poly in enumerate(hat_polys):
-                    # GROUT: Scale kites toward the HAT CENTRE so borders form at the
-                    # outline of the hat, not between individual kites.
                     padded_poly = []
                     for px, py in poly:
                         nx = hat_cx + (px - hat_cx) * render_padding
                         ny = hat_cy + (py - hat_cy) * render_padding
-                        # Flip to image coordinate system (origin = top-left).
                         padded_poly.append((nx, target_h - ny))
-                        
+
                     min_x = min(p[0] for p in padded_poly)
                     max_x = max(p[0] for p in padded_poly)
                     min_y = min(p[1] for p in padded_poly)
                     max_y = max(p[1] for p in padded_poly)
-                    
+
                     bw, bh = int(max_x - min_x), int(max_y - min_y)
                     if bw <= 0 or bh <= 0: continue
-                    
+
                     safe_box = (int(min_x), int(min_y), int(max_x), int(max_y))
                     sb = (max(0, safe_box[0]), max(0, safe_box[1]), min(target_w, safe_box[2]), min(target_h, safe_box[3]))
                     if sb[2] <= sb[0] or sb[3] <= sb[1]: continue
-                    
+
                     s_img = target.crop(sb)
                     if s_img.size != (bw, bh):
                         tmp = Image.new("RGB", (bw, bh), (0,0,0))
                         tmp.paste(s_img, (sb[0] - safe_box[0], sb[1] - safe_box[1]))
                         s_img = tmp
-                        
-                    mat = s_img.resize((5, 5), Image.Resampling.BOX)
-                    lab = skimage.color.rgb2lab(np.array(mat)/255.0).flatten()
-                    lab[0::3] /= 100.0; lab[1::3] = (lab[1::3]+128)/255.0; lab[2::3] = (lab[2::3]+128)/255.0
-                    
-                    # Draw a pixel-perfect kite mask clipped to the bounding box.
+
                     mask_kite = Image.new("L", (bw, bh), 0)
                     draw_k = ImageDraw.Draw(mask_kite)
                     shifted_poly = [(p[0] - min_x, p[1] - min_y) for p in padded_poly]
                     draw_k.polygon(shifted_poly, fill=255)
-                    
+
                     sectors_data.append({
                         "meta": (i_hat, int(min_x), int(min_y), mask_kite, bw, bh, len(hat_kites) > 1),
-                        "feature": lab.astype(np.float32)
+                        "feature": self._compute_sector_feature(s_img, edge_aware)
                     })
 
         # ==========================================
@@ -340,7 +352,7 @@ class SmartEngine:
             tile_w, tile_h = base_s, base_s
             step_x, step_y = base_s, base_s
             offset_odd_row_x = 0
-            
+
             if shape_mode == "rectangle_3x1": tile_h=base_s//3; step_y=tile_h
             elif shape_mode == "brick_wall": tile_h=base_s//2; step_y=tile_h; offset_odd_row_x=base_s//2
             elif "hexagon" in shape_mode or shape_mode == "hexagon_romb":
@@ -351,10 +363,10 @@ class SmartEngine:
 
             cols = (target_w // step_x) + 2
             rows = (target_h // step_y) + 2
-            
+
             mask_norm = self._get_shape_mask(shape_mode, tile_w, tile_h, False, padding=render_padding)
             mask_flip = self._get_shape_mask(shape_mode, tile_w, tile_h, True, padding=render_padding)
-            
+
             if shape_mode == "hexagon_romb":
                 mask_left = self._get_shape_mask("mask_left", tile_w, tile_h, padding=render_padding)
                 mask_right = self._get_shape_mask("mask_right", tile_w, tile_h, padding=render_padding)
@@ -366,7 +378,7 @@ class SmartEngine:
                     pos_x = c * step_x
                     pos_y = r * step_y
                     is_flipped = False
-                    
+
                     if shape_mode in ["brick_wall", "hexagon", "hexagon_romb", "romb"]:
                         if r % 2 == 1: pos_x += offset_odd_row_x
                     elif shape_mode == "triangle":
@@ -385,13 +397,10 @@ class SmartEngine:
                             s_img = target.crop(safe)
                             if s_img.size != (tile_w, tile_h):
                                 tmp = Image.new("RGB", (tile_w, tile_h), (0,0,0)); tmp.paste(s_img, (0,0)); s_img = tmp
-                            mat = s_img.resize((5, 5), Image.Resampling.BOX)
-                            lab = skimage.color.rgb2lab(np.array(mat)/255.0).flatten()
-                            lab[0::3]/=100.0; lab[1::3]=(lab[1::3]+128)/255.0; lab[2::3]=(lab[2::3]+128)/255.0
-                            
+
                             sectors_data.append({
                                 "meta": (r, int(pos_x), int(pos_y), masks[k], tile_w, tile_h, False),
-                                "feature": lab.astype(np.float32)
+                                "feature": self._compute_sector_feature(s_img, edge_aware)
                             })
                         continue
 
@@ -402,14 +411,11 @@ class SmartEngine:
                     s_img = target.crop(safe)
                     if s_img.size != (tile_w, tile_h):
                         tmp = Image.new("RGB", (tile_w, tile_h), (0,0,0)); tmp.paste(s_img, (0,0)); s_img = tmp
-                    mat = s_img.resize((5, 5), Image.Resampling.BOX)
-                    lab = skimage.color.rgb2lab(np.array(mat)/255.0).flatten()
-                    lab[0::3]/=100.0; lab[1::3]=(lab[1::3]+128)/255.0; lab[2::3]=(lab[2::3]+128)/255.0
-                    
+
                     current_mask = mask_flip if is_flipped else mask_norm
                     sectors_data.append({
                         "meta": (r, px, py, current_mask, tile_w, tile_h, False),
-                        "feature": lab.astype(np.float32)
+                        "feature": self._compute_sector_feature(s_img, edge_aware)
                     })
 
         # ==========================================
@@ -418,6 +424,10 @@ class SmartEngine:
         if not sectors_data:
             print("No tiles generated.")
             return
+
+        # Select which tile features to use for matching.
+        # allow_mirror and edge_aware are mutually exclusive (enforced in GUI).
+        tile_features = self.features if edge_aware else self.features[:, :75]
 
         print(f"Building Spatial Tree for {len(sectors_data)} tiles...")
         points = [(s["meta"][1] + s["meta"][4]/2.0, s["meta"][2] + s["meta"][5]/2.0) for s in sectors_data]
@@ -430,17 +440,21 @@ class SmartEngine:
             print(f"  Tile Tint active: {int(tint_strength * 100)}% (pixel lerp toward sector colour)")
         if blend_strength > 0.0:
             print(f"  Color Blend will be applied at save: {int(blend_strength * 100)}%")
+        if edge_aware:
+            print("  Edge-Aware Matching active (79-dim features)")
+
         tgt_features = np.array([x["feature"] for x in sectors_data])
         used_counts = np.zeros(len(self.paths), dtype=np.int32)
         sector_assignments = -1 * np.ones(len(sectors_data), dtype=np.int32)
-        
+
         chunk_size = 500
         allow_mirror = self.settings.get("allow_mirror", False)
-        
-        features_norm = self.features
+
+        features_norm = tile_features
         features_flip = None
         if allow_mirror:
-            reshaped = self.features.reshape(-1, 5, 5, 3)
+            # tile_features is 75-dim here (edge_aware=False enforced by GUI mutex).
+            reshaped = tile_features.reshape(-1, 5, 5, 3)
             flipped = reshaped[:, :, ::-1, :]
             features_flip = flipped.reshape(-1, 75)
 
@@ -457,20 +471,19 @@ class SmartEngine:
             top_k_norm = np.argpartition(dists_norm, top_k - 1, axis=1)[:, :top_k]
             if allow_mirror:
                 top_k_flip = np.argpartition(dists_flip, top_k - 1, axis=1)[:, :top_k]
-            
+
             for j in range(len(chunk_tgt)):
                 global_idx = i + j
                 meta = sectors_data[global_idx]["meta"]
-                
+
                 idx_id, px, py, mask, tw, th, is_hat = meta
-                
+
                 forbidden_indices = set()
                 my_neighbors = neighbors_map[global_idx]
                 for n_idx in my_neighbors:
                     if n_idx == global_idx: continue
-                    # Within the same hat, always force a different photo for each kite.
                     if is_hat:
-                        if sectors_data[n_idx]["meta"][0] == idx_id: 
+                        if sectors_data[n_idx]["meta"][0] == idx_id:
                             assigned = sector_assignments[n_idx]
                             if assigned != -1: forbidden_indices.add(assigned)
                     else:
@@ -482,19 +495,19 @@ class SmartEngine:
                     score = dists_norm[j, idx] + (used_counts[idx]**2 * self.settings["freq_penalty"] * 0.001)
                     if idx in forbidden_indices: score += 1000000.0
                     candidates.append((score, idx, False))
-                
+
                 if allow_mirror:
                     for idx in top_k_flip[j]:
                         score = dists_flip[j, idx] + (used_counts[idx]**2 * self.settings["freq_penalty"] * 0.001)
                         if idx in forbidden_indices: score += 1000000.0
                         candidates.append((score, idx, True))
-                
+
                 candidates.sort(key=lambda x: x[0])
                 best_score, best_idx, should_mirror = candidates[0]
-                
+
                 used_counts[best_idx] += 1
                 sector_assignments[global_idx] = best_idx
-                
+
                 try:
                     with Image.open(self.paths[best_idx]) as img:
                         img = img.convert("RGBA")
@@ -514,12 +527,6 @@ class SmartEngine:
                                     dtype=np.float32)[:3]
                                 tile_rgb = img.convert("RGB")
                                 tile_arr = np.array(tile_rgb, dtype=np.float32)
-                                # Pixel-wise lerp toward sector_mean.
-                                # Previously: shift = (sector_mean - tile_mean) * tint_strength
-                                # was near-zero because the matcher already picked a tile with
-                                # similar colour — tile_mean ≈ sector_mean. The lerp below
-                                # guarantees a visible tint regardless of match quality:
-                                # tint=0.0 → full tile texture, 1.0 → solid sector colour.
                                 tile_arr = tile_arr * (1.0 - tint_strength) + sector_mean * tint_strength
                                 tile_arr = np.clip(tile_arr, 0, 255).astype(np.uint8)
                                 img = Image.fromarray(tile_arr).convert("RGBA")
