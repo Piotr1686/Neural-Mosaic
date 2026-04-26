@@ -13,6 +13,9 @@ import sys
 import shutil
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
+from dotenv import load_dotenv
+load_dotenv()
+
 import customtkinter as ctk
 from tkinter import filedialog
 import threading
@@ -27,23 +30,26 @@ from .downloader_v2 import PoliteDownloader, DEFAULT_OUTPUT_DIR
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
-FONTS_DIR = Path("assets/fonts") 
+FONTS_DIR = Path("assets/fonts")
+STARTER_TARGET = 500
+
 
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("Neural-Mosaic 5.7 (Solid Geometry)")
         self.geometry("1250x900")
-        
+
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
-        
+
         self.output_dir = None
-        
+        self._active_dl: PoliteDownloader | None = None
+
         self._init_sidebar()
         self._init_tabs()
-        
-        self.smart_engine = None 
+
+        self.smart_engine = None
         self.typo_engine = TypoEngine()
 
     def _init_sidebar(self):
@@ -92,21 +98,29 @@ class App(ctk.CTk):
 
         self.progress_dl = ctk.CTkProgressBar(self.sidebar, width=220)
         self.progress_dl.set(0)
-        self.progress_dl.grid(row=9, column=0, padx=15, pady=(0, 8))
+        self.progress_dl.grid(row=9, column=0, padx=15, pady=(0, 4))
         self.progress_dl.grid_remove()
 
+        self.btn_stop_dl = ctk.CTkButton(
+            self.sidebar, text="Stop Download",
+            fg_color="#8a1a1a", hover_color="#a83232", width=220,
+            command=self._stop_download,
+        )
+        self.btn_stop_dl.grid(row=10, column=0, padx=15, pady=(0, 6))
+        self.btn_stop_dl.grid_remove()
+
         # --- OUTPUT SETTINGS ---
-        ctk.CTkLabel(self.sidebar, text="OUTPUT SETTINGS", font=ctk.CTkFont(size=12, weight="bold")).grid(row=10, column=0, pady=(10, 5))
+        ctk.CTkLabel(self.sidebar, text="OUTPUT SETTINGS", font=ctk.CTkFont(size=12, weight="bold")).grid(row=11, column=0, pady=(10, 5))
 
         self.btn_out_dir = ctk.CTkButton(self.sidebar, text="Set Output Folder", fg_color="gray", command=self.select_output_dir)
-        self.btn_out_dir.grid(row=11, column=0, padx=20, pady=5)
+        self.btn_out_dir.grid(row=12, column=0, padx=20, pady=5)
 
         self.entry_project_name = ctk.CTkEntry(self.sidebar, placeholder_text="Project Name")
-        self.entry_project_name.grid(row=12, column=0, padx=20, pady=5)
+        self.entry_project_name.grid(row=13, column=0, padx=20, pady=5)
 
         self.console = ctk.CTkTextbox(self.sidebar, width=220)
-        self.console.grid(row=13, column=0, padx=10, pady=20, sticky="nsew")
-        self.sidebar.grid_rowconfigure(13, weight=1)
+        self.console.grid(row=14, column=0, padx=10, pady=20, sticky="nsew")
+        self.sidebar.grid_rowconfigure(14, weight=1)
 
         self._check_library_status()
 
@@ -174,7 +188,6 @@ class App(ctk.CTk):
         self.seg_scale_p.pack(pady=5)
 
         ctk.CTkLabel(frame, text="Tile Shape").pack(pady=(10,0))
-        # All available tile shapes.
         shapes = ["square", "rectangle_3x1", "brick_wall", "hexagon", "hexagon_romb", "romb", "triangle", "kite"]
         self.combo_shape = ctk.CTkComboBox(frame, values=shapes)
         self.combo_shape.set("hexagon_romb")
@@ -311,7 +324,7 @@ class App(ctk.CTk):
         )
         if total == 0:
             text, color = "EMPTY", "red"
-        elif total < 500:
+        elif total < STARTER_TARGET:
             text, color = f"{total} images", "orange"
         elif total < 5000:
             text, color = f"{total} images", "yellow"
@@ -319,23 +332,36 @@ class App(ctk.CTk):
             text, color = f"{total} images", "green"
         self.lbl_library_status.configure(text=text, text_color=color)
 
+        # Starter button turns green once the 500-image target is reached
+        starter_color = "darkgreen" if total >= STARTER_TARGET else "#5a3e8a"
+        self.btn_dl_starter.configure(fg_color=starter_color)
+
     def _run_download(self, plan: str):
         def _work():
             self.after(0, self.progress_dl.grid)
             self.after(0, lambda: self.progress_dl.configure(mode="indeterminate"))
             self.after(0, self.progress_dl.start)
+            self.after(0, self.btn_stop_dl.grid)
             try:
                 dl = PoliteDownloader()
                 dl.on_progress = self.log
+                self._active_dl = dl
                 saved = dl.download(plan)
                 self.log(f"Download complete: {saved} images saved.")
             except Exception as exc:
                 self.log(f"Download error: {exc}")
             finally:
+                self._active_dl = None
                 self.after(0, self.progress_dl.stop)
                 self.after(0, self.progress_dl.grid_remove)
+                self.after(0, self.btn_stop_dl.grid_remove)
                 self.after(0, self._check_library_status)
         threading.Thread(target=_work, daemon=True).start()
+
+    def _stop_download(self):
+        if self._active_dl is not None:
+            self._active_dl.stop()
+            self.log("Stop requested — finishing current image and saving state...")
 
     def download_starter(self):
         self._run_download("starter")
@@ -448,18 +474,17 @@ class App(ctk.CTk):
         return os.path.join(self.output_dir, f"{proj}_{prefix}_{ts}{ext}")
 
     def run_photo(self):
-        if not self.smart_engine or not hasattr(self, 'path_p'): 
+        if not self.smart_engine or not hasattr(self, 'path_p'):
             self.log("Error: Load Smart Index and Select Image first!")
             return
         out = self._get_auto_filename("Smart", ".jpg")
         if not out: return
-        
-        # Read current settings from GUI controls.
+
         self.smart_engine.settings["allow_mirror"] = bool(self.check_mirror.get())
         res = self.combo_res_p.get()
         shape = self.combo_shape.get()
         scale = self.seg_scale_p.get()
-        border_mode = bool(self.check_border.get())  # Black grout borders
+        border_mode = bool(self.check_border.get())
 
         if not scale:
             scale = "1.0"
@@ -482,7 +507,7 @@ class App(ctk.CTk):
                     blend_strength=blend_strength, tint_strength=tint_strength,
                 )
                 self.log("DONE! Smart Mosaic saved.")
-            except Exception as e: 
+            except Exception as e:
                 self.log(f"Error: {e}")
                 import traceback
                 traceback.print_exc()
@@ -501,17 +526,14 @@ class App(ctk.CTk):
         if not scale: scale = "1.0"
         scale = float(scale)
 
-        # Gather selected font groups
         selected_groups = [k for k, v in self.font_group_vars.items() if v.get()]
         if not selected_groups:
             self.log("ERROR: Select at least one Font Group!")
             return
 
-        # Palette size
         palette_raw = self.seg_palette.get()
         palette_size = None if palette_raw == "Full" else int(palette_raw)
 
-        # Variation
         variation = int(self.seg_variation.get())
 
         def _run():

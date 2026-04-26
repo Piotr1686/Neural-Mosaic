@@ -12,6 +12,7 @@ import json
 import time
 import random
 import logging
+import threading
 import shutil
 from pathlib import Path
 from io import BytesIO
@@ -89,6 +90,8 @@ class PoliteDownloader:
 
         self.on_progress: Optional[Callable[[str], None]] = None
 
+        self._stop_event = threading.Event()
+
         # phash index: loaded from state or built from existing files
         self._hashes: list = []
         self._downloaded_ids: set = set()
@@ -100,10 +103,17 @@ class PoliteDownloader:
     # Public API
     # -----------------------------------------------------------------------
 
+    def stop(self):
+        """Request graceful stop. Saves state immediately."""
+        self._stop_event.set()
+        self._save_state()
+
     def download(self, plan: str = "starter") -> int:
         """Run a named download plan. Returns number of saved images."""
         if plan not in DOWNLOAD_PLANS:
             raise ValueError(f"Unknown plan '{plan}'. Choose from: {list(DOWNLOAD_PLANS)}")
+
+        self._stop_event.clear()
 
         if plan == "extended":
             free_gb = shutil.disk_usage(".").free / (1024 ** 3)
@@ -114,6 +124,9 @@ class PoliteDownloader:
         total_saved = 0
 
         for source, count in targets.items():
+            if self._stop_event.is_set():
+                self._log("Download stopped by user.")
+                break
             self._log(f"[{source.upper()}] target={count}")
             fetcher = getattr(self, f"_fetch_{source}_ids")
             saved = self._run_source(fetcher, count, source)
@@ -150,6 +163,8 @@ class PoliteDownloader:
         fetched = 0
 
         while fetched < limit:
+            if self._stop_event.is_set():
+                return
             n = len(self._tags)
             tag = self._tags[self._tag_index % n]
             self._tag_index += 1
@@ -162,6 +177,8 @@ class PoliteDownloader:
                 "page_size": page_size,
                 "page": random.randint(1, 10),
                 "size": "medium,large",
+                "min_width": 200,
+                "min_height": 200,
             }
             resp = self._get("https://api.openverse.org/v1/images/",
                              params=params, headers=headers)
@@ -182,7 +199,11 @@ class PoliteDownloader:
 
             results = resp.json().get("results", [])
             for item in results:
-                url = item.get("thumbnail") or item.get("url")  # thumbnail wystarczy dla kafelków
+                w = item.get("width") or 0
+                h = item.get("height") or 0
+                if w and h and min(w, h) < 200:
+                    continue
+                url = item.get("thumbnail") or item.get("url")
                 img_id = f"openverse_{item.get('id', '')}"
                 if url and img_id not in self._downloaded_ids:
                     yield url, img_id
@@ -195,7 +216,7 @@ class PoliteDownloader:
         dept_ids = [1, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 17, 18, 19, 21]
         fetched = 0
         for dept in random.sample(dept_ids, min(len(dept_ids), 6)):
-            if fetched >= limit:
+            if fetched >= limit or self._stop_event.is_set():
                 break
             resp = self._get(
                 "https://collectionapi.metmuseum.org/public/collection/v1/objects",
@@ -206,7 +227,7 @@ class PoliteDownloader:
             obj_ids = resp.json().get("objectIDs") or []
             random.shuffle(obj_ids)
             for obj_id in obj_ids:
-                if fetched >= limit:
+                if fetched >= limit or self._stop_event.is_set():
                     return
                 img_id = f"met_{obj_id}"
                 if img_id in self._downloaded_ids:
@@ -225,6 +246,8 @@ class PoliteDownloader:
         fetched = 0
         page = 1
         while fetched < limit:
+            if self._stop_event.is_set():
+                return
             resp = self._get(
                 "https://api.artic.edu/api/v1/artworks",
                 params={
@@ -259,7 +282,7 @@ class PoliteDownloader:
                    "astronaut", "rocket", "space", "planet", "aurora"]
         fetched = 0
         for q in random.sample(queries, min(len(queries), limit // 5 + 1)):
-            if fetched >= limit:
+            if fetched >= limit or self._stop_event.is_set():
                 break
             resp = self._get(
                 "https://images-api.nasa.gov/search",
@@ -283,6 +306,8 @@ class PoliteDownloader:
         fetched = 0
         skip = 0
         while fetched < limit:
+            if self._stop_event.is_set():
+                return
             resp = self._get(
                 "https://openaccess-api.clevelandart.org/api/artworks/",
                 params={"has_image": 1, "cc0": 1, "limit": 100, "skip": skip},
@@ -314,7 +339,7 @@ class PoliteDownloader:
         ]
         fetched = 0
         for cat in random.sample(categories, min(len(categories), 4)):
-            if fetched >= limit:
+            if fetched >= limit or self._stop_event.is_set():
                 break
             resp = self._get(
                 "https://commons.wikimedia.org/w/api.php",
@@ -395,44 +420,64 @@ class PoliteDownloader:
 
     def _run_source(self, fetcher, count: int, source_name: str) -> int:
         saved = 0
+        attempted = 0
+        stats = {"fetch_fail": 0, "decode": 0, "small": 0, "quality": 0, "dup": 0}
+
         for url, img_id in fetcher(count * 3):  # overfetch to allow rejects
+            if self._stop_event.is_set():
+                self._log(f"[{source_name}] Download stopped by user.")
+                break
             if saved >= count:
                 break
             if img_id in self._downloaded_ids:
                 continue
-            if self._download_and_save(url, img_id):
+
+            result = self._download_and_save(url, img_id)
+            attempted += 1
+            if result is True:
                 saved += 1
                 if saved % 10 == 0:
                     self._log(f"[{source_name}] {saved}/{count} saved")
                     self._save_state()
+            elif result in stats:
+                stats[result] += 1
+
+            if attempted % 50 == 0:
+                self._log(
+                    f"[{source_name}] tried={attempted} saved={saved} | "
+                    f"fetch_fail={stats['fetch_fail']} small={stats['small']} "
+                    f"quality={stats['quality']} dup={stats['dup']}"
+                )
+
         return saved
 
-    def _download_and_save(self, url: str, img_id: str) -> bool:
+    def _download_and_save(self, url: str, img_id: str):
+        """Returns True on success, or a rejection-reason string on failure."""
         raw = self._fetch_bytes(url)
         if raw is None:
-            return False
+            return "fetch_fail"
         try:
             img = Image.open(BytesIO(raw))
             img = img.convert("RGB")
         except Exception:
-            return False
+            return "decode"
 
         w, h = img.size
         shortest = min(w, h)
-        if shortest < 200:
-            return False
+        if shortest < 100:
+            return "small"
         if shortest > 600:
             scale = 600 / shortest
             img = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
 
-        if not self._passes_quality(img):
-            return False
+        if self._is_low_quality(img):
+            return "quality"
 
         from imagehash import phash as compute_phash
         h_val = compute_phash(img)
         for existing in self._hashes:
             if (h_val - existing) < 5:
-                return False
+                return "dup"
         self._hashes.append(h_val)
 
         out_path = self.output_dir / f"{img_id}.jpg"
@@ -440,15 +485,13 @@ class PoliteDownloader:
         self._downloaded_ids.add(img_id)
         return True
 
-    def _passes_quality(self, img: Image.Image) -> bool:
-        gray = img.convert("L")
-        edges = gray.filter(ImageFilter.FIND_EDGES)
-        if np.var(np.array(edges)) < 50:
-            return False
-        colors = np.array(img.resize((1, 1))).flatten()
-        if int(colors.max()) - int(colors.min()) < 30:
-            return False
-        return True
+    def _is_low_quality(self, img: Image.Image) -> bool:
+        arr = np.array(img.convert("L"), dtype=np.float32)
+        if arr.std() < 8:
+            return True
+        if int(arr.max()) - int(arr.min()) < 20:
+            return True
+        return False
 
     # -----------------------------------------------------------------------
     # HTTP helpers
@@ -456,6 +499,8 @@ class PoliteDownloader:
 
     def _get(self, url: str, params=None, headers=None) -> Optional[requests.Response]:
         self._polite_wait()
+        if self._stop_event.is_set():
+            return None
         merged_headers = {"User-Agent": random.choice(USER_AGENTS)}
         if headers:
             merged_headers.update(headers)
@@ -492,7 +537,12 @@ class PoliteDownloader:
             delay = random.uniform(10, 20)
             self._log(f"Micro-pause ({delay:.0f}s) after {self._request_count} requests")
 
-        time.sleep(delay)
+        # Sleep in small chunks so stop() takes effect quickly
+        deadline = time.time() + delay
+        while time.time() < deadline:
+            if self._stop_event.is_set():
+                return
+            time.sleep(0.5)
 
     # -----------------------------------------------------------------------
     # State persistence
