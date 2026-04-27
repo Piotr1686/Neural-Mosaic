@@ -112,6 +112,30 @@ Font scanning is triggered from the GUI with a single click. Any `.ttf` or `.otf
 
 ---
 
+## Use Cases
+
+NeuroMosaic is built for projects that demand both photographic detail *and* physical-print scale. Three scenarios where the app delivers immediate value:
+
+### Personalised Keepsake Prints — Weddings, Anniversaries, "First Year"
+
+Turn a portrait of a couple, a child, or a jubilarian into a 16K mosaic assembled from 2,000–5,000 of their **own** photos — phone archives, social-media exports, family albums. Printed at 100×150 cm on canvas, the portrait reads across the room, while every tile up close is a real memory.
+
+> **Why it works:** the anti-repetition engine guarantees no single photograph dominates the composition, and the `kite` tile shape gives the print a distinctly non-rectangular, gallery-ready geometry.
+
+### Brand & Campaign Visuals — Hero Images from Product or UGC Libraries
+
+Build a campaign hero — logo, ambassador portrait, or key brand symbol — from a product catalogue or user-generated content (e.g. an Instagram contest). Export at 16K for billboards and annual-report covers; downscale the same render to 4K for reels, web banners, and social posts. One source render → every channel.
+
+> **Why it works:** `Tile Tint (0–40%)` nudges tile colours toward the brand palette without erasing the recognisability of each source image; `Color Blend (0–30%)` produces a softer variant ready for use as a background layer.
+
+### Typography Wall Art — Schools, Bookstores, Cafés, Museums
+
+Use the Symbol Mosaic engine to compose literary or educational posters: a portrait of an author or historical figure assembled entirely from glyphs — 50,000 Hanzi forming Murakami, the letters of a sonnet forming Shakespeare. The `color_on_white` mode suits modern interiors, `black_on_white` delivers a classic editorial look.
+
+> **Why it works:** zero library cost (fonts replace thousands of photos), CJK Unicode coverage is built in, and 16K output holds up at A0 print size and beyond.
+
+---
+
 ## How It Works
 
 ### Smart Engine — colour matching
