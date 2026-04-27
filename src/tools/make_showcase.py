@@ -20,9 +20,11 @@ Manual step (cannot be automated):
 
 Usage:
     python -m src.tools.make_showcase --source input/my_portrait.jpg
-    python -m src.tools.make_showcase --source input/my_portrait.jpg --res 8K
+    python -m src.tools.make_showcase --source input/my_portrait.jpg --res 4K
     python -m src.tools.make_showcase --source input/my_portrait.jpg --skip-typo
     python -m src.tools.make_showcase --list   # status only, no rendering
+
+Default: 16K for both Smart and Symbol engines (best quality, long render time).
 """
 import argparse
 import os
@@ -248,8 +250,8 @@ def main():
         help="Source portrait image (required for rendering)",
     )
     parser.add_argument(
-        "--res", choices=["2K", "4K", "8K"], default="4K",
-        help="Output resolution for Smart Engine renders (default: 4K)",
+        "--res", choices=["2K", "4K", "8K", "16K"], default="16K",
+        help="Output resolution for Smart + Symbol renders (default: 16K)",
     )
     parser.add_argument(
         "--skip-smart", action="store_true",
@@ -318,7 +320,7 @@ def main():
 
     # -- Typo mosaics -------------------------------------------------------
     if not args.skip_typo:
-        typo_res = "8K" if args.res in ("8K", "16K") else "4K"
+        typo_res = args.res  # match smart resolution — best quality
         print(f"\n[3] SYMBOL MOSAICS  (res={typo_res})")
 
         print("\n  > black_on_white")
