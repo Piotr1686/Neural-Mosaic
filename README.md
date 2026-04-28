@@ -257,16 +257,16 @@ Benchmarked on: i5-12500H · RTX 3050 Laptop 4 GB · 32 GB DDR4
 
 | Operation | GPU (CUDA) | CPU only |
 |---|---|---|
-| Index 10,000 tiles | — s | — s |
-| Index 50,000 tiles | — s | — s |
-| Render 4K · square tiles | — s | — s |
-| Render 8K · hexagon tiles | — s | — s |
-| Render 16K · kite tiles | — s | — s |
-| Symbol mosaic 8K · B&W | — s | — s |
-| Peak VRAM | — GB | N/A |
-| Peak RAM | — GB | — GB |
+| Index 10,000 tiles | 14.8 s | 14.8 s |
+| Index 50,000 tiles | 1.2 min | 1.2 min |
+| Render 4K · square tiles | 32.1 s | 32.1 s |
+| Render 8K · hexagon tiles | 2.4 min | 2.4 min |
+| Render 16K · kite tiles | — | — |
+| Symbol mosaic 8K · B&W | 11.9 s | 11.9 s |
+| Peak VRAM | ~0 GB † | N/A |
+| Peak RAM | 0.58 GB | 0.58 GB |
 
-> Values marked with — are placeholders. Run `python -m tests.benchmark` to generate values for your hardware.
+> † SmartEngine and TypoEngine run on CPU — VRAM usage is near zero. Run `python -m tests.benchmark` to generate values for your hardware.
 
 ---
 

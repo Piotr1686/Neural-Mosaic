@@ -100,11 +100,11 @@ def bench_indexing(all_paths: list) -> list:
 
     for n in (10_000, 50_000):
         if len(all_paths) < n:
-            print(f"  [skip] Index {n:,} tiles — library too small ({len(all_paths)} files)")
+            print(f"  [skip] Index {n:,} tiles - library too small ({len(all_paths)} files)")
             continue
 
         sample = random.sample(all_paths, n)
-        print(f"  Indexing {n:,} tiles …", flush=True)
+        print(f"  Indexing {n:,} tiles ...", flush=True)
         ram0 = _rss_mb()
         t0   = time.perf_counter()
         ok   = 0
@@ -137,20 +137,20 @@ def bench_indexing(all_paths: list) -> list:
             "ram_delta_mb": ram_delta,
             "n_ok": ok,
         })
-        print(f"  ✓ {_fmt(elapsed)}  ({ok:,} succeeded)")
+        print(f"  OK {_fmt(elapsed)}  ({ok:,} succeeded)")
 
     return results
 
 
 def bench_render(test_img: Path, configs: list) -> list:
     if not INDEX_PATH.exists():
-        print(f"  [skip] Smart renders — index not found: {INDEX_PATH}")
+        print(f"  [skip] Smart renders - index not found: {INDEX_PATH}")
         return []
 
     from src.engine_smart import SmartEngine
     engine = SmartEngine(index_path=str(INDEX_PATH))
     if not engine.paths:
-        print("  [skip] Smart renders — index failed to load.")
+        print("  [skip] Smart renders - index failed to load.")
         return []
 
     results = []
@@ -158,7 +158,7 @@ def bench_render(test_img: Path, configs: list) -> list:
         for cfg in configs:
             label = cfg["label"]
             out   = Path(tmpdir) / f"{label.replace(' ', '_')}.jpg"
-            print(f"\n  → {label}")
+            print(f"\n  -> {label}")
             engine.settings.update({
                 "allow_mirror": False,
                 "edge_aware": False,
@@ -183,23 +183,23 @@ def bench_render(test_img: Path, configs: list) -> list:
                 "ram_delta_mb": ram_delta,
                 "vram_mb": vram,
             })
-            print(f"  ✓ {label}: {_fmt(elapsed)}")
+            print(f"  OK {label}: {_fmt(elapsed)}")
 
     return results
 
 
 def bench_typo(test_img: Path):
     if not TYPO_INDEX_PATH.exists():
-        print(f"  [skip] Symbol Mosaic — typo index not found: {TYPO_INDEX_PATH}")
+        print(f"  [skip] Symbol Mosaic - typo index not found: {TYPO_INDEX_PATH}")
         return None
 
     from src.engine_typo import TypoEngine
     engine = TypoEngine(index_path=str(TYPO_INDEX_PATH))
     if not engine.library:
-        print("  [skip] Symbol Mosaic — typo index empty.")
+        print("  [skip] Symbol Mosaic - typo index empty.")
         return None
 
-    print("\n  → Symbol mosaic 8K · B&W")
+    print("\n  -> Symbol mosaic 8K - B&W")
     with tempfile.TemporaryDirectory() as tmpdir:
         out  = Path(tmpdir) / "bench_typo.png"
         ram0 = _rss_mb()
@@ -214,9 +214,9 @@ def bench_typo(test_img: Path):
         elapsed   = time.perf_counter() - t0
         ram_delta = max(0.0, _rss_mb() - ram0)
 
-    print(f"  ✓ Symbol mosaic 8K · B&W: {_fmt(elapsed)}")
+    print(f"  OK Symbol mosaic 8K - B&W: {_fmt(elapsed)}")
     return {
-        "label": "Symbol mosaic 8K · B&W",
+        "label": "Symbol mosaic 8K - B&W",
         "elapsed_s": elapsed,
         "ram_delta_mb": ram_delta,
     }
@@ -226,15 +226,15 @@ def bench_typo(test_img: Path):
 
 def print_summary(idx_res: list, rnd_res: list, typ_res):
     W   = 64
-    SEP = "═" * W
+    SEP = "=" * W
 
     print(f"\n{SEP}")
     print("  NEUROMOSAIC BENCHMARK RESULTS")
     cuda_tag = f"  |  CUDA available: {torch.cuda.get_device_name(0)}" if _CUDA else "  |  CUDA: not available"
     print(f"  CPUs: {psutil.cpu_count()}{cuda_tag}")
     print(SEP)
-    print(f"  {'Operation':<36}  {'Time':>9}  {'RAM Δ':>8}")
-    print(f"  {'─'*36}  {'─'*9}  {'─'*8}")
+    print(f"  {'Operation':<36}  {'Time':>9}  {'RAM+':>8}")
+    print(f"  {'-'*36}  {'-'*9}  {'-'*8}")
 
     for r in idx_res:
         print(f"  {r['label']:<36}  {_fmt(r['elapsed_s']):>9}  {r['ram_delta_mb']:>6.0f} MB")
@@ -249,16 +249,16 @@ def print_summary(idx_res: list, rnd_res: list, typ_res):
 
     print(f"\n  Peak RAM  : {peak_ram_gb:.2f} GB")
     if _CUDA:
-        print(f"  Peak VRAM : {peak_vram_gb:.2f} GB  (engine runs on CPU — VRAM is overhead only)")
+        print(f"  Peak VRAM : {peak_vram_gb:.2f} GB  (engine runs on CPU - VRAM is overhead only)")
     else:
         print("  Peak VRAM : N/A")
 
     # README-ready paste block
     print(f"\n{SEP}")
-    print("  README PASTE — replace '— s' and '— GB' in the Performance table:")
+    print("  README PASTE - replace values in the Performance table:")
     print(SEP)
 
-    note = "(engine runs on CPU — same for both columns)"
+    note = "(engine runs on CPU - same for both columns)"
 
     for r in idx_res:
         t = _fmt(r["elapsed_s"])
@@ -295,12 +295,12 @@ def main():
     args = parser.parse_args()
 
     render_configs = [
-        {"label": "Render 4K · square tiles",   "res": "4K",  "shape": "square",  "scale": 1.0},
-        {"label": "Render 8K · hexagon tiles",  "res": "8K",  "shape": "hexagon", "scale": 1.0},
+        {"label": "Render 4K - square tiles",   "res": "4K",  "shape": "square",  "scale": 1.0},
+        {"label": "Render 8K - hexagon tiles",  "res": "8K",  "shape": "hexagon", "scale": 1.0},
     ]
     if not args.quick:
         render_configs.append(
-            {"label": "Render 16K · kite tiles", "res": "16K", "shape": "kite",   "scale": 1.0}
+            {"label": "Render 16K - kite tiles", "res": "16K", "shape": "kite",   "scale": 1.0}
         )
 
     print("=" * 64)
@@ -312,7 +312,7 @@ def main():
     with tempfile.TemporaryDirectory() as tmpdir:
         test_img = Path(tmpdir) / "test_source.jpg"
         _make_test_image(test_img, size=(1024, 768))
-        print(f"\n  Test image: {test_img.name}  (1024×768 synthetic gradient)\n")
+        print(f"\n  Test image: {test_img.name}  (1024x768 synthetic gradient)\n")
 
         # 1. Indexing
         print("[1] INDEXING BENCHMARK")
