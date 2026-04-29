@@ -1,58 +1,58 @@
 # last_session.md
 
-**Sesja:** 2026-04-18 · Faza 1 Quality Enhancements (MASTER_PLAN v6.1)
+**Sesja:** 2026-04-28 · bieżąca
 **Status:** ✓ Zakończona poprawnie
 
 ---
 
 ## ▸ NASTĘPNY KROK (zacznij tutaj)
 
-**Krok 1.5.1 — Refaktor layoutu zakładki Symbol Mosaic (Typo) w `src/gui.py`:**
-W metodzie `_setup_typo_tab()` zamień `frame = self.tab_typo` na `CTkScrollableFrame` w gridzie (row=0), a przycisk `RENDER SYMBOL MOSAIC` przenieś do `outer.grid(row=1)` — pinned na dole zakładki, zawsze widoczny.
+Wygeneruj `assets/examples/symbol_zoom.gif` i dodaj oba zoom GIFy do README:
 
-Kontekst: Zakładka Typo ma 7 checkboxów Font Groups + Palette Size + Variation — łącznie przekracza 900px wysokości okna i przycisk RENDER wypada poza viewport. To jest Faza 1.5 z MASTER_PLAN_v6.1. Krok 1.12 (przebudowa indeksu) jest ręczny — można go wykonać równolegle lub po Fazie 1.5.
+```bash
+"C:/Users/plazo/miniconda3/envs/mosaic/python.exe" -m src.tools.make_zoom_gif \
+  output/showcase_symbol_black_on_white_20260428_202842.png \
+  assets/examples/symbol_zoom.gif
+```
+
+Kontekst: To jest krok 4.2 z MASTER_PLAN_v6.4.md. `make_zoom_gif.py` jest gotowy (commit `6d64b43`) i przetestowany na photo mosaic (7.5 MB). Po wygenerowaniu symbol_zoom.gif trzeba dodać oba GIFy do README — sekcja Photo Mosaic (mosaic_zoom.gif) i Symbol Mosaic (symbol_zoom.gif) — plus tabelę rozmiarów wydruku wg planu.
 
 ---
 
 ## Co zrobiono w tej sesji
 
-- ✓ Zweryfikowano: wszystkie 5 kroków z prompta symbol_mosaic_v2 ZROBIONE w poprzednich sesjach
-- ✓ Uzupełniono "Cel bieżący" w CLAUDE.md
-- ✓ Scommitowano zaległe zmiany: engine_smart.py (kosmetyka), CLAUDE.md/README.md/.gitignore, CONTRIBUTING.md/Makefile, MEMORY.md/last_session.md
-- ✓ Zapisano feedback memory: proactive /save przy ~95% kontekstu + jak pauzować przy context warning
-- ✓ Odczytano i przeanalizowano MASTER_PLAN_v6.1.md (wszystkie fazy 0–7)
-- ✓ Krok 1.1: `indexer_smart.py` — 3×3→5×5, LIBRARY_DIRS (4 katalogi), schema_version="5x5", feature_dim=75
-- ✓ Krok 1.2: `engine_smart.py` — 3 lokalizacje `resize((3,3))` → `resize((5,5))`
-- ✓ Krok 1.3: `engine_smart.py` — mirroring: `reshape(-1,3,3,3)` → `(-1,5,5,3)`, 27→75
-- ✓ Krok 1.4: `engine_smart.py` — hard block renderowania przy niezgodnym indeksie (dim≠75), WARNING dla schema≠"5x5"
-- ✓ Krok 1.5+1.7: `gui.py` — sekcja POST-PROCESSING: Color Blend (0/10/20/30%) + Tile Tint (0/10/20/30/40%)
-- ✓ Krok 1.6: `engine_smart.py` — Color Blend post-processing (`Image.blend` przy zapisie)
-- ✓ Krok 1.8: `engine_smart.py` — Tile Tint w pętli renderowania (RGB mean shift per sektor)
-- ✓ Krok 1.9: `gui.py` — `run_photo()` odczytuje blend_strength + tint_strength → przekazuje do `create_mosaic()`
-- ✓ Krok 1.10: `README.md` — 3×3→5×5, 27-dim→75-dim, tabela kontrolek (Color Blend, Tile Tint)
-- ✓ Krok 1.11: `gui.py` — RAM warning dla 8K/16K przed renderowaniem
-- ✓ Zaktualizowano MEMORY.md (SmartEngine 5×5, post-processing, LIBRARY_DIRS)
+- ✓ /start — wczytano MEMORY.md + last_session.md
+- ✓ Re-render showcase 16K (przerwany w poprzedniej sesji) — make_showcase.py wygenerował wszystkie 8 plików → commit `bb60ab5`
+- ✓ Wyjaśnienie: assets/examples/ zawiera celowo miniaturki 1920px do README; pełne 16K są w output/
+- ✓ fix(benchmark): ASCII-only output dla Windows CP1250 (✓, ═, ─, →, ·, Δ) → commit `a6bb40d`
+- ✓ Tabela Performance w README uzupełniona rzeczywistymi wynikami:
+  - Index 10k=14.8s, 50k=1.2min | Render 4K=32.1s, 8K=2.4min | Symbol 8K=11.9s | RAM=0.58GB
+- ✓ Krok 4.1: src/tools/make_zoom_gif.py — crop-first (ROI→crop→resize, nie resize 16K/klatkę), sinusoidal easing, 40 klatek, 640×360, 128 kolorów → commit `6d64b43`
+- ✓ assets/examples/mosaic_zoom.gif wygenerowany (7.5 MB, photo mosaic square) → commit `6d64b43`
 
 ## Co zostało (backlog sesji)
 
-- ⟳ Krok 1.12: 👤 ręcznie — przebudowa indeksu (`Update / Create Index` w GUI) + test blend/tint
-- ⟳ Faza 1.5 — Kroky 1.5.1 + 1.5.2: scrollable layout obu zakładek, pinned RENDER buttons
-- ⟳ Faza 1.5 — Krok 1.5.3: 👤 ręcznie — test GUI
-- ⟳ Fazy 2, 3, 4, 5, 6, 7 (w kolejności planu)
+- ⟳ Krok 4.2: symbol_zoom.gif + sekcja README z oboma GIFami + tabela rozmiarów wydruku
+- ⟳ `assets/demo.gif` — manualne nagranie GUI (OBS/ShareX)
+- ⟳ Krok 5.1: `src/tools/make_dzi.py`
+- ⟳ Fazy 6-7 wg MASTER_PLAN_v6.4.md
+- ⟳ Render 16K kite — brakuje w tabeli Performance (benchmark był uruchomiony z --quick)
+- ⟳ Opcjonalnie: MCP wrapper dla Gemini CLI (poza Neural-Mosaic)
 
 ## Aktywne pliki
 
-- `src/indexer_smart.py` — ✓ gotowy (5×5, LIBRARY_DIRS, schema_version)
-- `src/engine_smart.py` — ✓ gotowy (5×5, blokada indeksu, Color Blend, Tile Tint)
-- `src/gui.py` — ✓ częściowo (Color Blend + Tile Tint + RAM warning); zostało: scrollable layout (Faza 1.5)
-- `README.md` — ✓ zaktualizowany (5×5, 75-dim, tabela kontrolek)
+- `data/smart_index.pkl` — gotowy, 454 857 obrazów, 79-dim, schema 5x5_edge
+- `src/tools/make_showcase.py` — committed `c0b6c6b`
+- `src/tools/make_zoom_gif.py` — committed `6d64b43`
+- `tests/benchmark.py` — committed `a6bb40d` (ASCII fix)
+- `assets/examples/` — 8 gallery JPG + mosaic_zoom.gif, wszystkie committed
+- `README.md` — committed `a6bb40d` (tabela Performance uzupełniona)
+- `output/showcase_symbol_black_on_white_20260428_202842.png` — wejście dla symbol_zoom.gif (16000×9008)
 
 ## Otwarte pytania
 
-- Krok 1.12 (ręczny): czy user przebudował indeks przed kolejną sesją? Stary smart_index.pkl (27-dim) jest niekompatybilny — silnik zablokuje rendering do czasu przebudowy.
-- Czy Faza 1.5 (GUI fix) wykonać przed czy po Kroku 1.12?
+- Render 16K kite do tabeli Performance — uruchomić `python -m tests.benchmark` (bez --quick) gdy jest czas; zajmie ~15-30 min.
 
 ## Do MEMORY.md (przeniesiono)
 
-- ✓ SmartEngine zaktualizowany do 5×5 (75-dim), LIBRARY_DIRS, schema_version, hard block, Color Blend, Tile Tint
-- ✓ Ostrzeżenie: stary smart_index.pkl (27-dim) jest niekompatybilny po upgrade
+- `feedback_conda_run.md` — `conda run -n mosaic` zawodzi dla niektórych argumentów; używaj bezpośrednio `C:/Users/plazo/miniconda3/envs/mosaic/python.exe` (2026-04-28)
