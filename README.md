@@ -60,6 +60,64 @@
 
 <p align="center"><em>Glyphs resolve into recognisable characters as you zoom in — 16K output, black-on-white mode.</em></p>
 
+---
+
+## Symbol Mosaic Gallery
+
+Neural-Mosaic includes a **typographic rendering engine** that replaces pixels with glyphs from 120 fonts spanning 7 thematic groups — from Latin monospace to CJK scripts, Ancient hieroglyphs, mathematical symbols and more. Each mode produces a visually distinct aesthetic.
+
+### Two modes showcased
+
+<table>
+  <tr>
+    <td align="center">
+      <b>Black on White</b><br>
+      <img src="assets/examples/symbol_bw.jpg" width="400"><br>
+      <i>Editorial aesthetic — readable, professional.</i>
+    </td>
+    <td align="center">
+      <b>Color on White</b><br>
+      <img src="assets/examples/symbol_color.jpg" width="400"><br>
+      <i>Vivid palette — each glyph tinted to match the source hue.</i>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center">
+      <img src="assets/examples/symbol_detail.jpg" width="500"><br>
+      <i>Tile detail — individual glyphs visible at this zoom level.</i>
+    </td>
+  </tr>
+</table>
+
+### Zoom animation
+
+![Symbol Mosaic Zoom](assets/examples/symbol_zoom.gif)
+
+*Watch glyphs resolve into recognisable characters as you zoom in — 16K output, black-on-white mode.*
+
+### Controls
+
+| Parameter | Options | Effect |
+|---|---|---|
+| Font Groups | CJK · Ancient · Symbols · Latin · Decorative · Handwriting · Other | Visual aesthetic family |
+| Style Mode | `black_on_white` · `white_on_black` · `color_on_white` | Background + glyph fill strategy |
+| Symbol Size | 0.5× · 0.75× · 1.0× · 1.75× · 2.0× | Glyph grid density |
+
+### Font library (bundled with the repo)
+
+All fonts are included in `assets/fonts/`. No separate download required — fonts are distributed under SIL Open Font License 1.1 or Apache License 2.0. Full license texts are in `assets/fonts/licenses/`.
+
+Font groups:
+- **CJK** — NotoSans/Serif JP/SC/KR/TC, Sawarabi Mincho, MPLUS1p, and more
+- **Ancient & Exotic Scripts** — Egyptian Hieroglyphs, Cuneiform, Runic, Linear A/B, Phoenician, Ogham, and more
+- **Symbols & Geometric** — NotoSansMath, NotoMusic, NotoEmoji, Yarndings
+- **Latin Clean** — NotoSans family, IBM Plex Mono, JetBrains Mono, Inconsolata, Space Mono
+- **Decorative / Display** — Creepster, Monoton, Matemasie, BitcountPropDouble variants, Danfo, Splash
+- **Handwriting / Script** — DancingScript, Sacramento, Tangerine, Allura, PinyonScript
+- **Other** — Arabic, Bengali, Sinhala, Amiri, Tajawal
+
+---
+
 ### GUI Demo
 
 <p align="center">
