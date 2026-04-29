@@ -34,6 +34,12 @@
 </p>
 </details>
 
+<p align="center">
+  <img src="assets/examples/mosaic_zoom.gif" width="80%" alt="Photo mosaic zoom-in" />
+</p>
+
+<p align="center"><em>Zoom-in animation — 454 857 tiles, 16K output.</em></p>
+
 ### Symbol Mosaic
 
 <p align="center">
@@ -47,6 +53,12 @@
   <img src="assets/examples/symbol_detail.jpg" width="60%" />
 </p>
 </details>
+
+<p align="center">
+  <img src="assets/examples/symbol_zoom.gif" width="80%" alt="Symbol mosaic zoom-in" />
+</p>
+
+<p align="center"><em>Glyphs resolve into recognisable characters as you zoom in — 16K output, black-on-white mode.</em></p>
 
 ### GUI Demo
 
@@ -270,6 +282,21 @@ Benchmarked on: i5-12500H · RTX 3050 Laptop 4 GB · 32 GB DDR4
 
 ---
 
+## Print Size Guide
+
+The table below shows the maximum recommended print dimensions for each output resolution at two common print DPI settings.
+
+| Resolution | Pixels | @ 300 DPI (photo quality) | @ 150 DPI (large format) | Best for |
+|---|---|---|---|---|
+| **16K** | 16 000 × 9 000 | 135 × 76 cm | 270 × 152 cm | Billboard, large canvas, A0+ poster |
+| **8K** | 8 000 × 4 500 | 68 × 38 cm | 135 × 76 cm | A1 poster, medium canvas |
+| **4K** | 4 000 × 2 250 | 34 × 19 cm | 68 × 38 cm | A3 framed print |
+| **2K** | 2 000 × 1 125 | 17 × 9.5 cm | 34 × 19 cm | A5 insert, digital display |
+
+> Portrait orientations swap width and height. Symbol Mosaic supports 4K / 8K / 16K; Smart Photo Mosaic supports all four.
+
+---
+
 ## Development History
 
 NeuroMosaic grew from an iterative design conversation that explored several approaches before arriving at the current architecture:
@@ -289,6 +316,22 @@ Each iteration kept the anti-repetition logic and the multi-shape tile geometry,
 - [ ] CLI mode for batch processing
 - [ ] Export to SVG (symbol mosaic)
 - [ ] Plugin system for custom tile shapes
+
+---
+
+## Troubleshooting
+
+**Q: Downloader returns 429 Too Many Requests**
+A: Wait ~1 hour. The Starter tier works without an API key. For Gallery / Extended access, register a key (see `.env.example`).
+
+**Q: 16K render fails or crashes**
+A: Close other applications. At least ~3 GB free RAM is required. As an alternative, render at 8K.
+
+**Q: WARNING about incompatible index**
+A: Click **"Update / Create Index"** in the GUI to rebuild `smart_index.pkl`.
+
+**Q: RENDER SYMBOL MOSAIC button is not visible**
+A: Scroll down inside the Symbol Mosaic tab. All controls are in a scrollable area; the RENDER button is pinned to the bottom of the tab and is always reachable.
 
 ---
 
