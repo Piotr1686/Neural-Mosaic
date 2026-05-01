@@ -7,14 +7,14 @@
 ![GUI](https://img.shields.io/badge/GUI-CustomTkinter-1a1a2e?style=flat-square)
 ![Resolution](https://img.shields.io/badge/Output-up%20to%2016K-orange?style=flat-square)
 ![Platform](https://img.shields.io/badge/Platform-Windows-0078D6?style=flat-square&logo=windows)
-![Last Commit](https://img.shields.io/github/last-commit/Piotr1686/neuromosaic?style=flat-square)
-![Repo Size](https://img.shields.io/github/repo-size/Piotr1686/neuromosaic?style=flat-square)
+![Last Commit](https://img.shields.io/github/last-commit/Piotr1686/Neural-Mosaic?style=flat-square)
+![Repo Size](https://img.shields.io/github/repo-size/Piotr1686/Neural-Mosaic?style=flat-square)
 
 ---
 
 ## Live Demo
 
-**[Open Interactive Viewer](https://piotr1686.github.io/neuromosaic/)** — zoom into 8K mosaics in your browser (OpenSeadragon · keyboard: `1`/`2` switch · `H` reset · `F` fullscreen)
+**[Open Interactive Viewer](https://piotr1686.github.io/Neural-Mosaic/)** — zoom into 8K mosaics in your browser (OpenSeadragon · keyboard: `1`/`2` switch · `H` reset · `F` fullscreen)
 
 ---
 
@@ -135,8 +135,8 @@ Font groups:
 ## Quick Start
 
 ```bash
-git clone https://github.com/Piotr1686/neuromosaic.git
-cd neuromosaic
+git clone https://github.com/Piotr1686/Neural-Mosaic.git
+cd Neural-Mosaic
 pip install -r requirements.txt
 python -m src.gui
 ```
@@ -290,7 +290,7 @@ Key settings:
 ## Project Structure
 
 ```
-neuromosaic/
+Neural-Mosaic/
 ├── src/
 │   ├── gui.py              # Entry point — CustomTkinter application
 │   ├── engine_smart.py     # Colour-matched photomosaic engine
