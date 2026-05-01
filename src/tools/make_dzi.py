@@ -27,7 +27,7 @@ JPEG_QUALITY = 70
 
 DZI_TEMPLATE = (
     '<?xml version="1.0" encoding="UTF-8"?>\n'
-    '<Image TileSize="{tile_size}" Overlap="{overlap}" Format="jpeg"'
+    '<Image TileSize="{tile_size}" Overlap="{overlap}" Format="jpg"'
     ' xmlns="http://schemas.microsoft.com/deepzoom/2008">\n'
     '  <Size Width="{width}" Height="{height}"/>\n'
     '</Image>\n'

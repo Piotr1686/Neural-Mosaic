@@ -12,6 +12,12 @@
 
 ---
 
+## Live Demo
+
+**[Open Interactive Viewer](https://piotr1686.github.io/neuromosaic/)** — zoom into 8K mosaics in your browser (OpenSeadragon · keyboard: `1`/`2` switch · `H` reset · `F` fullscreen)
+
+---
+
 ## Gallery
 
 ### Smart Photo Mosaic

@@ -117,7 +117,7 @@ def step_source(source: Path):
     return dest
 
 
-def step_smart(source: Path, shape: str, res: str) -> Path | None:
+def step_smart(source: Path, shape: str, res: str, tile_scale: float = 1.0) -> Path | None:
     if not INDEX_PATH.exists():
         print(f"  [skip] smart/{shape} - index not found: {INDEX_PATH}")
         return None
@@ -137,21 +137,22 @@ def step_smart(source: Path, shape: str, res: str) -> Path | None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     full_path = OUTPUT_DIR / f"showcase_{shape}_{_stamp()}.jpg"
 
-    print(f"  Rendering smart/{shape} at {res} …")
+    tile_px = max(10, int(100 * tile_scale))
+    print(f"  Rendering smart/{shape} at {res}, tile_scale={tile_scale} ({tile_px}px tiles) …")
     t0 = time.perf_counter()
     engine.create_mosaic(
         target_path=str(source),
         output_path=str(full_path),
         resolution_key=res,
         shape_mode=shape,
-        tile_scale=1.0,
+        tile_scale=tile_scale,
     )
     elapsed = time.perf_counter() - t0
     print(f"  OK smart/{shape} done in {elapsed:.1f}s  ->  {full_path.name}")
     return full_path
 
 
-def step_typo(source: Path, mode: str, res: str) -> Path | None:
+def step_typo(source: Path, mode: str, res: str, scale: float = 1.0) -> Path | None:
     if not TYPO_INDEX.exists():
         print(f"  [skip] typo/{mode} - typo index not found: {TYPO_INDEX}")
         return None
@@ -166,14 +167,14 @@ def step_typo(source: Path, mode: str, res: str) -> Path | None:
     ext = "png"
     full_path = OUTPUT_DIR / f"showcase_symbol_{mode}_{_stamp()}.{ext}"
 
-    print(f"  Rendering typo/{mode} at {res} …")
+    print(f"  Rendering typo/{mode} at {res}, scale={scale} …")
     t0 = time.perf_counter()
     engine.process(
         input_path=str(source),
         output_path=str(full_path),
         res_key=res,
         mode=mode,
-        scale=1.0,
+        scale=scale,
     )
     elapsed = time.perf_counter() - t0
     print(f"  OK typo/{mode} done in {elapsed:.1f}s  ->  {full_path.name}")
@@ -262,6 +263,20 @@ def main():
         help="Skip Typo Engine renders (symbol mosaics)",
     )
     parser.add_argument(
+        "--tile-scale", type=float, default=1.0, metavar="F",
+        help="Tile size multiplier for Smart Engine (default 1.0 = 100px; 0.5 = 50px)",
+    )
+    parser.add_argument(
+        "--symbol-mode",
+        choices=["black_on_white", "white_on_black", "color_on_white", "color_on_black"],
+        default="black_on_white",
+        help="Colour mode for Symbol Engine (default: black_on_white)",
+    )
+    parser.add_argument(
+        "--symbol-scale", type=float, default=1.0, metavar="F",
+        help="Glyph size multiplier for Symbol Engine (default 1.0)",
+    )
+    parser.add_argument(
         "--list", dest="list_only", action="store_true",
         help="Print checklist status only - do not render anything",
     )
@@ -300,17 +315,17 @@ def main():
 
     # -- Smart mosaics ------------------------------------------------------
     if not args.skip_smart:
-        print(f"\n[2] SMART MOSAICS  (res={args.res})")
+        print(f"\n[2] SMART MOSAICS  (res={args.res}, tile_scale={args.tile_scale})")
 
         print("\n  > Square tiles")
-        sq_full = step_smart(args.source, "square", args.res)
+        sq_full = step_smart(args.source, "square", args.res, tile_scale=args.tile_scale)
         if sq_full:
             _save_gallery(sq_full, EXAMPLES_DIR / "mosaic_portrait_square.jpg")
             _save_detail(sq_full, EXAMPLES_DIR / "detail_square.jpg")
             generated["square"] = sq_full
 
         print("\n  > Kite tiles")
-        kite_full = step_smart(args.source, "kite", args.res)
+        kite_full = step_smart(args.source, "kite", args.res, tile_scale=args.tile_scale)
         if kite_full:
             _save_gallery(kite_full, EXAMPLES_DIR / "mosaic_portrait_kite.jpg")
             _save_detail(kite_full, EXAMPLES_DIR / "detail_kite.jpg")
@@ -320,21 +335,15 @@ def main():
 
     # -- Typo mosaics -------------------------------------------------------
     if not args.skip_typo:
-        typo_res = args.res  # match smart resolution — best quality
-        print(f"\n[3] SYMBOL MOSAICS  (res={typo_res})")
+        typo_res = args.res
+        print(f"\n[3] SYMBOL MOSAICS  (res={typo_res}, mode={args.symbol_mode}, scale={args.symbol_scale})")
 
-        print("\n  > black_on_white")
-        bw_full = step_typo(args.source, "black_on_white", typo_res)
-        if bw_full:
-            _save_gallery(bw_full, EXAMPLES_DIR / "symbol_bw.jpg")
-            _save_detail(bw_full, EXAMPLES_DIR / "symbol_detail.jpg")
-            generated["bw"] = bw_full
-
-        print("\n  > color_on_white")
-        col_full = step_typo(args.source, "color_on_white", typo_res)
-        if col_full:
-            _save_gallery(col_full, EXAMPLES_DIR / "symbol_color.jpg")
-            generated["color"] = col_full
+        sym_full = step_typo(args.source, args.symbol_mode, typo_res, scale=args.symbol_scale)
+        if sym_full:
+            gallery_name = "symbol_bw.jpg" if "black" in args.symbol_mode else "symbol_color.jpg"
+            _save_gallery(sym_full, EXAMPLES_DIR / gallery_name)
+            _save_detail(sym_full, EXAMPLES_DIR / "symbol_detail.jpg")
+            generated["symbol"] = sym_full
     else:
         print("\n[3] SYMBOL MOSAICS - skipped")
 
