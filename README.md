@@ -25,18 +25,27 @@
 <p align="center">
   <img src="assets/examples/source_portrait.jpg" width="30%" alt="Source" />
   <img src="assets/examples/mosaic_portrait_square.jpg" width="30%" alt="Square tiles" />
-  <img src="assets/examples/mosaic_portrait_kite.jpg" width="30%" alt="Kite tiling" />
+  <img src="assets/examples/mosaic_portrait_triangle.jpg" width="30%" alt="Triangle tiling" />
 </p>
 
 <p align="center">
-  <em>Left: source image · Center: square tiles · Right: kite tiling</em>
+  <em>Left: source image · Center: square tiles · Right: triangle tiling</em>
+</p>
+
+<p align="center">
+  <img src="assets/examples/mosaic_portrait_hexagon.jpg" width="60%" alt="Hexagon tiling" />
+</p>
+
+<p align="center">
+  <em>Hexagon tiling — same portrait, honeycomb geometry</em>
 </p>
 
 <details>
 <summary>🔍 Tile detail — click to expand</summary>
 <p align="center">
-  <img src="assets/examples/detail_square.jpg" width="45%" />
-  <img src="assets/examples/detail_kite.jpg" width="45%" />
+  <img src="assets/examples/detail_square.jpg" width="30%" />
+  <img src="assets/examples/detail_triangle.jpg" width="30%" />
+  <img src="assets/examples/detail_hexagon.jpg" width="30%" />
 </p>
 </details>
 
