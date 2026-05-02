@@ -29,9 +29,6 @@ input/
 .DS_Store
 Thumbs.db
 
-# Font assets (large binary files — see README for download instructions)
-assets/fonts/
-
 # Claude Code internal files
 CLAUDE.md
 .claude/
