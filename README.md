@@ -9,6 +9,7 @@
 ![Platform](https://img.shields.io/badge/Platform-Windows-0078D6?style=flat-square&logo=windows)
 ![Last Commit](https://img.shields.io/github/last-commit/Piotr1686/Neural-Mosaic?style=flat-square)
 ![Repo Size](https://img.shields.io/github/repo-size/Piotr1686/Neural-Mosaic?style=flat-square)
+![CI](https://github.com/Piotr1686/Neural-Mosaic/actions/workflows/ci.yml/badge.svg)
 
 ---
 
@@ -239,6 +240,14 @@ Each glyph is pre-rendered at the target tile size and its **normalised ink dens
 
 ---
 
+## Architecture
+
+Neural-Mosaic follows a modular pipeline: a polite multi-source downloader builds the tile library, a feature indexer encodes each tile into a 75-dimensional LAB descriptor, and the rendering engine matches sectors of the target image to the closest tiles using `cKDTree` nearest-neighbour search.
+
+Full module dependency graph: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+
+---
+
 ## Building the Tile Library
 
 The included async downloader fetches public-domain artwork (Chicago Art Institute API) and Creative Commons images:
@@ -389,6 +398,17 @@ Each iteration kept the anti-repetition logic and the multi-shape tile geometry,
 - [ ] CLI mode for batch processing
 - [ ] Export to SVG (symbol mosaic)
 - [ ] Plugin system for custom tile shapes
+
+---
+
+## Known Limitations
+
+- 16K rendering requires ~3 GB free RAM (output is not chunked yet — the full canvas is held in memory).
+- GUI is Windows-focused. CustomTkinter works on Linux/macOS but the font stack and file-path handling assume Windows.
+- Tile Tint uses pixel-wise lerp in RGB space. A LAB-space variant is on the roadmap; current RGB implementation produces visible, predictable results.
+- Deep Zoom viewer hosts only 2 mosaics due to GitHub Pages storage constraints.
+- CC0/Public Domain licence filter trusts source metadata — rare false positives on user-uploaded content are reported upstream to Openverse.
+- Repository size is ~100 MB due to the bundled font library (120 OFL/Apache fonts). Initial clone takes ~30–60 seconds. Fonts are mandatory for Symbol Mosaic — included directly to guarantee zero-friction setup.
 
 ---
 

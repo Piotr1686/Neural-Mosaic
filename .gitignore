@@ -42,6 +42,10 @@ CLAUDE.md
 .history/
 *.code-workspace
 
+# GitNexus (local index — not committed)
+.gitnexus/
+.claude/skills/generated/
+
 # --- Claude Code Session System ---
 # Odkomentuj jeśli nie chcesz commitować stanu sesji:
 # last_session.md
