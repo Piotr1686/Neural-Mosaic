@@ -60,14 +60,14 @@ class App(ctk.CTk):
         self.logo.grid(row=0, column=0, padx=20, pady=(20, 10))
 
         # --- INDEXING SECTION ---
-        self.btn_load_smart = ctk.CTkButton(self.sidebar, text="Load Smart Index", fg_color="darkgreen", command=self.load_index)
+        self.btn_load_smart = ctk.CTkButton(self.sidebar, text="Load Smart Index", fg_color="#1a6b1a", hover_color="#22891a", command=self.load_index)
         self.btn_load_smart.grid(row=1, column=0, padx=20, pady=(10, 5))
 
         self.btn_update_smart = ctk.CTkButton(self.sidebar, text="Update / Create Index", fg_color="#1f538d", command=self.run_smart_indexer)
         self.btn_update_smart.grid(row=2, column=0, padx=20, pady=(5, 10))
 
         # --- TILE LIBRARY SECTION ---
-        ctk.CTkLabel(self.sidebar, text="TILE LIBRARY", font=ctk.CTkFont(size=12, weight="bold")).grid(row=3, column=0, pady=(10, 2))
+        ctk.CTkLabel(self.sidebar, text="TILE LIBRARY", font=ctk.CTkFont(size=11, weight="bold"), text_color="#aaaaaa").grid(row=3, column=0, pady=(10, 2))
 
         self.lbl_library_status = ctk.CTkLabel(self.sidebar, text="EMPTY", text_color="red")
         self.lbl_library_status.grid(row=4, column=0, pady=(0, 4))
@@ -110,7 +110,7 @@ class App(ctk.CTk):
         self.btn_stop_dl.grid_remove()
 
         # --- OUTPUT SETTINGS ---
-        ctk.CTkLabel(self.sidebar, text="OUTPUT SETTINGS", font=ctk.CTkFont(size=12, weight="bold")).grid(row=11, column=0, pady=(10, 5))
+        ctk.CTkLabel(self.sidebar, text="OUTPUT SETTINGS", font=ctk.CTkFont(size=11, weight="bold"), text_color="#aaaaaa").grid(row=11, column=0, pady=(10, 5))
 
         self.btn_out_dir = ctk.CTkButton(self.sidebar, text="Set Output Folder", fg_color="gray", command=self.select_output_dir)
         self.btn_out_dir.grid(row=12, column=0, padx=20, pady=5)
@@ -135,24 +135,46 @@ class App(ctk.CTk):
         self._setup_typo_tab()
 
     def _make_quickstart_frame(self, parent, steps: list):
-        box = ctk.CTkFrame(parent, fg_color=("#d4d4e8", "#23233a"), corner_radius=8)
-        box.pack(fill="x", padx=10, pady=(0, 14))
+        outer = ctk.CTkFrame(parent, fg_color=("#d4d4e8", "#23233a"), corner_radius=8)
+        outer.pack(fill="x", padx=10, pady=(0, 14))
+
+        ctk.CTkFrame(outer, width=3, fg_color="#4a3a7a", corner_radius=0).pack(
+            side="left", fill="y"
+        )
+
+        content = ctk.CTkFrame(outer, fg_color="transparent")
+        content.pack(side="left", fill="both", expand=True, padx=(8, 12), pady=10)
+
         ctk.CTkLabel(
-            box,
+            content,
             text="Quick Start",
-            font=ctk.CTkFont(size=11, weight="bold"),
-            text_color=("#555555", "#9999bb"),
-        ).pack(anchor="w", padx=12, pady=(8, 3))
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color=("#4a3a7a", "#c0b8e8"),
+        ).pack(anchor="w", pady=(0, 8))
+
         for i, step in enumerate(steps, 1):
+            row = ctk.CTkFrame(content, fg_color="transparent")
+            row.pack(anchor="w", fill="x", pady=2)
+
             ctk.CTkLabel(
-                box,
-                text=f"  {i}.  {step}",
-                font=ctk.CTkFont(size=11),
-                text_color=("#333333", "#cccccc"),
+                row,
+                text=str(i),
+                width=22, height=22,
+                corner_radius=11,
+                fg_color="#3a2e6a",
+                text_color="#9999bb",
+                font=ctk.CTkFont(size=11, weight="bold"),
+            ).pack(side="left", padx=(0, 10))
+
+            ctk.CTkLabel(
+                row,
+                text=step,
+                font=ctk.CTkFont(size=13),
+                text_color=("#333333", "#b8b0d8"),
                 justify="left",
                 anchor="w",
-            ).pack(anchor="w", padx=12, pady=1)
-        ctk.CTkLabel(box, text="").pack(pady=3)
+                wraplength=400,
+            ).pack(side="left", anchor="w")
 
     def _setup_photo_tab(self):
         outer = self.tab_photo
@@ -177,9 +199,10 @@ class App(ctk.CTk):
         self.btn_input_p = ctk.CTkButton(frame, text="Select Input Image", command=self.select_input_p)
         self.btn_input_p.pack(pady=10)
 
-        self.combo_res_p = ctk.CTkComboBox(frame, values=["2K", "4K", "8K", "16K"])
-        self.combo_res_p.set("4K")
-        self.combo_res_p.pack(pady=5)
+        ctk.CTkLabel(frame, text="Output Resolution").pack(pady=(10, 0))
+        self.seg_res_p = ctk.CTkSegmentedButton(frame, values=["2K", "4K", "8K", "16K"])
+        self.seg_res_p.set("4K")
+        self.seg_res_p.pack(pady=5)
 
         # BUTTON PHOTO SCALE
         ctk.CTkLabel(frame, text="Tile Size Multiplier", font=("Arial", 12, "bold")).pack(pady=(15,0))
@@ -229,7 +252,8 @@ class App(ctk.CTk):
         self.btn_run_p = ctk.CTkButton(
             outer,
             text="RENDER SMART MOSAIC",
-            fg_color="green",
+            fg_color="#1a7a1a",
+            hover_color="#22991a",
             height=50,
             font=ctk.CTkFont(size=14, weight="bold"),
             command=self.run_photo,
@@ -253,7 +277,7 @@ class App(ctk.CTk):
             "Configure font/symbol settings and click  RENDER",
         ])
 
-        self.btn_load_typo = ctk.CTkButton(frame, text="Load Typo Index (Fast)", command=self.load_typo_index)
+        self.btn_load_typo = ctk.CTkButton(frame, text="Load Typo Index (Fast)", fg_color="#1f538d", hover_color="#2a6ab0", command=self.load_typo_index)
         self.btn_load_typo.pack(pady=5)
 
         self.lbl_typo_status = ctk.CTkLabel(frame, text="Status: Not Loaded", text_color="red")
@@ -267,10 +291,10 @@ class App(ctk.CTk):
         self.btn_input_t = ctk.CTkButton(frame, text="Select Input Image", command=self.select_input_t)
         self.btn_input_t.pack(pady=10)
 
-        ctk.CTkLabel(frame, text="Output Resolution").pack()
-        self.combo_res_t = ctk.CTkComboBox(frame, values=["4K", "8K", "16K"])
-        self.combo_res_t.set("8K")
-        self.combo_res_t.pack(pady=5)
+        ctk.CTkLabel(frame, text="Output Resolution").pack(pady=(10, 0))
+        self.seg_res_t = ctk.CTkSegmentedButton(frame, values=["4K", "8K", "16K"])
+        self.seg_res_t.set("8K")
+        self.seg_res_t.pack(pady=5)
 
         # BUTTON TYPO SCALE
         ctk.CTkLabel(frame, text="Symbol Size Multiplier", font=("Arial", 12, "bold")).pack(pady=(15,0))
@@ -316,7 +340,8 @@ class App(ctk.CTk):
         self.btn_run_t = ctk.CTkButton(
             outer,
             text="RENDER SYMBOL MOSAIC",
-            fg_color="purple",
+            fg_color="#6b2f9e",
+            hover_color="#7d35b8",
             height=50,
             font=ctk.CTkFont(size=14, weight="bold"),
             command=self.run_typo,
@@ -332,17 +357,17 @@ class App(ctk.CTk):
             for d in all_dirs if d.exists()
         )
         if total == 0:
-            text, color = "EMPTY", "red"
+            text, color = "EMPTY", "#ff4444"
         elif total < STARTER_TARGET:
-            text, color = f"{total} images", "orange"
+            text, color = f"{total} images", "#ff9900"
         elif total < 5000:
-            text, color = f"{total} images", "yellow"
+            text, color = f"{total} images", "#ffdd00"
         else:
-            text, color = f"{total} images", "green"
+            text, color = f"{total} images", "#33cc55"
         self.lbl_library_status.configure(text=text, text_color=color)
 
         # Starter button turns green once the 500-image target is reached
-        starter_color = "darkgreen" if total >= STARTER_TARGET else "#5a3e8a"
+        starter_color = "#1a6b1a" if total >= STARTER_TARGET else "#5a3e8a"
         self.btn_dl_starter.configure(fg_color=starter_color)
 
     def _run_download(self, plan: str):
@@ -451,13 +476,13 @@ class App(ctk.CTk):
                 if self.typo_engine.library:
                     count = len(self.typo_engine.library)
                     self.log(f"SUCCESS: Loaded {count} symbols.")
-                    self.lbl_typo_status.configure(text=f"Status: Ready ({count} sym)", text_color="green")
+                    self.lbl_typo_status.configure(text=f"Status: Ready ({count} sym)", text_color="#33cc55")
                 else:
                     self.log("ERROR: Index empty.")
-                    self.lbl_typo_status.configure(text="Status: Missing", text_color="red")
+                    self.lbl_typo_status.configure(text="Status: Missing", text_color="#ff4444")
             except Exception as e:
                 self.log(f"Error loading typo index: {e}")
-                self.lbl_typo_status.configure(text="Status: Error", text_color="red")
+                self.lbl_typo_status.configure(text="Status: Error", text_color="#ff4444")
         threading.Thread(target=_load).start()
 
     def scan_fonts(self):
@@ -505,7 +530,7 @@ class App(ctk.CTk):
 
         self.smart_engine.settings["allow_mirror"] = bool(self.check_mirror.get())
         self.smart_engine.settings["edge_aware"] = bool(self.check_edge_aware.get())
-        res = self.combo_res_p.get()
+        res = self.seg_res_p.get()
         shape = self.combo_shape.get()
         scale = self.seg_scale_p.get()
         border_mode = bool(self.check_border.get())
@@ -544,7 +569,7 @@ class App(ctk.CTk):
         out = self._get_auto_filename("Symbol", ".png")
         if not out: return
 
-        res = self.combo_res_t.get()
+        res = self.seg_res_t.get()
         mode = self.combo_mode.get()
         scale = self.seg_scale_t.get()
         if not scale: scale = "1.0"
