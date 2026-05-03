@@ -106,10 +106,11 @@
   <div class="switcher">
     <button id="btn1" class="active" onclick="switchTo(0)">1 — Photo Mosaic</button>
     <button id="btn2" onclick="switchTo(1)">2 — Symbol Mosaic</button>
+    <button id="btn3" onclick="switchTo(2)">3 — Triangle</button>
+    <button id="btn4" onclick="switchTo(3)">4 — Hexagon</button>
   </div>
   <div class="shortcuts">
-    <kbd>1</kbd> Photo &nbsp;
-    <kbd>2</kbd> Symbol &nbsp;
+    <kbd>1</kbd>–<kbd>4</kbd> Switch &nbsp;
     <kbd>H</kbd> Reset &nbsp;
     <kbd>F</kbd> Fullscreen &nbsp;
     <kbd>scroll</kbd> Zoom
@@ -128,6 +129,14 @@
     {
       tileSources: "tiles/symbol_mosaic.dzi",
       label: "Symbol Mosaic — white glyphs on black · scroll to zoom"
+    },
+    {
+      tileSources: "tiles/showcase_triangle_20260502_101900.dzi",
+      label: "Triangle Mosaic — 15 360 × 8 647 px · scroll to zoom"
+    },
+    {
+      tileSources: "tiles/showcase_hexagon_20260502_112755.dzi",
+      label: "Hexagon Mosaic — 15 360 × 8 647 px · scroll to zoom"
     }
   ];
 
@@ -152,8 +161,9 @@
     current = idx;
     viewer.open(mosaics[idx].tileSources);
     document.getElementById("label").textContent = mosaics[idx].label;
-    document.getElementById("btn1").classList.toggle("active", idx === 0);
-    document.getElementById("btn2").classList.toggle("active", idx === 1);
+    [1,2,3,4].forEach(n =>
+      document.getElementById("btn" + n).classList.toggle("active", idx === n - 1)
+    );
   }
 
   document.addEventListener("keydown", e => {
@@ -162,6 +172,8 @@
     switch (e.key) {
       case "1": switchTo(0); break;
       case "2": switchTo(1); break;
+      case "3": switchTo(2); break;
+      case "4": switchTo(3); break;
       case "h": case "H": viewer.viewport.goHome(); break;
       case "f": case "F":
         if (!document.fullscreenElement) document.documentElement.requestFullscreen();
