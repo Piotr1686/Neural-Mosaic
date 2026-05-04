@@ -7,7 +7,6 @@ Replaces each grid cell of the target image with a glyph chosen from the
 pre-built typo index so that its ink density matches the local brightness of
 the source image.  Supports ASCII characters and CJK Unicode blocks.
 """
-import colorsys
 import numpy as np
 import pickle
 from PIL import Image, ImageDraw, ImageFont, ImageEnhance, ImageOps, ImageFilter
@@ -96,14 +95,10 @@ class TypoEngine:
         enhancer = ImageEnhance.Contrast(img)
         img = enhancer.enhance(1.4)
 
-        if "color" in mode:
-            enhancer = ImageEnhance.Color(img)
-            img = enhancer.enhance(1.3)  # was 2.5 — too aggressive, caused neon colors
-
         return img
 
     def process(self, input_path, output_path, res_key="4K", mode="black_on_white",
-                scale=1.0, variation=20, palette_size=16):
+                scale=1.0, variation=20):
         if not self.library:
             return
 
@@ -135,18 +130,11 @@ class TypoEngine:
         processed = self._preprocess_image(original, mode)
         map_img = processed.resize((cols, rows), Image.Resampling.LANCZOS)
 
-        # Fix 3: Reduce palette to avoid "color noise" in output
-        if mode in ("color_on_white", "color_on_black") and palette_size:
-            map_img = (map_img
-                       .quantize(colors=palette_size, method=Image.Quantize.MEDIANCUT)
-                       .convert("RGB"))
-
         gray_data = np.array(map_img.convert("L")) / 255.0
-        color_data = np.array(map_img)
 
         bg_color = (255, 255, 255)
         text_fill_base = (0, 0, 0)
-        if mode in ("white_on_black", "color_on_black"):
+        if mode == "white_on_black":
             bg_color = (0, 0, 0)
             text_fill_base = (255, 255, 255)
 
@@ -157,19 +145,16 @@ class TypoEngine:
         lib_max = self.max_density
         lib_range = lib_max - lib_min
 
-        ascii_lines = []
-
         print(f"Grid: {cols}x{rows} | Cell: {cell_w}x{cell_h}px | Rendering...")
 
         for r in range(rows):
             pos_y = r * cell_h
-            current_line_chars = []
 
             for c in range(cols):
                 pos_x = c * cell_w
                 brightness = gray_data[r, c]
 
-                if mode in ("white_on_black", "color_on_black"):
+                if mode == "white_on_black":
                     # Dark background — higher density glyphs for bright areas
                     val = np.power(brightness, 0.8)
                     target_density = lib_min + (val * lib_range)
@@ -186,7 +171,6 @@ class TypoEngine:
                 chosen = random.choice(self.library[start:end])
 
                 char = chosen["char"]
-                current_line_chars.append(char)
 
                 font_path = chosen["font"]
                 font_obj = self._get_font_object(font_path, font_size)
@@ -202,39 +186,10 @@ class TypoEngine:
                 else:
                     continue
 
-                rgb = text_fill_base
-                if "color" in mode:
-                    raw = color_data[r, c]
-                    # Ensure numpy uint8 -> python int (colorsys requires floats)
-                    pr, pg, pb = float(raw[0]) / 255.0, float(raw[1]) / 255.0, float(raw[2]) / 255.0
-                    h_val, l_val, s_val = colorsys.rgb_to_hls(pr, pg, pb)
-
-                    if mode == "color_on_white":
-                        # Darker colors read well on white background
-                        l_val = min(l_val, 0.45)
-                        s_val = max(s_val, 0.4)  # avoid washed-out grays
-                    elif mode == "color_on_black":
-                        # Lighter, more saturated colors pop on black
-                        l_val = max(l_val, 0.55)
-                        s_val = max(s_val, 0.5)
-
-                    rr, gg, bb = colorsys.hls_to_rgb(h_val, l_val, s_val)
-                    rgb = (int(rr * 255), int(gg * 255), int(bb * 255))
-
-                draw.text((render_x, render_y), char, font=font_obj, fill=rgb)
-
-            ascii_lines.append("".join(current_line_chars))
+                draw.text((render_x, render_y), char, font=font_obj, fill=text_fill_base)
 
             if r % 50 == 0:
                 print(f"Progress: {(r/rows)*100:.1f}%", end='\r')
 
         print(f"\nSaved Symbol Mosaic: {output_path}")
         final_img.save(output_path, dpi=(300, 300))
-
-        txt_path = os.path.splitext(output_path)[0] + ".txt"
-        try:
-            with open(txt_path, "w", encoding="utf-8") as f:
-                f.write("\n".join(ascii_lines))
-            print(f"Saved UTF-8 Text: {txt_path}")
-        except Exception as e:
-            print(f"Could not save TXT: {e}")

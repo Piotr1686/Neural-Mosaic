@@ -321,15 +321,10 @@ class App(ctk.CTk):
         ctk.CTkLabel(frame, text="Style Mode").pack(pady=(10, 0))
         self.combo_mode = ctk.CTkComboBox(
             frame,
-            values=["black_on_white", "white_on_black", "color_on_white", "color_on_black"]
+            values=["black_on_white", "white_on_black"]
         )
         self.combo_mode.set("black_on_white")
         self.combo_mode.pack(pady=5)
-
-        ctk.CTkLabel(frame, text="Color Palette Size (color modes only)").pack(pady=(10, 0))
-        self.seg_palette = ctk.CTkSegmentedButton(frame, values=["8", "16", "32", "Full"])
-        self.seg_palette.set("16")
-        self.seg_palette.pack(pady=5)
 
         ctk.CTkLabel(frame, text="Variation (lower = sharper, higher = organic)").pack(pady=(10, 0))
         self.seg_variation = ctk.CTkSegmentedButton(frame, values=["5", "20", "50"])
@@ -580,9 +575,6 @@ class App(ctk.CTk):
             self.log("ERROR: Select at least one Font Group!")
             return
 
-        palette_raw = self.seg_palette.get()
-        palette_size = None if palette_raw == "Full" else int(palette_raw)
-
         variation = int(self.seg_variation.get())
 
         def _run():
@@ -599,7 +591,6 @@ class App(ctk.CTk):
                     self.path_t, out, res, mode,
                     scale=scale,
                     variation=variation,
-                    palette_size=palette_size,
                 )
                 self.log("DONE! Symbol Mosaic saved.")
             except Exception as e:

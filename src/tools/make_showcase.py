@@ -10,7 +10,6 @@ Produces (in assets/examples/):
     detail_square.jpg          - Centre-crop detail of the square mosaic
     detail_kite.jpg            - Centre-crop detail of the kite mosaic
     symbol_bw.jpg              - Symbol mosaic, black_on_white
-    symbol_color.jpg           - Symbol mosaic, color_on_white
     symbol_detail.jpg          - Centre-crop detail of the B&W symbol mosaic
 
 Full-resolution outputs go to output/showcase_<shape>_<timestamp>.jpg|png.
@@ -46,14 +45,15 @@ TYPO_INDEX   = PROJECT_ROOT / "data" / "typo_index.pkl"
 
 # Gallery images expected by README.md
 GALLERY_FILES = [
-    ("source_portrait.jpg",        "Source portrait (resized copy of input)"),
-    ("mosaic_portrait_square.jpg", "Smart mosaic - square tiles"),
-    ("mosaic_portrait_kite.jpg",   "Smart mosaic - kite tiles"),
-    ("detail_square.jpg",          "Tile detail crop - square mosaic"),
-    ("detail_kite.jpg",            "Tile detail crop - kite mosaic"),
-    ("symbol_bw.jpg",              "Symbol mosaic - black_on_white"),
-    ("symbol_color.jpg",           "Symbol mosaic - color_on_white"),
-    ("symbol_detail.jpg",          "Glyph detail crop - B&W symbol mosaic"),
+    ("source_portrait.jpg",          "Source portrait (resized copy of input)"),
+    ("mosaic_portrait_square.jpg",   "Smart mosaic - square tiles"),
+    ("mosaic_portrait_triangle.jpg", "Smart mosaic - triangle tiles"),
+    ("mosaic_portrait_hexagon.jpg",  "Smart mosaic - hexagon tiles"),
+    ("detail_square.jpg",            "Tile detail crop - square mosaic"),
+    ("detail_triangle.jpg",          "Tile detail crop - triangle mosaic"),
+    ("detail_hexagon.jpg",           "Tile detail crop - hexagon mosaic"),
+    ("symbol_bw.jpg",                "Symbol mosaic - black_on_white"),
+    ("symbol_detail.jpg",            "Glyph detail crop - B&W symbol mosaic"),
 ]
 MANUAL_FILES = [
     ("../demo.gif", "GUI demo - record with OBS/ShareX and export as GIF"),
@@ -263,12 +263,19 @@ def main():
         help="Skip Typo Engine renders (symbol mosaics)",
     )
     parser.add_argument(
+        "--shape",
+        choices=["square", "triangle", "hexagon", "hexagon_romb", "romb", "brick_wall",
+                 "rectangle_3x1", "kite"],
+        default="square",
+        help="Tile shape for Smart Engine (default: square)",
+    )
+    parser.add_argument(
         "--tile-scale", type=float, default=1.0, metavar="F",
         help="Tile size multiplier for Smart Engine (default 1.0 = 100px; 0.5 = 50px)",
     )
     parser.add_argument(
         "--symbol-mode",
-        choices=["black_on_white", "white_on_black", "color_on_white", "color_on_black"],
+        choices=["black_on_white", "white_on_black"],
         default="black_on_white",
         help="Colour mode for Symbol Engine (default: black_on_white)",
     )
@@ -315,21 +322,14 @@ def main():
 
     # -- Smart mosaics ------------------------------------------------------
     if not args.skip_smart:
-        print(f"\n[2] SMART MOSAICS  (res={args.res}, tile_scale={args.tile_scale})")
+        shape = args.shape
+        print(f"\n[2] SMART MOSAICS  (res={args.res}, shape={shape}, tile_scale={args.tile_scale})")
 
-        print("\n  > Square tiles")
-        sq_full = step_smart(args.source, "square", args.res, tile_scale=args.tile_scale)
-        if sq_full:
-            _save_gallery(sq_full, EXAMPLES_DIR / "mosaic_portrait_square.jpg")
-            _save_detail(sq_full, EXAMPLES_DIR / "detail_square.jpg")
-            generated["square"] = sq_full
-
-        print("\n  > Kite tiles")
-        kite_full = step_smart(args.source, "kite", args.res, tile_scale=args.tile_scale)
-        if kite_full:
-            _save_gallery(kite_full, EXAMPLES_DIR / "mosaic_portrait_kite.jpg")
-            _save_detail(kite_full, EXAMPLES_DIR / "detail_kite.jpg")
-            generated["kite"] = kite_full
+        full = step_smart(args.source, shape, args.res, tile_scale=args.tile_scale)
+        if full:
+            _save_gallery(full, EXAMPLES_DIR / f"mosaic_portrait_{shape}.jpg")
+            _save_detail(full, EXAMPLES_DIR / f"detail_{shape}.jpg")
+            generated[shape] = full
     else:
         print("\n[2] SMART MOSAICS  - skipped")
 
@@ -340,8 +340,7 @@ def main():
 
         sym_full = step_typo(args.source, args.symbol_mode, typo_res, scale=args.symbol_scale)
         if sym_full:
-            gallery_name = "symbol_bw.jpg" if "black" in args.symbol_mode else "symbol_color.jpg"
-            _save_gallery(sym_full, EXAMPLES_DIR / gallery_name)
+            _save_gallery(sym_full, EXAMPLES_DIR / "symbol_bw.jpg")
             _save_detail(sym_full, EXAMPLES_DIR / "symbol_detail.jpg")
             generated["symbol"] = sym_full
     else:
