@@ -50,11 +50,22 @@
 </p>
 </details>
 
-<p align="center">
-  <img src="assets/examples/mosaic_zoom.gif" width="80%" alt="Photo mosaic zoom-in" />
-</p>
+### Zoom animations — 6 tile shapes
 
-<p align="center"><em>Zoom-in animation — 454 857 tiles, 16K output.</em></p>
+<table>
+  <tr>
+    <td align="center"><b>Rectangle</b><br><img src="assets/examples/zoom_rectangle.gif" width="280" alt="Rectangle tiles zoom"></td>
+    <td align="center"><b>Square (mirrored)</b><br><img src="assets/examples/zoom_square_mirror.gif" width="280" alt="Square mirror tiles zoom"></td>
+    <td align="center"><b>Hexagon</b><br><img src="assets/examples/zoom_hexagon.gif" width="280" alt="Hexagon tiles zoom"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Brick Wall</b><br><img src="assets/examples/zoom_brickwall.gif" width="280" alt="Brick wall tiles zoom"></td>
+    <td align="center"><b>Triangle</b><br><img src="assets/examples/zoom_triangle.gif" width="280" alt="Triangle tiles zoom"></td>
+    <td align="center"><b>Hexagon-Romb</b><br><img src="assets/examples/zoom_hexagon_romb.gif" width="280" alt="Hexagon-romb tiles zoom"></td>
+  </tr>
+</table>
+
+<p align="center"><em>Zoom-in animation — 454 857 tiles, 16K output. Same source photo, six tile geometries.</em></p>
 
 ### Symbol Mosaic
 
