@@ -126,6 +126,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--tint", type=float, default=0.0, metavar="FLOAT",
         help="Tint each tile toward target sector colour, 0.0–0.4  (default: 0.0)",
     )
+    sg.add_argument(
+        "--mirror", action=argparse.BooleanOptionalAction, default=True,
+        help="Allow horizontal tile mirroring (default: on). Use --no-mirror to disable.",
+    )
+    sg.add_argument(
+        "--edge-aware", action="store_true", dest="edge_aware",
+        help="Use edge-aware matching (requires 79-dim index built with edge features).",
+    )
 
     # Typo engine options
     tg = rp.add_argument_group("Typo engine options (--engine typo)")
@@ -204,19 +212,47 @@ def _run_render(args: argparse.Namespace, log: logging.Logger) -> None:
     log.info("  Output : %s", args.output)
 
     if args.engine == "smart":
-        log.info(
-            "  Shape=%s  Scale=%.2f  Border=%s  Blend=%.2f  Tint=%.2f",
-            args.shape, args.scale, args.border, args.blend, args.tint,
-        )
+        _run_smart(args, log)
     else:
         groups = args.font_groups or _FONT_GROUPS
         log.info(
             "  Mode=%s  Scale=%.2f  Variation=%d  Groups=%s",
             args.mode, args.scale, args.variation, groups,
         )
+        # Sprint 1.3 will add TypoEngine call.
+        log.warning("Typo engine not yet wired to CLI (Sprint 1.3). Use the GUI for now.")
 
-    # Sprint 1.2 / 1.3 will replace this with actual engine calls.
-    log.warning("Rendering not yet implemented (Sprint 1.1). Use the GUI for now.")
+
+def _run_smart(args: argparse.Namespace, log: logging.Logger) -> None:
+    log.info(
+        "  Shape=%s  Scale=%.2f  Border=%s  Blend=%.2f  Tint=%.2f  Mirror=%s  EdgeAware=%s",
+        args.shape, args.scale, args.border, args.blend, args.tint,
+        args.mirror, args.edge_aware,
+    )
+
+    from .engine_smart import SmartEngine
+
+    log.info("Loading SmartEngine index...")
+    engine = SmartEngine(index_path=str(args.index))
+    if not engine.paths:
+        log.error("Index loaded but contains no tiles — aborting.")
+        sys.exit(1)
+
+    engine.settings["allow_mirror"] = args.mirror
+    engine.settings["edge_aware"] = args.edge_aware
+
+    log.info("Rendering...")
+    engine.create_mosaic(
+        args.input,
+        args.output,
+        args.res,
+        args.shape,
+        tile_scale=args.scale,
+        border_mode=args.border,
+        blend_strength=args.blend,
+        tint_strength=args.tint,
+    )
+    log.info("Done. Saved to: %s", args.output)
 
 
 # ---------------------------------------------------------------------------
