@@ -67,6 +67,33 @@
 
 <p align="center"><em>Zoom-in animation — 454 857 tiles, 16K output. Same source photo, six tile geometries.</em></p>
 
+### Output resolution comparison — same source, same tile shape
+
+<table>
+  <tr>
+    <td align="center">
+      <b>2K</b> — 1 920 × 1 080 px<br>
+      <img src="assets/examples/res_2K.jpg" width="420" alt="2K mosaic">
+    </td>
+    <td align="center">
+      <b>4K</b> — 3 840 × 2 160 px<br>
+      <img src="assets/examples/res_4K.jpg" width="420" alt="4K mosaic">
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <b>8K</b> — 7 680 × 4 320 px<br>
+      <img src="assets/examples/res_8K.jpg" width="420" alt="8K mosaic">
+    </td>
+    <td align="center">
+      <b>16K</b> — 15 360 × 8 640 px<br>
+      <img src="assets/examples/res_16K.jpg" width="420" alt="16K mosaic">
+    </td>
+  </tr>
+</table>
+
+<p align="center"><em>Tile size: 75 px — higher resolution means more tiles and finer detail. Square mirror shape, blend 20%, tint 20%.</em></p>
+
 ### Symbol Mosaic
 
 <p align="center">
