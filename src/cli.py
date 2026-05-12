@@ -214,13 +214,36 @@ def _run_render(args: argparse.Namespace, log: logging.Logger) -> None:
     if args.engine == "smart":
         _run_smart(args, log)
     else:
-        groups = args.font_groups or _FONT_GROUPS
-        log.info(
-            "  Mode=%s  Scale=%.2f  Variation=%d  Groups=%s",
-            args.mode, args.scale, args.variation, groups,
-        )
-        # Sprint 1.3 will add TypoEngine call.
-        log.warning("Typo engine not yet wired to CLI (Sprint 1.3). Use the GUI for now.")
+        _run_typo(args, log)
+
+
+def _run_typo(args: argparse.Namespace, log: logging.Logger) -> None:
+    groups = args.font_groups  # None = all groups
+    log.info(
+        "  Mode=%s  Scale=%.2f  Variation=%d  Groups=%s",
+        args.mode, args.scale, args.variation,
+        groups if groups else "all",
+    )
+
+    from .engine_typo import TypoEngine
+
+    log.info("Loading TypoEngine index...")
+    engine = TypoEngine(index_path=str(args.index), selected_groups=groups)
+    if not engine.library:
+        log.error("Index loaded but contains no glyphs — try adding more font groups.")
+        sys.exit(1)
+    log.info("TypoEngine ready. Glyphs: %d", len(engine.library))
+
+    log.info("Rendering...")
+    engine.process(
+        args.input,
+        args.output,
+        res_key=args.res,
+        mode=args.mode,
+        scale=args.scale,
+        variation=args.variation,
+    )
+    log.info("Done. Saved to: %s", args.output)
 
 
 def _run_smart(args: argparse.Namespace, log: logging.Logger) -> None:
