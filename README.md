@@ -343,6 +343,62 @@ Key settings:
 
 ---
 
+## CLI Usage
+
+For headless rendering, scripted pipelines, or batch jobs, Neural-Mosaic ships a command-line interface in `src/cli.py`. Both engines and all GUI options are exposed; the prerequisites (a built index and a tile/font library) are identical to the GUI.
+
+### `render` — single image
+
+```bash
+# Smart photo mosaic at 8K, default square tiles
+python -m src.cli render input/portrait.jpg --engine smart --res 8K
+
+# Smart mosaic at 16K with hexagon tiles, soft colour blend, mirror disabled
+python -m src.cli render input/portrait.jpg --engine smart --res 16K \
+  --shape hexagon --blend 0.2 --tint 0.15 --no-mirror
+
+# Symbol mosaic at 8K, white-on-black, restricted to CJK + Symbol fonts
+python -m src.cli render input/portrait.jpg --engine typo --res 8K \
+  --mode white_on_black --font-groups A_cjk C_symbols
+```
+
+Outputs default to `output/<stem>_<engine>_<res>_<timestamp>.{jpg|png}`. Override with `--output PATH`.
+
+### `batch` — whole folder, idempotent
+
+```bash
+# Render every *.jpg in ./input/ to ./output/ at 4K
+python -m src.cli batch ./input ./output --engine smart --res 4K
+
+# Custom glob pattern
+python -m src.cli batch ./input ./output --engine smart --res 8K --pattern '*.png'
+```
+
+Batch output names are **timestamp-free** — `{stem}_{engine}_{res}_{shape|mode}.ext` — so re-running the same command skips already-rendered files instead of re-doing the work. Failed renders are logged and the run exits with code `1`.
+
+### Common options
+
+| Option | Engine | Default | Notes |
+|---|---|---|---|
+| `--engine {smart,typo}` | both | required | Which renderer to use |
+| `--res {2K,4K,8K,16K}` | both | `8K` | Output resolution |
+| `--index PATH` | both | `data/<engine>_index.pkl` | Override pre-built index location |
+| `--shape SHAPE` | smart | `square` | `square` · `rectangle_3x1` · `brick_wall` · `hexagon` · `hexagon_romb` · `romb` · `triangle` · `kite` |
+| `--scale FLOAT` | both | `1.0` | Tile size multiplier (0.5–2.0) |
+| `--blend FLOAT` | smart | `0.0` | Original-over-mosaic blend, 0.0–0.3 |
+| `--tint FLOAT` | smart | `0.0` | Tile tinting toward sector colour, 0.0–0.4 |
+| `--border` | smart | off | Add dark grout lines between tiles |
+| `--no-mirror` | smart | mirroring on | Disable horizontal tile mirroring |
+| `--edge-aware` | smart | off | Require 79-dim edge-feature index |
+| `--mode {black_on_white,white_on_black}` | typo | `black_on_white` | Symbol mosaic style |
+| `--font-groups GROUP ...` | typo | all | Limit to subset: `A_cjk` · `B_ancient` · `C_symbols` · `D_latin_clean` · `E_decorative` · `F_handwriting` · `G_uncategorized` |
+| `--variation INT` | typo | `20` | Glyph density window |
+| `--verbose` | both | off | Debug-level logging |
+
+Logs are written to `logs/cli.log` in addition to stdout. Run `python -m src.cli --help` (or `render --help` / `batch --help`) for the full reference.
+
+---
+
 ## Project Structure
 
 ```
@@ -433,7 +489,7 @@ Each iteration kept the anti-repetition logic and the multi-shape tile geometry,
 
 - [ ] Real-time mosaic preview in GUI (downscaled)
 - [ ] Tile library browser with visual search
-- [ ] CLI mode for batch processing
+- [x] CLI mode for batch processing — see [CLI Usage](#cli-usage)
 - [ ] Export to SVG (symbol mosaic)
 - [ ] Plugin system for custom tile shapes
 
