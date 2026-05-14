@@ -3,9 +3,10 @@ src/gui.py
 ----------
 Main application window for NeuroMosaic built with CustomTkinter.
 
-Provides two tabs:
+Provides three tabs:
   * Smart Photo Mosaic — colour-matched photomosaic using SmartEngine.
   * Symbol Mosaic (Typo) — typography-based mosaic using TypoEngine.
+  * Tile Library — visual browser for data/library_* tile collections.
 """
 import os
 import subprocess
@@ -130,9 +131,11 @@ class App(ctk.CTk):
 
         self.tab_photo = self.tabview.add("Smart Photo Mosaic")
         self.tab_typo = self.tabview.add("Symbol Mosaic (Typo)")
+        self.tab_library = self.tabview.add("Tile Library")
 
         self._setup_photo_tab()
         self._setup_typo_tab()
+        self._setup_library_tab()
 
     def _make_quickstart_frame(self, parent, steps: list):
         outer = ctk.CTkFrame(parent, fg_color=("#d4d4e8", "#23233a"), corner_radius=8)
@@ -598,6 +601,95 @@ class App(ctk.CTk):
                 import traceback
                 traceback.print_exc()
         threading.Thread(target=_run).start()
+
+    # ------------------------------------------------------------------ #
+    # Tab 3: Tile Library Browser                                         #
+    # ------------------------------------------------------------------ #
+
+    def _setup_library_tab(self):
+        outer = self.tab_library
+        outer.grid_columnconfigure(0, weight=1)
+        outer.grid_rowconfigure(0, weight=0)
+        outer.grid_rowconfigure(1, weight=0)
+        outer.grid_rowconfigure(2, weight=1)
+        outer.grid_rowconfigure(3, weight=0)
+
+        # Header row
+        header = ctk.CTkFrame(outer, fg_color="transparent")
+        header.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 0))
+        header.columnconfigure(1, weight=1)
+
+        ctk.CTkLabel(
+            header, text="TILE LIBRARY BROWSER",
+            font=ctk.CTkFont(size=18, weight="bold"),
+        ).grid(row=0, column=0, sticky="w")
+
+        self.lbl_lib_count = ctk.CTkLabel(header, text="-- tiles", text_color="#aaaaaa")
+        self.lbl_lib_count.grid(row=0, column=2, sticky="e", padx=10)
+
+        ctk.CTkButton(
+            header, text="Refresh", width=90, fg_color="#1f538d",
+            command=self._lib_refresh,
+        ).grid(row=0, column=3, sticky="e")
+
+        # Filter bar
+        filter_frame = ctk.CTkFrame(outer, fg_color=("#e8e8e8", "#1e1e2e"), corner_radius=6)
+        filter_frame.grid(row=1, column=0, sticky="ew", padx=10, pady=(8, 0))
+        filter_frame.columnconfigure(1, weight=1)
+
+        ctk.CTkLabel(filter_frame, text="Filter:", width=50).grid(
+            row=0, column=0, padx=(10, 4), pady=8)
+
+        self.entry_lib_filter = ctk.CTkEntry(
+            filter_frame, placeholder_text="filename contains...")
+        self.entry_lib_filter.grid(row=0, column=1, sticky="ew", padx=4, pady=8)
+
+        ctk.CTkLabel(filter_frame, text="Sort:", width=40).grid(
+            row=0, column=2, padx=(8, 4), pady=8)
+
+        self.combo_lib_sort = ctk.CTkComboBox(
+            filter_frame, width=160,
+            values=["Name A-Z", "Name Z-A", "Newest first", "Oldest first"],
+        )
+        self.combo_lib_sort.set("Name A-Z")
+        self.combo_lib_sort.grid(row=0, column=3, padx=(0, 10), pady=8)
+
+        # Main scrollable grid — thumbnail grid filled in Sprint 2.2
+        self.lib_scroll = ctk.CTkScrollableFrame(outer, fg_color="transparent")
+        self.lib_scroll.grid(row=2, column=0, sticky="nsew", padx=10, pady=5)
+
+        self._lib_placeholder = ctk.CTkLabel(
+            self.lib_scroll,
+            text="Click Refresh to count tiles\n(thumbnail grid: Sprint 2.2)",
+            text_color="#555555",
+            font=ctk.CTkFont(size=14),
+        )
+        self._lib_placeholder.pack(expand=True, pady=80)
+
+        # Action bar — export + status
+        action_bar = ctk.CTkFrame(outer, fg_color="transparent")
+        action_bar.grid(row=3, column=0, sticky="ew", padx=10, pady=(0, 10))
+
+        self.lbl_lib_status = ctk.CTkLabel(action_bar, text="Ready", text_color="#aaaaaa")
+        self.lbl_lib_status.pack(side="left", padx=5)
+
+        ctk.CTkButton(
+            action_bar, text="Export Bad Tiles...", width=160,
+            fg_color="gray", state="disabled",
+        ).pack(side="right", padx=5)
+
+    def _lib_refresh(self):
+        all_dirs = list(LIBRARY_DIRS) + [DEFAULT_OUTPUT_DIR]
+        total = sum(
+            len(list(d.glob("*.jpg"))) + len(list(d.glob("*.png")))
+            for d in all_dirs if d.exists()
+        )
+        self.lbl_lib_count.configure(text=f"{total} tiles")
+        n_dirs = sum(1 for d in all_dirs if d.exists())
+        self.lbl_lib_status.configure(
+            text=f"Scanned {total} tiles across {n_dirs} library dir(s)")
+        self._check_library_status()
+
 
 if __name__ == "__main__":
     app = App()

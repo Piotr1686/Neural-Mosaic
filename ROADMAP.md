@@ -20,18 +20,18 @@ Plan ustalony 2026-05-11. Aktualizacja po każdym ukończonym sprincie.
 Cel: `python -m src.cli render input.jpg --engine smart --res 8K --output out.jpg`
 bez uruchamiania customtkinter. Batch: folder → folder.
 
-- [ ] **Sprint 1.1** — Szkielet `src/cli.py`: argparse, podstawowa walidacja (engine, res, paths), logowanie do `logs/cli.log`. Smoke test: `--help` działa, błędy ścieżek raportowane czytelnie.
-- [ ] **Sprint 1.2** — Smart engine path: `--engine smart --index data/smart_index.pkl`. Pełna parytetowość z GUI: tile_size, target_short_side, scale, mirror.
-- [ ] **Sprint 1.3** — Typo engine path: `--engine typo --mode {black_on_white,white_on_black} --font ...`. Parytet z GUI.
-- [ ] **Sprint 1.4** — Batch mode: `cli batch <input_dir> <output_dir> --engine ... [--pattern *.jpg]`. Skip already-rendered (idempotentność).
-- [ ] **Sprint 1.5** — README sekcja "CLI usage" + smoke testy w `tests/test_cli.py` (1 obraz, niska rozdzielczość).
+- [x] **Sprint 1.1** — Szkielet `src/cli.py`: argparse, podstawowa walidacja (engine, res, paths), logowanie do `logs/cli.log`. Smoke test: `--help` działa, błędy ścieżek raportowane czytelnie.
+- [x] **Sprint 1.2** — Smart engine path: `--engine smart --index data/smart_index.pkl`. Pełna parytetowość z GUI: tile_size, target_short_side, scale, mirror.
+- [x] **Sprint 1.3** — Typo engine path: `--engine typo --mode {black_on_white,white_on_black} --font ...`. Parytet z GUI.
+- [x] **Sprint 1.4** — Batch mode: `cli batch <input_dir> <output_dir> --engine ... [--pattern *.jpg]`. Skip already-rendered (idempotentność).
+- [x] **Sprint 1.5** — README sekcja "CLI usage" + smoke testy w `tests/test_cli.py` (1 obraz, niska rozdzielczość).
 
 ## 2) Tile library browser — sprinty (TBD po CLI)
 
 Cel: GUI tab lub osobne narzędzie do przeglądu kafelków z `data/library_*` —
 thumbnaile, filtry (kolor, edge-density), statystyki pokrycia LAB.
 
-- [ ] **Sprint 2.1** — Decyzja: nowy tab w `gui.py` vs osobny `python -m src.tools.library_browser`. Mock UI / wireframe.
+- [x] **Sprint 2.1** — Decyzja: nowy tab w `gui.py` vs osobny `python -m src.tools.library_browser`. Mock UI / wireframe.
 - [ ] **Sprint 2.2** — Loader: thumbnail grid (lazy, np. 200x200 cache w `data/.thumbs/`).
 - [ ] **Sprint 2.3** — Filtry: dominantny kolor LAB, edge-density (z indeksu), nazwa pliku.
 - [ ] **Sprint 2.4** — Heatmapa pokrycia LAB (2D PCA / hex bins) — ile mamy "różnorodności" w bibliotece.
