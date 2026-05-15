@@ -17,6 +17,7 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 from dotenv import load_dotenv
 load_dotenv()
 
+import numpy as np
 import customtkinter as ctk
 from tkinter import filedialog
 import threading
@@ -36,9 +37,18 @@ FONTS_DIR = Path("assets/fonts")
 STARTER_TARGET = 500
 
 _THUMB_DIR = Path("data/.thumbs")
-_THUMB_CACHE_PX = 200   # resolution stored on disk
+_THUMB_CACHE_PX = 200    # resolution stored on disk
 _THUMB_DISPLAY_PX = 120  # size rendered in grid
 _GRID_COLS = 5
+
+# Lightness thresholds (normalised 0–1, derived from PIL grayscale mean)
+_L_RANGES = {
+    "Dark":   (0.00, 0.35),
+    "Mid":    (0.35, 0.65),
+    "Bright": (0.65, 1.00),
+}
+# Texture threshold: std-dev of L channel
+_TEX_THRESHOLD = 0.10
 
 
 class App(ctk.CTk):
@@ -640,28 +650,52 @@ class App(ctk.CTk):
             command=self._lib_refresh,
         ).grid(row=0, column=3, sticky="e")
 
-        # Filter bar
+        # Filter bar — two rows: (0) filename + sort, (1) lightness + texture
         filter_frame = ctk.CTkFrame(outer, fg_color=("#e8e8e8", "#1e1e2e"), corner_radius=6)
         filter_frame.grid(row=1, column=0, sticky="ew", padx=10, pady=(8, 0))
         filter_frame.columnconfigure(1, weight=1)
 
+        # Row 0: filename search + sort
         ctk.CTkLabel(filter_frame, text="Filter:", width=50).grid(
-            row=0, column=0, padx=(10, 4), pady=8)
+            row=0, column=0, padx=(10, 4), pady=(8, 4))
 
         self.entry_lib_filter = ctk.CTkEntry(
             filter_frame, placeholder_text="filename contains...")
-        self.entry_lib_filter.grid(row=0, column=1, sticky="ew", padx=4, pady=8)
+        self.entry_lib_filter.grid(row=0, column=1, sticky="ew", padx=4, pady=(8, 4))
         self.entry_lib_filter.bind("<Return>", lambda _e: self._lib_refresh())
 
         ctk.CTkLabel(filter_frame, text="Sort:", width=40).grid(
-            row=0, column=2, padx=(8, 4), pady=8)
+            row=0, column=2, padx=(8, 4), pady=(8, 4))
 
         self.combo_lib_sort = ctk.CTkComboBox(
             filter_frame, width=160,
             values=["Name A-Z", "Name Z-A", "Newest first", "Oldest first"],
+            command=lambda _v: self._lib_refresh(),
         )
         self.combo_lib_sort.set("Name A-Z")
-        self.combo_lib_sort.grid(row=0, column=3, padx=(0, 10), pady=8)
+        self.combo_lib_sort.grid(row=0, column=3, padx=(0, 10), pady=(8, 4))
+
+        # Row 1: lightness + texture visual filters
+        row1 = ctk.CTkFrame(filter_frame, fg_color="transparent")
+        row1.grid(row=1, column=0, columnspan=4, sticky="w", padx=10, pady=(0, 8))
+
+        ctk.CTkLabel(row1, text="Lightness:", width=72,
+                     font=ctk.CTkFont(size=12)).pack(side="left", padx=(0, 4))
+        self.seg_lib_light = ctk.CTkSegmentedButton(
+            row1, values=["All", "Dark", "Mid", "Bright"], width=260,
+            command=lambda _v: self._lib_refresh(),
+        )
+        self.seg_lib_light.set("All")
+        self.seg_lib_light.pack(side="left", padx=(0, 20))
+
+        ctk.CTkLabel(row1, text="Texture:", width=60,
+                     font=ctk.CTkFont(size=12)).pack(side="left", padx=(0, 4))
+        self.seg_lib_texture = ctk.CTkSegmentedButton(
+            row1, values=["All", "Flat", "Textured"], width=210,
+            command=lambda _v: self._lib_refresh(),
+        )
+        self.seg_lib_texture.set("All")
+        self.seg_lib_texture.pack(side="left")
 
         # Main scrollable grid
         self.lib_scroll = ctk.CTkScrollableFrame(outer, fg_color="transparent")
@@ -684,7 +718,7 @@ class App(ctk.CTk):
             fg_color="gray", state="disabled",
         ).pack(side="right", padx=5)
 
-    # ---- helpers ----
+    # ---- Library helpers ----
 
     def _lib_show_placeholder(self, text: str):
         for w in self.lib_scroll.winfo_children():
@@ -697,7 +731,7 @@ class App(ctk.CTk):
         ).grid(row=0, column=0, columnspan=_GRID_COLS, pady=80)
 
     def _lib_collect_paths(self) -> list[Path]:
-        """Return sorted+filtered list of image paths from all library dirs."""
+        """Scan all library dirs, apply filename filter and sort."""
         all_dirs = list(LIBRARY_DIRS) + [DEFAULT_OUTPUT_DIR]
         paths: list[Path] = []
         for d in all_dirs:
@@ -722,16 +756,50 @@ class App(ctk.CTk):
 
         return paths
 
-    def _lib_make_thumb(self, src: Path) -> Path:
-        """Return path to cached thumbnail (200×200 JPEG), creating it if absent."""
+    def _lib_make_thumb(self, src: Path) -> tuple[Path, dict]:
+        """Return (thumb_path, stats) where stats = {L: float, texture: float}.
+
+        L and texture are normalised 0–1 (mean / std of grayscale channel).
+        Thumbnail is cached in _THUMB_DIR; stats are computed from it.
+        """
         _THUMB_DIR.mkdir(parents=True, exist_ok=True)
         size_tag = src.stat().st_size
         dest = _THUMB_DIR / f"{src.stem}_{size_tag}.jpg"
-        if not dest.exists():
+
+        if dest.exists():
+            with Image.open(dest) as thumb:
+                arr = np.array(thumb.convert("L"), dtype=np.float32)
+        else:
             with Image.open(src) as img:
                 img.thumbnail((_THUMB_CACHE_PX, _THUMB_CACHE_PX), Image.LANCZOS)
-                img.convert("RGB").save(dest, "JPEG", quality=85)
-        return dest
+                rgb = img.convert("RGB")
+                rgb.save(dest, "JPEG", quality=85)
+                arr = np.array(rgb.convert("L"), dtype=np.float32)
+
+        stats = {
+            "L": float(arr.mean() / 255.0),
+            "texture": float(arr.std() / 255.0),
+        }
+        return dest, stats
+
+    def _lib_passes_filter(self, stats: dict) -> bool:
+        """Return True if tile stats satisfy the current Lightness + Texture filters."""
+        L = stats["L"]
+        tex = stats["texture"]
+
+        light_mode = self.seg_lib_light.get()
+        if light_mode != "All":
+            lo, hi = _L_RANGES[light_mode]
+            if not (lo <= L < hi):
+                return False
+
+        texture_mode = self.seg_lib_texture.get()
+        if texture_mode == "Flat" and tex >= _TEX_THRESHOLD:
+            return False
+        if texture_mode == "Textured" and tex < _TEX_THRESHOLD:
+            return False
+
+        return True
 
     def _lib_refresh(self):
         if self._lib_loading:
@@ -743,28 +811,38 @@ class App(ctk.CTk):
     def _lib_load_grid(self):
         try:
             paths = self._lib_collect_paths()
-            total = len(paths)
+            total_scanned = len(paths)
 
-            self.after(0, lambda: self.lbl_lib_count.configure(text=f"{total} tiles"))
+            self.after(0, lambda: self.lbl_lib_count.configure(
+                text=f"{total_scanned} tiles"))
             self._check_library_status()
 
-            if total == 0:
-                msg = "No tiles found. Download tiles using the sidebar."
-                self.after(0, lambda: self._lib_show_placeholder(msg))
-                self.after(0, lambda: self.lbl_lib_status.configure(text="Ready — 0 tiles"))
+            if total_scanned == 0:
+                self.after(0, lambda: self._lib_show_placeholder(
+                    "No tiles found. Download tiles using the sidebar."))
+                self.after(0, lambda: self.lbl_lib_status.configure(
+                    text="Ready — 0 tiles"))
                 return
 
             # Clear grid and reset image store
-            self.after(0, lambda: [w.destroy() for w in self.lib_scroll.winfo_children()])
+            self.after(0, lambda: [w.destroy()
+                                   for w in self.lib_scroll.winfo_children()])
             self._lib_images = []
 
             px = _THUMB_DISPLAY_PX
+            grid_row = 0
+            grid_col = 0
+            shown = 0
 
             for i, src in enumerate(paths):
                 if not self._lib_loading:
                     break
                 try:
-                    thumb_path = self._lib_make_thumb(src)
+                    thumb_path, stats = self._lib_make_thumb(src)
+
+                    if not self._lib_passes_filter(stats):
+                        continue
+
                     pil_img = Image.open(thumb_path).copy()
                     ctk_img = ctk.CTkImage(
                         light_image=pil_img, dark_image=pil_img,
@@ -772,10 +850,10 @@ class App(ctk.CTk):
                     )
                     self._lib_images.append(ctk_img)
 
-                    row, col = divmod(i, _GRID_COLS)
+                    r, c = grid_row, grid_col
                     name = src.name if len(src.name) <= 16 else src.name[:14] + ".."
 
-                    def _add(r=row, c=col, img=ctk_img, lbl=name):
+                    def _add(row=r, col=c, img=ctk_img, lbl=name):
                         cell = ctk.CTkFrame(
                             self.lib_scroll,
                             fg_color=("#dddddd", "#2a2a3a"),
@@ -783,7 +861,7 @@ class App(ctk.CTk):
                             width=px + 14,
                             height=px + 28,
                         )
-                        cell.grid(row=r, column=c, padx=4, pady=4, sticky="n")
+                        cell.grid(row=row, column=col, padx=4, pady=4, sticky="n")
                         cell.grid_propagate(False)
                         ctk.CTkLabel(cell, image=img, text="").pack(pady=(5, 2))
                         ctk.CTkLabel(
@@ -793,6 +871,11 @@ class App(ctk.CTk):
                         ).pack()
 
                     self.after(0, _add)
+                    shown += 1
+                    grid_col += 1
+                    if grid_col >= _GRID_COLS:
+                        grid_col = 0
+                        grid_row += 1
 
                 except Exception:
                     pass
@@ -800,10 +883,18 @@ class App(ctk.CTk):
                 if (i + 1) % 25 == 0:
                     done = i + 1
                     self.after(0, lambda n=done: self.lbl_lib_status.configure(
-                        text=f"Loading {n}/{total}..."))
+                        text=f"Loading {n}/{total_scanned}..."))
 
+            if shown == 0:
+                self.after(0, lambda: self._lib_show_placeholder(
+                    "No tiles match the current filters."))
+
+            n_shown = shown
+            n_total = total_scanned
+            self.after(0, lambda: self.lbl_lib_count.configure(
+                text=f"{n_shown} / {n_total} tiles"))
             self.after(0, lambda: self.lbl_lib_status.configure(
-                text=f"Ready — {total} tiles shown"))
+                text=f"Ready — {n_shown} of {n_total} tiles shown"))
 
         finally:
             self._lib_loading = False
