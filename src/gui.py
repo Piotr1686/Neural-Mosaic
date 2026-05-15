@@ -22,6 +22,7 @@ from tkinter import filedialog
 import threading
 from datetime import datetime
 from pathlib import Path
+from PIL import Image
 from .engine_smart import SmartEngine
 from .engine_typo import TypoEngine
 from .indexer_smart import SmartIndexer, LIBRARY_DIRS
@@ -33,6 +34,11 @@ ctk.set_default_color_theme("blue")
 
 FONTS_DIR = Path("assets/fonts")
 STARTER_TARGET = 500
+
+_THUMB_DIR = Path("data/.thumbs")
+_THUMB_CACHE_PX = 200   # resolution stored on disk
+_THUMB_DISPLAY_PX = 120  # size rendered in grid
+_GRID_COLS = 5
 
 
 class App(ctk.CTk):
@@ -46,6 +52,8 @@ class App(ctk.CTk):
 
         self.output_dir = None
         self._active_dl: PoliteDownloader | None = None
+        self._lib_images: list = []   # keeps CTkImage refs alive
+        self._lib_loading = False
 
         self._init_sidebar()
         self._init_tabs()
@@ -643,6 +651,7 @@ class App(ctk.CTk):
         self.entry_lib_filter = ctk.CTkEntry(
             filter_frame, placeholder_text="filename contains...")
         self.entry_lib_filter.grid(row=0, column=1, sticky="ew", padx=4, pady=8)
+        self.entry_lib_filter.bind("<Return>", lambda _e: self._lib_refresh())
 
         ctk.CTkLabel(filter_frame, text="Sort:", width=40).grid(
             row=0, column=2, padx=(8, 4), pady=8)
@@ -654,17 +663,14 @@ class App(ctk.CTk):
         self.combo_lib_sort.set("Name A-Z")
         self.combo_lib_sort.grid(row=0, column=3, padx=(0, 10), pady=8)
 
-        # Main scrollable grid — thumbnail grid filled in Sprint 2.2
+        # Main scrollable grid
         self.lib_scroll = ctk.CTkScrollableFrame(outer, fg_color="transparent")
         self.lib_scroll.grid(row=2, column=0, sticky="nsew", padx=10, pady=5)
+        for c in range(_GRID_COLS):
+            self.lib_scroll.grid_columnconfigure(c, weight=1)
 
-        self._lib_placeholder = ctk.CTkLabel(
-            self.lib_scroll,
-            text="Click Refresh to count tiles\n(thumbnail grid: Sprint 2.2)",
-            text_color="#555555",
-            font=ctk.CTkFont(size=14),
-        )
-        self._lib_placeholder.pack(expand=True, pady=80)
+        # Initial placeholder — replaced on first Refresh
+        self._lib_show_placeholder("Click  Refresh  to load the tile grid")
 
         # Action bar — export + status
         action_bar = ctk.CTkFrame(outer, fg_color="transparent")
@@ -678,17 +684,129 @@ class App(ctk.CTk):
             fg_color="gray", state="disabled",
         ).pack(side="right", padx=5)
 
-    def _lib_refresh(self):
+    # ---- helpers ----
+
+    def _lib_show_placeholder(self, text: str):
+        for w in self.lib_scroll.winfo_children():
+            w.destroy()
+        ctk.CTkLabel(
+            self.lib_scroll,
+            text=text,
+            text_color="#555555",
+            font=ctk.CTkFont(size=14),
+        ).grid(row=0, column=0, columnspan=_GRID_COLS, pady=80)
+
+    def _lib_collect_paths(self) -> list[Path]:
+        """Return sorted+filtered list of image paths from all library dirs."""
         all_dirs = list(LIBRARY_DIRS) + [DEFAULT_OUTPUT_DIR]
-        total = sum(
-            len(list(d.glob("*.jpg"))) + len(list(d.glob("*.png")))
-            for d in all_dirs if d.exists()
-        )
-        self.lbl_lib_count.configure(text=f"{total} tiles")
-        n_dirs = sum(1 for d in all_dirs if d.exists())
-        self.lbl_lib_status.configure(
-            text=f"Scanned {total} tiles across {n_dirs} library dir(s)")
-        self._check_library_status()
+        paths: list[Path] = []
+        for d in all_dirs:
+            if d.exists():
+                paths.extend(d.glob("*.jpg"))
+                paths.extend(d.glob("*.jpeg"))
+                paths.extend(d.glob("*.png"))
+
+        filter_text = self.entry_lib_filter.get().strip().lower()
+        if filter_text:
+            paths = [p for p in paths if filter_text in p.name.lower()]
+
+        sort_mode = self.combo_lib_sort.get()
+        if sort_mode == "Name A-Z":
+            paths.sort(key=lambda p: p.name.lower())
+        elif sort_mode == "Name Z-A":
+            paths.sort(key=lambda p: p.name.lower(), reverse=True)
+        elif sort_mode == "Newest first":
+            paths.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+        elif sort_mode == "Oldest first":
+            paths.sort(key=lambda p: p.stat().st_mtime)
+
+        return paths
+
+    def _lib_make_thumb(self, src: Path) -> Path:
+        """Return path to cached thumbnail (200×200 JPEG), creating it if absent."""
+        _THUMB_DIR.mkdir(parents=True, exist_ok=True)
+        size_tag = src.stat().st_size
+        dest = _THUMB_DIR / f"{src.stem}_{size_tag}.jpg"
+        if not dest.exists():
+            with Image.open(src) as img:
+                img.thumbnail((_THUMB_CACHE_PX, _THUMB_CACHE_PX), Image.LANCZOS)
+                img.convert("RGB").save(dest, "JPEG", quality=85)
+        return dest
+
+    def _lib_refresh(self):
+        if self._lib_loading:
+            return
+        self._lib_loading = True
+        self.after(0, lambda: self.lbl_lib_status.configure(text="Scanning..."))
+        threading.Thread(target=self._lib_load_grid, daemon=True).start()
+
+    def _lib_load_grid(self):
+        try:
+            paths = self._lib_collect_paths()
+            total = len(paths)
+
+            self.after(0, lambda: self.lbl_lib_count.configure(text=f"{total} tiles"))
+            self._check_library_status()
+
+            if total == 0:
+                msg = "No tiles found. Download tiles using the sidebar."
+                self.after(0, lambda: self._lib_show_placeholder(msg))
+                self.after(0, lambda: self.lbl_lib_status.configure(text="Ready — 0 tiles"))
+                return
+
+            # Clear grid and reset image store
+            self.after(0, lambda: [w.destroy() for w in self.lib_scroll.winfo_children()])
+            self._lib_images = []
+
+            px = _THUMB_DISPLAY_PX
+
+            for i, src in enumerate(paths):
+                if not self._lib_loading:
+                    break
+                try:
+                    thumb_path = self._lib_make_thumb(src)
+                    pil_img = Image.open(thumb_path).copy()
+                    ctk_img = ctk.CTkImage(
+                        light_image=pil_img, dark_image=pil_img,
+                        size=(px, px),
+                    )
+                    self._lib_images.append(ctk_img)
+
+                    row, col = divmod(i, _GRID_COLS)
+                    name = src.name if len(src.name) <= 16 else src.name[:14] + ".."
+
+                    def _add(r=row, c=col, img=ctk_img, lbl=name):
+                        cell = ctk.CTkFrame(
+                            self.lib_scroll,
+                            fg_color=("#dddddd", "#2a2a3a"),
+                            corner_radius=6,
+                            width=px + 14,
+                            height=px + 28,
+                        )
+                        cell.grid(row=r, column=c, padx=4, pady=4, sticky="n")
+                        cell.grid_propagate(False)
+                        ctk.CTkLabel(cell, image=img, text="").pack(pady=(5, 2))
+                        ctk.CTkLabel(
+                            cell, text=lbl,
+                            font=ctk.CTkFont(size=9),
+                            text_color="#999999",
+                        ).pack()
+
+                    self.after(0, _add)
+
+                except Exception:
+                    pass
+
+                if (i + 1) % 25 == 0:
+                    done = i + 1
+                    self.after(0, lambda n=done: self.lbl_lib_status.configure(
+                        text=f"Loading {n}/{total}..."))
+
+            self.after(0, lambda: self.lbl_lib_status.configure(
+                text=f"Ready — {total} tiles shown"))
+
+        finally:
+            self._lib_loading = False
 
 
 if __name__ == "__main__":
