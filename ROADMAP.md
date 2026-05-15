@@ -34,7 +34,7 @@ thumbnaile, filtry (kolor, edge-density), statystyki pokrycia LAB.
 - [x] **Sprint 2.1** — Decyzja: nowy tab w `gui.py` vs osobny `python -m src.tools.library_browser`. Mock UI / wireframe.
 - [ ] **Sprint 2.2** — Loader: thumbnail grid (lazy, np. 200x200 cache w `data/.thumbs/`).
 - [x] **Sprint 2.3** — Filtry: dominantny kolor LAB, edge-density (z indeksu), nazwa pliku.
-- [ ] **Sprint 2.4** — Heatmapa pokrycia LAB (2D PCA / hex bins) — ile mamy "różnorodności" w bibliotece.
+- [x] **Sprint 2.4** — Heatmapa pokrycia LAB (2D PCA / hex bins) — ile mamy "różnorodności" w bibliotece.
 - [ ] **Sprint 2.5** — Akcje: usuń/oznacz kafelek, eksport listy "bad tiles" do `data/library_*/excluded.txt`.
 
 ## 3) Real-time preview — sprinty (TBD po Tile browser)

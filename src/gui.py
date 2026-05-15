@@ -9,6 +9,7 @@ Provides three tabs:
   * Tile Library — visual browser for data/library_* tile collections.
 """
 import os
+import pickle
 import subprocess
 import sys
 import shutil
@@ -24,6 +25,9 @@ import threading
 from datetime import datetime
 from pathlib import Path
 from PIL import Image
+from sklearn.decomposition import PCA
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from .engine_smart import SmartEngine
 from .engine_typo import TypoEngine
 from .indexer_smart import SmartIndexer, LIBRARY_DIRS
@@ -40,6 +44,7 @@ _THUMB_DIR = Path("data/.thumbs")
 _THUMB_CACHE_PX = 200    # resolution stored on disk
 _THUMB_DISPLAY_PX = 120  # size rendered in grid
 _GRID_COLS = 5
+_SMART_INDEX = Path("data/smart_index.pkl")
 
 # Lightness thresholds (normalised 0–1, derived from PIL grayscale mean)
 _L_RANGES = {
@@ -47,7 +52,7 @@ _L_RANGES = {
     "Mid":    (0.35, 0.65),
     "Bright": (0.65, 1.00),
 }
-# Texture threshold: std-dev of L channel
+# Texture threshold: std-dev of grayscale channel (normalised)
 _TEX_THRESHOLD = 0.10
 
 
@@ -225,19 +230,17 @@ class App(ctk.CTk):
         self.seg_res_p.set("4K")
         self.seg_res_p.pack(pady=5)
 
-        # BUTTON PHOTO SCALE
-        ctk.CTkLabel(frame, text="Tile Size Multiplier", font=("Arial", 12, "bold")).pack(pady=(15,0))
+        ctk.CTkLabel(frame, text="Tile Size Multiplier", font=("Arial", 12, "bold")).pack(pady=(15, 0))
         self.seg_scale_p = ctk.CTkSegmentedButton(frame, values=["0.5", "0.75", "1.0", "1.75", "2.0"])
         self.seg_scale_p.set("1.0")
         self.seg_scale_p.pack(pady=5)
 
-        ctk.CTkLabel(frame, text="Tile Shape").pack(pady=(10,0))
+        ctk.CTkLabel(frame, text="Tile Shape").pack(pady=(10, 0))
         shapes = ["square", "rectangle_3x1", "brick_wall", "hexagon", "hexagon_romb", "romb", "triangle", "kite"]
         self.combo_shape = ctk.CTkComboBox(frame, values=shapes)
         self.combo_shape.set("hexagon_romb")
         self.combo_shape.pack(pady=5)
 
-        # Checkboxes
         self.check_mirror = ctk.CTkCheckBox(
             frame, text="Allow Mirroring  (small library)",
             command=self._on_mirror_toggled)
@@ -255,7 +258,6 @@ class App(ctk.CTk):
         self.check_edge_aware.deselect()
         self.check_edge_aware.pack(pady=5)
 
-        # --- POST-PROCESSING ---
         ctk.CTkLabel(frame, text="POST-PROCESSING",
                      font=("Arial", 12, "bold")).pack(pady=(20, 5))
 
@@ -269,7 +271,6 @@ class App(ctk.CTk):
         self.seg_tint.set("0%")
         self.seg_tint.pack(pady=5)
 
-        # RENDER button pinned outside the scroll area — always visible
         self.btn_run_p = ctk.CTkButton(
             outer,
             text="RENDER SMART MOSAIC",
@@ -317,13 +318,11 @@ class App(ctk.CTk):
         self.seg_res_t.set("8K")
         self.seg_res_t.pack(pady=5)
 
-        # BUTTON TYPO SCALE
-        ctk.CTkLabel(frame, text="Symbol Size Multiplier", font=("Arial", 12, "bold")).pack(pady=(15,0))
+        ctk.CTkLabel(frame, text="Symbol Size Multiplier", font=("Arial", 12, "bold")).pack(pady=(15, 0))
         self.seg_scale_t = ctk.CTkSegmentedButton(frame, values=["0.5", "0.75", "1.0", "1.75", "2.0"])
         self.seg_scale_t.set("1.0")
         self.seg_scale_t.pack(pady=5)
 
-        # --- FONT GROUPS ---
         ctk.CTkLabel(frame, text="Font Groups (select one or more)",
                      font=("Arial", 12, "bold")).pack(pady=(15, 5))
 
@@ -331,7 +330,6 @@ class App(ctk.CTk):
         groups_frame = ctk.CTkFrame(frame, fg_color="transparent")
         groups_frame.pack(pady=5, padx=20, fill="x")
 
-        # Default: D_latin_clean selected (safest choice for first-time users)
         default_selected = {"D_latin_clean"}
         for group_key, label in GROUP_LABELS.items():
             var = ctk.BooleanVar(value=(group_key in default_selected))
@@ -352,7 +350,6 @@ class App(ctk.CTk):
         self.seg_variation.set("20")
         self.seg_variation.pack(pady=5)
 
-        # RENDER button pinned outside the scroll area — always visible
         self.btn_run_t = ctk.CTkButton(
             outer,
             text="RENDER SYMBOL MOSAIC",
@@ -382,7 +379,6 @@ class App(ctk.CTk):
             text, color = f"{total} images", "#33cc55"
         self.lbl_library_status.configure(text=text, text_color=color)
 
-        # Starter button turns green once the 500-image target is reached
         starter_color = "#1a6b1a" if total >= STARTER_TARGET else "#5a3e8a"
         self.btn_dl_starter.configure(fg_color=starter_color)
 
@@ -462,7 +458,6 @@ class App(ctk.CTk):
     # --- ENGINE AND INDEX MANAGEMENT ---
 
     def run_smart_indexer(self):
-        """Rebuild the Smart Index in a background thread."""
         def _run():
             self.log("Starting Smart Indexer... (Wait)")
             try:
@@ -481,7 +476,8 @@ class App(ctk.CTk):
             try:
                 self.smart_engine = SmartEngine()
                 self.log("Smart Engine Ready!")
-            except Exception as e: self.log(f"Error: {e}")
+            except Exception as e:
+                self.log(f"Error: {e}")
         threading.Thread(target=_load).start()
 
     def load_typo_index(self):
@@ -510,7 +506,8 @@ class App(ctk.CTk):
 
     def select_output_dir(self):
         self.output_dir = filedialog.askdirectory()
-        if self.output_dir: self.log(f"Output: {self.output_dir}")
+        if self.output_dir:
+            self.log(f"Output: {self.output_dir}")
 
     def _on_mirror_toggled(self):
         if self.check_mirror.get():
@@ -542,23 +539,17 @@ class App(ctk.CTk):
             self.log("Error: Load Smart Index and Select Image first!")
             return
         out = self._get_auto_filename("Smart", ".jpg")
-        if not out: return
+        if not out:
+            return
 
         self.smart_engine.settings["allow_mirror"] = bool(self.check_mirror.get())
         self.smart_engine.settings["edge_aware"] = bool(self.check_edge_aware.get())
         res = self.seg_res_p.get()
         shape = self.combo_shape.get()
-        scale = self.seg_scale_p.get()
+        scale = float(self.seg_scale_p.get() or "1.0")
         border_mode = bool(self.check_border.get())
-
-        if not scale:
-            scale = "1.0"
-        scale = float(scale)
-
-        blend_val = self.seg_blend.get()
-        blend_strength = int(blend_val.replace("%", "")) / 100.0
-        tint_val = self.seg_tint.get()
-        tint_strength = int(tint_val.replace("%", "")) / 100.0
+        blend_strength = int(self.seg_blend.get().replace("%", "")) / 100.0
+        tint_strength = int(self.seg_tint.get().replace("%", "")) / 100.0
 
         if res in ("8K", "16K"):
             self.log(f"NOTE: {res} rendering requires ~2-4 GB free RAM. "
@@ -583,19 +574,16 @@ class App(ctk.CTk):
             self.log("Error: Select Input Image first")
             return
         out = self._get_auto_filename("Symbol", ".png")
-        if not out: return
+        if not out:
+            return
 
         res = self.seg_res_t.get()
         mode = self.combo_mode.get()
-        scale = self.seg_scale_t.get()
-        if not scale: scale = "1.0"
-        scale = float(scale)
-
+        scale = float(self.seg_scale_t.get() or "1.0")
         selected_groups = [k for k, v in self.font_group_vars.items() if v.get()]
         if not selected_groups:
             self.log("ERROR: Select at least one Font Group!")
             return
-
         variation = int(self.seg_variation.get())
 
         def _run():
@@ -607,7 +595,6 @@ class App(ctk.CTk):
                 if not active_engine.library:
                     self.log("ERROR: No glyphs after filter. Select more groups.")
                     return
-
                 active_engine.process(
                     self.path_t, out, res, mode,
                     scale=scale,
@@ -650,12 +637,11 @@ class App(ctk.CTk):
             command=self._lib_refresh,
         ).grid(row=0, column=3, sticky="e")
 
-        # Filter bar — two rows: (0) filename + sort, (1) lightness + texture
+        # Filter bar — row 0: filename + sort / row 1: lightness + texture
         filter_frame = ctk.CTkFrame(outer, fg_color=("#e8e8e8", "#1e1e2e"), corner_radius=6)
         filter_frame.grid(row=1, column=0, sticky="ew", padx=10, pady=(8, 0))
         filter_frame.columnconfigure(1, weight=1)
 
-        # Row 0: filename search + sort
         ctk.CTkLabel(filter_frame, text="Filter:", width=50).grid(
             row=0, column=0, padx=(10, 4), pady=(8, 4))
 
@@ -675,7 +661,6 @@ class App(ctk.CTk):
         self.combo_lib_sort.set("Name A-Z")
         self.combo_lib_sort.grid(row=0, column=3, padx=(0, 10), pady=(8, 4))
 
-        # Row 1: lightness + texture visual filters
         row1 = ctk.CTkFrame(filter_frame, fg_color="transparent")
         row1.grid(row=1, column=0, columnspan=4, sticky="w", padx=10, pady=(0, 8))
 
@@ -703,10 +688,9 @@ class App(ctk.CTk):
         for c in range(_GRID_COLS):
             self.lib_scroll.grid_columnconfigure(c, weight=1)
 
-        # Initial placeholder — replaced on first Refresh
         self._lib_show_placeholder("Click  Refresh  to load the tile grid")
 
-        # Action bar — export + status
+        # Action bar
         action_bar = ctk.CTkFrame(outer, fg_color="transparent")
         action_bar.grid(row=3, column=0, sticky="ew", padx=10, pady=(0, 10))
 
@@ -716,6 +700,12 @@ class App(ctk.CTk):
         ctk.CTkButton(
             action_bar, text="Export Bad Tiles...", width=160,
             fg_color="gray", state="disabled",
+        ).pack(side="right", padx=5)
+
+        ctk.CTkButton(
+            action_bar, text="LAB Coverage Map", width=160,
+            fg_color="#4a3070",
+            command=self._lib_show_lab_map,
         ).pack(side="right", padx=5)
 
     # ---- Library helpers ----
@@ -731,7 +721,6 @@ class App(ctk.CTk):
         ).grid(row=0, column=0, columnspan=_GRID_COLS, pady=80)
 
     def _lib_collect_paths(self) -> list[Path]:
-        """Scan all library dirs, apply filename filter and sort."""
         all_dirs = list(LIBRARY_DIRS) + [DEFAULT_OUTPUT_DIR]
         paths: list[Path] = []
         for d in all_dirs:
@@ -757,10 +746,10 @@ class App(ctk.CTk):
         return paths
 
     def _lib_make_thumb(self, src: Path) -> tuple[Path, dict]:
-        """Return (thumb_path, stats) where stats = {L: float, texture: float}.
+        """Return (thumb_path, stats) — stats = {L, texture} normalised 0–1.
 
-        L and texture are normalised 0–1 (mean / std of grayscale channel).
-        Thumbnail is cached in _THUMB_DIR; stats are computed from it.
+        Thumbnail is cached in _THUMB_DIR. Stats are computed from the cached
+        thumbnail so repeated refreshes are free.
         """
         _THUMB_DIR.mkdir(parents=True, exist_ok=True)
         size_tag = src.stat().st_size
@@ -776,16 +765,13 @@ class App(ctk.CTk):
                 rgb.save(dest, "JPEG", quality=85)
                 arr = np.array(rgb.convert("L"), dtype=np.float32)
 
-        stats = {
+        return dest, {
             "L": float(arr.mean() / 255.0),
             "texture": float(arr.std() / 255.0),
         }
-        return dest, stats
 
     def _lib_passes_filter(self, stats: dict) -> bool:
-        """Return True if tile stats satisfy the current Lightness + Texture filters."""
-        L = stats["L"]
-        tex = stats["texture"]
+        L, tex = stats["L"], stats["texture"]
 
         light_mode = self.seg_lib_light.get()
         if light_mode != "All":
@@ -820,11 +806,9 @@ class App(ctk.CTk):
             if total_scanned == 0:
                 self.after(0, lambda: self._lib_show_placeholder(
                     "No tiles found. Download tiles using the sidebar."))
-                self.after(0, lambda: self.lbl_lib_status.configure(
-                    text="Ready — 0 tiles"))
+                self.after(0, lambda: self.lbl_lib_status.configure(text="Ready — 0 tiles"))
                 return
 
-            # Clear grid and reset image store
             self.after(0, lambda: [w.destroy()
                                    for w in self.lib_scroll.winfo_children()])
             self._lib_images = []
@@ -839,7 +823,6 @@ class App(ctk.CTk):
                     break
                 try:
                     thumb_path, stats = self._lib_make_thumb(src)
-
                     if not self._lib_passes_filter(stats):
                         continue
 
@@ -898,6 +881,104 @@ class App(ctk.CTk):
 
         finally:
             self._lib_loading = False
+
+    # ---- LAB Coverage Map ----
+
+    def _lib_show_lab_map(self):
+        if not _SMART_INDEX.exists():
+            self.lbl_lib_status.configure(
+                text="LAB Map: smart_index.pkl not found — run Update / Create Index first")
+            return
+
+        self.lbl_lib_status.configure(text="Building LAB map...")
+        threading.Thread(target=self._lib_build_lab_map, daemon=True).start()
+
+    def _lib_build_lab_map(self):
+        try:
+            with open(_SMART_INDEX, "rb") as f:
+                data = pickle.load(f)
+
+            features = data["features"]          # (N, 79)
+            N = len(features)
+
+            # Mean LAB per tile — first 75 dims, every 3rd channel
+            mean_L = features[:, 0:75:3].mean(axis=1) * 100           # 0..100
+            mean_a = features[:, 1:75:3].mean(axis=1) * 255 - 128     # -128..127
+            mean_b = features[:, 2:75:3].mean(axis=1) * 255 - 128     # -128..127
+
+            # 2-component PCA of the full 75-dim LAB vectors
+            pca = PCA(n_components=2, random_state=0)
+            proj = pca.fit_transform(features[:, :75])
+            var1 = pca.explained_variance_ratio_[0]
+            var2 = pca.explained_variance_ratio_[1]
+
+            self.after(0, lambda: self._lib_open_map_window(
+                N, mean_L, mean_a, mean_b, proj, var1, var2))
+
+        except Exception as exc:
+            msg = f"LAB Map error: {exc}"
+            self.after(0, lambda: self.lbl_lib_status.configure(text=msg))
+
+    def _lib_open_map_window(self, N, mean_L, mean_a, mean_b, proj, var1, var2):
+        win = ctk.CTkToplevel(self)
+        win.title(f"LAB Coverage Map — {N} tiles indexed")
+        win.geometry("960x500")
+        win.grab_set()
+
+        bg = "#1a1a2e"
+        panel_bg = "#0d0d1a"
+        tick_col = "#666688"
+        label_col = "#aaaacc"
+        title_col = "#ccccee"
+
+        fig = Figure(figsize=(9.6, 4.8), facecolor=bg)
+
+        # --- Plot 1: a-b hex bin (colour gamut coverage) ---
+        ax1 = fig.add_subplot(121)
+        ax1.set_facecolor(panel_bg)
+        hb = ax1.hexbin(
+            mean_a, mean_b,
+            C=mean_L, reduce_C_function=np.mean,
+            gridsize=28, cmap="RdYlGn", mincnt=1,
+        )
+        ax1.axhline(0, color="#334", lw=0.6, zorder=0)
+        ax1.axvline(0, color="#334", lw=0.6, zorder=0)
+        ax1.set_xlabel("a*  (green ←→ red)", color=label_col, fontsize=10)
+        ax1.set_ylabel("b*  (blue ←→ yellow)", color=label_col, fontsize=10)
+        ax1.set_title("Colour Gamut Coverage (a–b)", color=title_col, fontsize=11, pad=8)
+        ax1.tick_params(colors=tick_col, labelsize=8)
+        for spine in ax1.spines.values():
+            spine.set_edgecolor("#334466")
+        cb1 = fig.colorbar(hb, ax=ax1, pad=0.02)
+        cb1.set_label("mean L*", color=label_col, fontsize=9)
+        cb1.ax.yaxis.set_tick_params(color=tick_col, labelcolor=tick_col)
+
+        # --- Plot 2: PCA scatter coloured by L* ---
+        ax2 = fig.add_subplot(122)
+        ax2.set_facecolor(panel_bg)
+        sc = ax2.scatter(
+            proj[:, 0], proj[:, 1],
+            c=mean_L, cmap="plasma",
+            s=3, alpha=0.45, linewidths=0, rasterized=True,
+        )
+        ax2.set_xlabel(f"PC1  ({var1:.0%} var)", color=label_col, fontsize=10)
+        ax2.set_ylabel(f"PC2  ({var2:.0%} var)", color=label_col, fontsize=10)
+        ax2.set_title("PCA Diversity  (colour = L*)", color=title_col, fontsize=11, pad=8)
+        ax2.tick_params(colors=tick_col, labelsize=8)
+        for spine in ax2.spines.values():
+            spine.set_edgecolor("#334466")
+        cb2 = fig.colorbar(sc, ax=ax2, pad=0.02)
+        cb2.set_label("L*", color=label_col, fontsize=9)
+        cb2.ax.yaxis.set_tick_params(color=tick_col, labelcolor=tick_col)
+
+        fig.tight_layout(pad=1.8)
+
+        canvas = FigureCanvasTkAgg(fig, master=win)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill="both", expand=True, padx=6, pady=6)
+
+        self.lbl_lib_status.configure(
+            text=f"LAB Map — {N} tiles, PC1+PC2 = {var1+var2:.0%} variance")
 
 
 if __name__ == "__main__":
