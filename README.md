@@ -154,7 +154,7 @@ Neural-Mosaic includes a **typographic rendering engine** that replaces pixels w
 | Parameter | Options | Effect |
 |---|---|---|
 | Font Groups | CJK · Ancient · Symbols · Latin · Decorative · Handwriting · Other | Visual aesthetic family |
-| Style Mode | `black_on_white` · `white_on_black` · `color_on_white` | Background + glyph fill strategy |
+| Style Mode | `black_on_white` · `white_on_black` | Background + glyph fill strategy |
 | Symbol Size | 0.5× · 0.75× · 1.0× · 1.75× · 2.0× | Glyph grid density |
 
 ### Font library (bundled with the repo)
@@ -230,9 +230,36 @@ Reconstructs the target image using typographic glyphs instead of photographs. E
 |---|---|
 | Output resolution | 4K · 8K · **16K** |
 | Symbol size multiplier | 0.5 · 0.75 · 1.0 · 1.75 · 2.0 |
-| Style mode | `black_on_white` · `white_on_black` · `color_on_white` |
+| Style mode | `black_on_white` · `white_on_black` |
 
 Font scanning is triggered from the GUI with a single click. Any `.ttf` or `.otf` fonts placed in `assets/fonts/` are indexed automatically.
+
+---
+
+### Tile Library Browser
+
+The **Tile Library** tab lets you inspect, filter, and curate the tile collection before rendering.
+
+| Feature | Details |
+|---|---|
+| Thumbnail grid | Lazy-loaded 120 px previews, cached on first load — instant on repeat visits |
+| Filters | **Lightness** (Dark / Mid / Bright), **Texture** (Flat / Textured), **Filename** substring |
+| Sort | Name A–Z / Z–A, Newest first, Oldest first |
+| LAB Coverage Map | matplotlib popup: a\*–b\* hex-bin gamut coverage + PCA diversity scatter for the full index |
+| Tile selection | Click any tile to mark it (purple highlight); click again to deselect |
+| Export Bad Tiles | Saves selected filenames to `data/library_*/excluded.txt` — idempotent, safe to re-run |
+
+`excluded.txt` is read by future index rebuilds to skip known-bad tiles without deleting the originals.
+
+---
+
+### Real-time Preview
+
+Both the **Smart Photo Mosaic** and **Symbol Mosaic** tabs have a live preview pane on the right side. The preview renders automatically 300 ms after any setting change — tile shape, scale, blend, border, mode, variation, or font group — with no manual trigger required.
+
+- Preview resolution: 512 px on the short edge (fast; full-resolution render is unchanged)
+- Multiple rapid changes are debounced: only the final state triggers a render
+- Preview activates as soon as both an input image and a loaded index are available
 
 ---
 
@@ -254,7 +281,7 @@ Build a campaign hero — logo, ambassador portrait, or key brand symbol — fro
 
 ### Typography Wall Art — Schools, Bookstores, Cafés, Museums
 
-Use the Symbol Mosaic engine to compose literary or educational posters: a portrait of an author or historical figure assembled entirely from glyphs — 50,000 Hanzi forming Murakami, the letters of a sonnet forming Shakespeare. The `color_on_white` mode suits modern interiors, `black_on_white` delivers a classic editorial look.
+Use the Symbol Mosaic engine to compose literary or educational posters: a portrait of an author or historical figure assembled entirely from glyphs — 50,000 Hanzi forming Murakami, the letters of a sonnet forming Shakespeare. `black_on_white` delivers a classic editorial look; `white_on_black` suits dark-themed modern interiors.
 
 > **Why it works:** zero library cost (fonts replace thousands of photos), CJK Unicode coverage is built in, and 16K output holds up at A0 print size and beyond.
 
@@ -338,8 +365,16 @@ Key settings:
 
 1. **Tab: Symbol Mosaic → "Update Database (Scan Assets)"** — indexes all fonts in `assets/fonts/`. Run once after adding new fonts.
 2. **"Load Typo Index (Fast)"** — loads the font index. The status label shows how many symbols are ready.
-3. Select your input image, choose resolution, symbol size, and style mode.
+3. Select your input image, choose resolution, symbol size, font groups, and style mode. The **PREVIEW** pane on the right updates automatically 300 ms after any change.
 4. Click **RENDER SYMBOL MOSAIC**. The file is saved as `<ProjectName>_Symbol_<timestamp>.png`.
+
+### Tile Library
+
+1. **Tab: Tile Library → Refresh** — scans all library directories and loads thumbnails lazily. Thumbnails are cached in `data/.thumbs/`; second load is instant.
+2. Use the filter bar to narrow by **Lightness**, **Texture**, or filename substring. The counter shows how many tiles match out of the total.
+3. Click **LAB Coverage Map** to open a matplotlib window showing the colour gamut of your indexed library (a\*–b\* hex-bin) alongside a PCA diversity scatter.
+4. Click any tile to **select** it (purple highlight); click again to deselect. When at least one tile is selected, the **Export Bad Tiles...** button becomes active.
+5. Click **Export Bad Tiles...** — selected filenames are appended to `data/library_*/excluded.txt` and will be skipped on the next index rebuild. The operation is idempotent.
 
 ---
 
@@ -390,7 +425,7 @@ Batch output names are **timestamp-free** — `{stem}_{engine}_{res}_{shape|mode
 | `--border` | smart | off | Add dark grout lines between tiles |
 | `--no-mirror` | smart | mirroring on | Disable horizontal tile mirroring |
 | `--edge-aware` | smart | off | Require 79-dim edge-feature index |
-| `--mode {black_on_white,white_on_black}` | typo | `black_on_white` | Symbol mosaic style |
+| `--mode {black_on_white,white_on_black}` | typo | `black_on_white` | Symbol render mode |
 | `--font-groups GROUP ...` | typo | all | Limit to subset: `A_cjk` · `B_ancient` · `C_symbols` · `D_latin_clean` · `E_decorative` · `F_handwriting` · `G_uncategorized` |
 | `--variation INT` | typo | `20` | Glyph density window |
 | `--verbose` | both | off | Debug-level logging |
@@ -404,21 +439,25 @@ Logs are written to `logs/cli.log` in addition to stdout. Run `python -m src.cli
 ```
 Neural-Mosaic/
 ├── src/
-│   ├── gui.py              # Entry point — CustomTkinter application
-│   ├── engine_smart.py     # Colour-matched photomosaic engine
+│   ├── gui.py              # Entry point — CustomTkinter application (3 tabs)
+│   ├── engine_smart.py     # Colour-matched photomosaic engine (LAB + cKDTree)
 │   ├── engine_typo.py      # Typography / glyph mosaic engine
+│   ├── preview.py          # PreviewRenderer — 300 ms debounced background render
+│   ├── cli.py              # Headless CLI: render + batch subcommands
 │   ├── indexer_smart.py    # Builds data/smart_index.pkl
 │   ├── indexer_typo.py     # Builds data/typo_index.pkl
-│   ├── ai_core.py          # [Legacy] MiDaS depth model — retained for future depth-aware features
-│   ├── downloader.py       # Async public-domain image fetcher
+│   ├── font_groups.py      # Font group definitions for typo engine
+│   ├── downloader_v2.py    # Async public-domain image fetcher
 │   ├── optimizer.py        # Image normalisation & cleanup
+│   ├── ai_core.py          # MiDaS depth model (retained for future depth-aware features)
 │   └── config.py           # Settings dataclass (reads .env)
 ├── assets/
 │   ├── fonts/              # Place .ttf / .otf fonts here
 │   └── examples/           # Example mosaics and source images
 ├── data/
 │   ├── library_public/tiles/
-│   └── library_private/tiles/
+│   ├── library_private/tiles/
+│   └── .thumbs/            # Thumbnail cache (generated at runtime, not in repo)
 ├── tests/
 ├── .env.example            # Configuration template
 ├── .gitignore
@@ -487,10 +526,10 @@ Each iteration kept the anti-repetition logic and the multi-shape tile geometry,
 
 ## Roadmap
 
-- [ ] Real-time mosaic preview in GUI (downscaled)
-- [ ] Tile library browser with visual search
+- [x] Real-time mosaic preview in GUI — 300 ms debounce, 512 px short edge, both tabs
+- [x] Tile library browser — thumbnail grid, LAB coverage map, tile selection & exclusion export
 - [x] CLI mode for batch processing — see [CLI Usage](#cli-usage)
-- [ ] Export to SVG (symbol mosaic)
+- [ ] Export to deep-zoom (DZI) with excluded-tile support
 - [ ] Plugin system for custom tile shapes
 
 ---
@@ -517,8 +556,8 @@ A: Close other applications. At least ~3 GB free RAM is required. As an alternat
 **Q: WARNING about incompatible index**
 A: Click **"Update / Create Index"** in the GUI to rebuild `smart_index.pkl`.
 
-**Q: RENDER SYMBOL MOSAIC button is not visible**
-A: Scroll down inside the Symbol Mosaic tab. All controls are in a scrollable area; the RENDER button is pinned to the bottom of the tab and is always reachable.
+**Q: Preview pane shows "Select image and load index"**
+A: Both conditions must be met: (1) click "Select Input Image" in the settings column, and (2) load the index via the sidebar (Smart) or "Load Typo Index" button (Symbol Mosaic). The preview fires automatically once both are ready.
 
 ---
 
