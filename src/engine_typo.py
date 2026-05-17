@@ -114,7 +114,8 @@ class TypoEngine:
         w, h = original.size
         out_w = target_res
         out_h = int(target_res * h / w)
-        self._do_render(original, output_path, out_w, out_h, cell_w, cell_h, mode, variation)
+        result = self._do_render(original, out_w, out_h, cell_w, cell_h, mode, variation)
+        result.save(output_path, dpi=(300, 300))
 
     def render_sized(self, input_path, output_path, out_w, out_h, mode="black_on_white",
                      scale=1.0, variation=20):
@@ -124,10 +125,25 @@ class TypoEngine:
         cell_w = max(6, int(14 * scale))
         cell_h = int(cell_w * 1.6)
         original = Image.open(input_path).convert("RGB")
-        self._do_render(original, output_path, out_w, out_h, cell_w, cell_h, mode, variation)
+        result = self._do_render(original, out_w, out_h, cell_w, cell_h, mode, variation)
+        result.save(output_path, dpi=(300, 300))
 
-    def _do_render(self, original, output_path, out_w, out_h, cell_w, cell_h, mode, variation):
-        """Core rendering kernel — accepts a pre-opened PIL Image."""
+    def render_preview(self, input_path, short_edge=512, mode="black_on_white",
+                       scale=1.0, variation=20):
+        """Return a PIL Image preview at ~short_edge px short side — no file I/O."""
+        if not self.library:
+            raise RuntimeError("Typo index not loaded.")
+        original = Image.open(input_path).convert("RGB")
+        img_w, img_h = original.size
+        sc = short_edge / min(img_w, img_h)
+        out_w = max(1, int(img_w * sc))
+        out_h = max(1, int(img_h * sc))
+        cell_w = max(6, int(14 * scale))
+        cell_h = int(cell_w * 1.6)
+        return self._do_render(original, out_w, out_h, cell_w, cell_h, mode, variation)
+
+    def _do_render(self, original, out_w, out_h, cell_w, cell_h, mode, variation):
+        """Core rendering kernel — accepts a pre-opened PIL Image, returns PIL Image."""
         font_size = int(cell_h * 0.9)
         cols = out_w // cell_w
         rows = out_h // cell_h
@@ -191,5 +207,4 @@ class TypoEngine:
             if r % 50 == 0:
                 print(f"Progress: {(r/rows)*100:.1f}%", end='\r')
 
-        print(f"\nSaved Symbol Mosaic: {output_path}")
-        final_img.save(output_path, dpi=(300, 300))
+        return final_img

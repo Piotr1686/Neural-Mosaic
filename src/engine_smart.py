@@ -195,7 +195,8 @@ class SmartEngine:
         img_w, img_h = target.size
         scale_res = target_long / max(img_w, img_h)
         target = target.resize((int(img_w * scale_res), int(img_h * scale_res)), Image.Resampling.LANCZOS)
-        self._do_render(target, output_path, shape_mode, tile_scale, border_mode, blend_strength, tint_strength)
+        result = self._do_render(target, shape_mode, tile_scale, border_mode, blend_strength, tint_strength)
+        result.save(output_path, quality=95)
 
     def render_sized(self, target_path, output_path, target_w, target_h, shape_mode, tile_scale, border_mode=False, blend_strength=0.0, tint_strength=0.0):
         """Render at explicit pixel dimensions — used by the preview pipeline."""
@@ -204,10 +205,24 @@ class SmartEngine:
             return
         target = Image.open(target_path).convert("RGB")
         target = target.resize((target_w, target_h), Image.Resampling.LANCZOS)
-        self._do_render(target, output_path, shape_mode, tile_scale, border_mode, blend_strength, tint_strength)
+        result = self._do_render(target, shape_mode, tile_scale, border_mode, blend_strength, tint_strength)
+        result.save(output_path, quality=95)
 
-    def _do_render(self, target, output_path, shape_mode, tile_scale, border_mode=False, blend_strength=0.0, tint_strength=0.0):
-        """Core rendering kernel — accepts a pre-scaled PIL Image."""
+    def render_preview(self, target_path, short_edge=512, shape_mode="hexagon_romb",
+                       tile_scale=1.0, border_mode=False):
+        """Return a PIL Image preview at ~short_edge px short side — no file I/O."""
+        if not self.paths:
+            raise RuntimeError("Index not loaded.")
+        target = Image.open(target_path).convert("RGB")
+        img_w, img_h = target.size
+        scale = short_edge / min(img_w, img_h)
+        prev_w = max(1, int(img_w * scale))
+        prev_h = max(1, int(img_h * scale))
+        target = target.resize((prev_w, prev_h), Image.Resampling.LANCZOS)
+        return self._do_render(target, shape_mode, tile_scale, border_mode, 0.0, 0.0)
+
+    def _do_render(self, target, shape_mode, tile_scale, border_mode=False, blend_strength=0.0, tint_strength=0.0):
+        """Core rendering kernel — accepts a pre-scaled PIL Image, returns PIL Image."""
         edge_aware = self.settings.get("edge_aware", False)
         has_edge_features = (self.features.ndim == 2 and self.features.shape[1] == 79)
         if edge_aware and not has_edge_features:
@@ -546,10 +561,9 @@ class SmartEngine:
                         final_mosaic.alpha_composite(img, (px, py))
                 except Exception: pass
 
-        print(f"Saving to {output_path}...")
         mosaic_rgb = final_mosaic.convert("RGB")
         if blend_strength > 0.0:
             print(f"Applying Color Blend: {int(blend_strength * 100)}%...")
             original_resized = target.resize(mosaic_rgb.size, Image.Resampling.LANCZOS)
             mosaic_rgb = Image.blend(mosaic_rgb, original_resized, blend_strength)
-        mosaic_rgb.save(output_path, quality=95)
+        return mosaic_rgb
