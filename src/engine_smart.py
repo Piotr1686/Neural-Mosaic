@@ -185,11 +185,29 @@ class SmartEngine:
         return img.crop(box).resize((target_w, target_h), Image.Resampling.LANCZOS)
 
     def create_mosaic(self, target_path, output_path, resolution_key, shape_mode, tile_scale, border_mode=False, blend_strength=0.0, tint_strength=0.0):
+        """Public API — resolves resolution_key and delegates to _do_render."""
         if not self.paths:
             print("ERROR: Index not loaded.")
             return
+        res_map = {"2K": 1920, "4K": 3840, "8K": 7680, "16K": 15360}
+        target_long = res_map.get(resolution_key, 3840)
+        target = Image.open(target_path).convert("RGB")
+        img_w, img_h = target.size
+        scale_res = target_long / max(img_w, img_h)
+        target = target.resize((int(img_w * scale_res), int(img_h * scale_res)), Image.Resampling.LANCZOS)
+        self._do_render(target, output_path, shape_mode, tile_scale, border_mode, blend_strength, tint_strength)
 
-        # Resolve edge_aware against index capabilities.
+    def render_sized(self, target_path, output_path, target_w, target_h, shape_mode, tile_scale, border_mode=False, blend_strength=0.0, tint_strength=0.0):
+        """Render at explicit pixel dimensions — used by the preview pipeline."""
+        if not self.paths:
+            print("ERROR: Index not loaded.")
+            return
+        target = Image.open(target_path).convert("RGB")
+        target = target.resize((target_w, target_h), Image.Resampling.LANCZOS)
+        self._do_render(target, output_path, shape_mode, tile_scale, border_mode, blend_strength, tint_strength)
+
+    def _do_render(self, target, output_path, shape_mode, tile_scale, border_mode=False, blend_strength=0.0, tint_strength=0.0):
+        """Core rendering kernel — accepts a pre-scaled PIL Image."""
         edge_aware = self.settings.get("edge_aware", False)
         has_edge_features = (self.features.ndim == 2 and self.features.shape[1] == 79)
         if edge_aware and not has_edge_features:
@@ -197,14 +215,7 @@ class SmartEngine:
                   "Rebuild index (Update / Create Index). Falling back to standard matching.")
             edge_aware = False
 
-        res_map = {"2K": 1920, "4K": 3840, "8K": 7680, "16K": 15360}
-        target_long = res_map.get(resolution_key, 3840)
-        target = Image.open(target_path).convert("RGB")
-        img_w, img_h = target.size
-        scale_res = target_long / max(img_w, img_h)
-        target = target.resize((int(img_w * scale_res), int(img_h * scale_res)), Image.Resampling.LANCZOS)
         target_w, target_h = target.size
-
         base_s = int(100 * tile_scale)
         if base_s < 10: base_s = 10
         render_padding = 0.94 if border_mode else 1.02
