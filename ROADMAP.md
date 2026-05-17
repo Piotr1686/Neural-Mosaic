@@ -42,11 +42,11 @@ thumbnaile, filtry (kolor, edge-density), statystyki pokrycia LAB.
 Cel: live podgląd ~1K przy zmianie suwaków (tile_size, scale, mode), bez ponawiania
 pełnego 16K renderu.
 
-- [ ] **Sprint 3.1** — Refactor `engine_smart.process()` → wydzielić `process_to_target_size(target_w, target_h)`. Bez zmiany API publicznego.
-- [ ] **Sprint 3.2** — Analogiczny refactor `engine_typo`.
-- [ ] **Sprint 3.3** — Preview pipeline: downsample input do 512px short edge, render do ~1024px, debounce 300ms.
-- [ ] **Sprint 3.4** — GUI: preview pane w obu tabach, throttling, anulowanie poprzedniego zadania.
-- [ ] **Sprint 3.5** — Cache: cKDTree query wynikowy keyed by (tile_size, target_size) — invalidate przy zmianie indeksu.
+- [x] **Sprint 3.1** — Refactor `engine_smart.process()` → wydzielić `process_to_target_size(target_w, target_h)`. Bez zmiany API publicznego.
+- [x] **Sprint 3.2** — Analogiczny refactor `engine_typo`.
+- [x] **Sprint 3.3** — Preview pipeline: downsample input do 512px short edge, render do ~1024px, debounce 300ms.
+- [x] **Sprint 3.4** — GUI: preview pane w obu tabach, throttling, anulowanie poprzedniego zadania.
+- [x] **Sprint 3.5** — Cache: cKDTree query wynikowy keyed by (tile_size, target_size) — invalidate przy zmianie indeksu.
 
 ---
 
