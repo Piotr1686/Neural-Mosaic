@@ -56,6 +56,7 @@ class SmartEngine:
                 "tile_size": 100,
                 "freq_penalty": 30.0,
             }
+            self._neighbors_cache: dict = {}
             print(f"Smart Engine Ready. Images: {len(self.paths)}  "
                   f"schema: {schema}  dim: {actual_dim}")
         except FileNotFoundError:
@@ -457,9 +458,16 @@ class SmartEngine:
 
         print(f"Building Spatial Tree for {len(sectors_data)} tiles...")
         points = [(s["meta"][1] + s["meta"][4]/2.0, s["meta"][2] + s["meta"][5]/2.0) for s in sectors_data]
-        tree = cKDTree(points)
         search_radius = base_s * 1.5
-        neighbors_map = tree.query_ball_tree(tree, r=search_radius)
+        _nkey = (base_s, shape_mode, target_w, target_h)
+        if _nkey in self._neighbors_cache:
+            neighbors_map = self._neighbors_cache[_nkey]
+        else:
+            tree = cKDTree(points)
+            neighbors_map = tree.query_ball_tree(tree, r=search_radius)
+            if len(self._neighbors_cache) > 8:
+                self._neighbors_cache.pop(next(iter(self._neighbors_cache)))
+            self._neighbors_cache[_nkey] = neighbors_map
 
         print("Matching and generating final mosaic...")
         if tint_strength > 0.0:
