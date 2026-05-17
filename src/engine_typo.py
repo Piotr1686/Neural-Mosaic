@@ -99,37 +99,41 @@ class TypoEngine:
 
     def process(self, input_path, output_path, res_key="4K", mode="black_on_white",
                 scale=1.0, variation=20):
+        """Public API — resolves res_key and delegates to _do_render."""
         if not self.library:
             return
-
         print(f"--- TYPO MOSAIC: {mode} @ {res_key} | Scale: {scale} ---")
-
         res_map = {"2K": 2500, "4K": 4500, "8K": 9000, "16K": 16000}
         target_res = res_map.get(res_key, 4500)
-
         base_cell_w = 14
         if res_key == "8K":  base_cell_w = 20
         if res_key == "16K": base_cell_w = 35
-
-        cell_w = int(base_cell_w * scale)
-        if cell_w < 6:
-            cell_w = 6
+        cell_w = max(6, int(base_cell_w * scale))
         cell_h = int(cell_w * 1.6)
-
-        font_size = int(cell_h * 0.9)
-
         original = Image.open(input_path).convert("RGB")
         w, h = original.size
-        aspect = h / w
         out_w = target_res
-        out_h = int(target_res * aspect)
+        out_h = int(target_res * h / w)
+        self._do_render(original, output_path, out_w, out_h, cell_w, cell_h, mode, variation)
 
+    def render_sized(self, input_path, output_path, out_w, out_h, mode="black_on_white",
+                     scale=1.0, variation=20):
+        """Render at explicit pixel dimensions — used by the preview pipeline."""
+        if not self.library:
+            return
+        cell_w = max(6, int(14 * scale))
+        cell_h = int(cell_w * 1.6)
+        original = Image.open(input_path).convert("RGB")
+        self._do_render(original, output_path, out_w, out_h, cell_w, cell_h, mode, variation)
+
+    def _do_render(self, original, output_path, out_w, out_h, cell_w, cell_h, mode, variation):
+        """Core rendering kernel — accepts a pre-opened PIL Image."""
+        font_size = int(cell_h * 0.9)
         cols = out_w // cell_w
         rows = out_h // cell_h
 
         processed = self._preprocess_image(original, mode)
         map_img = processed.resize((cols, rows), Image.Resampling.LANCZOS)
-
         gray_data = np.array(map_img.convert("L")) / 255.0
 
         bg_color = (255, 255, 255)
@@ -149,17 +153,14 @@ class TypoEngine:
 
         for r in range(rows):
             pos_y = r * cell_h
-
             for c in range(cols):
                 pos_x = c * cell_w
                 brightness = gray_data[r, c]
 
                 if mode == "white_on_black":
-                    # Dark background — higher density glyphs for bright areas
                     val = np.power(brightness, 0.8)
                     target_density = lib_min + (val * lib_range)
                 else:
-                    # Light background — higher density glyphs for dark areas
                     val = 1.0 - np.power(brightness, 1.1)
                     target_density = lib_min + (val * lib_range)
 
@@ -171,7 +172,6 @@ class TypoEngine:
                 chosen = random.choice(self.library[start:end])
 
                 char = chosen["char"]
-
                 font_path = chosen["font"]
                 font_obj = self._get_font_object(font_path, font_size)
 
