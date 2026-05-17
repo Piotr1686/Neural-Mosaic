@@ -69,6 +69,8 @@ class App(ctk.CTk):
         self._active_dl: PoliteDownloader | None = None
         self._lib_images: list = []   # keeps CTkImage refs alive
         self._lib_loading = False
+        self._lib_selected: set[Path] = set()
+        self._lib_cell_frames: dict[Path, ctk.CTkFrame] = {}
 
         self._init_sidebar()
         self._init_tabs()
@@ -697,10 +699,12 @@ class App(ctk.CTk):
         self.lbl_lib_status = ctk.CTkLabel(action_bar, text="Ready", text_color="#aaaaaa")
         self.lbl_lib_status.pack(side="left", padx=5)
 
-        ctk.CTkButton(
+        self.btn_export_bad = ctk.CTkButton(
             action_bar, text="Export Bad Tiles...", width=160,
             fg_color="gray", state="disabled",
-        ).pack(side="right", padx=5)
+            command=self._lib_export_bad_tiles,
+        )
+        self.btn_export_bad.pack(side="right", padx=5)
 
         ctk.CTkButton(
             action_bar, text="LAB Coverage Map", width=160,
@@ -791,6 +795,9 @@ class App(ctk.CTk):
         if self._lib_loading:
             return
         self._lib_loading = True
+        self._lib_selected.clear()
+        self._lib_cell_frames.clear()
+        self.btn_export_bad.configure(state="disabled")
         self.after(0, lambda: self.lbl_lib_status.configure(text="Scanning..."))
         threading.Thread(target=self._lib_load_grid, daemon=True).start()
 
@@ -812,6 +819,7 @@ class App(ctk.CTk):
             self.after(0, lambda: [w.destroy()
                                    for w in self.lib_scroll.winfo_children()])
             self._lib_images = []
+            self._lib_cell_frames.clear()
 
             px = _THUMB_DISPLAY_PX
             grid_row = 0
@@ -836,7 +844,7 @@ class App(ctk.CTk):
                     r, c = grid_row, grid_col
                     name = src.name if len(src.name) <= 16 else src.name[:14] + ".."
 
-                    def _add(row=r, col=c, img=ctk_img, lbl=name):
+                    def _add(row=r, col=c, img=ctk_img, lbl=name, path=src):
                         cell = ctk.CTkFrame(
                             self.lib_scroll,
                             fg_color=("#dddddd", "#2a2a3a"),
@@ -846,12 +854,19 @@ class App(ctk.CTk):
                         )
                         cell.grid(row=row, column=col, padx=4, pady=4, sticky="n")
                         cell.grid_propagate(False)
-                        ctk.CTkLabel(cell, image=img, text="").pack(pady=(5, 2))
-                        ctk.CTkLabel(
+                        img_lbl = ctk.CTkLabel(cell, image=img, text="")
+                        img_lbl.pack(pady=(5, 2))
+                        name_lbl = ctk.CTkLabel(
                             cell, text=lbl,
                             font=ctk.CTkFont(size=9),
                             text_color="#999999",
-                        ).pack()
+                        )
+                        name_lbl.pack()
+                        self._lib_cell_frames[path] = cell
+                        handler = lambda _e, p=path, c=cell: self._lib_toggle_tile(p, c)
+                        cell.bind("<Button-1>", handler)
+                        img_lbl.bind("<Button-1>", handler)
+                        name_lbl.bind("<Button-1>", handler)
 
                     self.after(0, _add)
                     shown += 1
@@ -881,6 +896,48 @@ class App(ctk.CTk):
 
         finally:
             self._lib_loading = False
+
+    # ---- Tile selection + export ----
+
+    def _lib_toggle_tile(self, path: Path, cell: ctk.CTkFrame):
+        if path in self._lib_selected:
+            self._lib_selected.discard(path)
+            cell.configure(fg_color=("#dddddd", "#2a2a3a"))
+        else:
+            self._lib_selected.add(path)
+            cell.configure(fg_color=("#7722bb", "#4a1a88"))
+
+        n = len(self._lib_selected)
+        if n == 0:
+            self.btn_export_bad.configure(state="disabled")
+            self.lbl_lib_status.configure(text="Ready")
+        else:
+            self.btn_export_bad.configure(state="normal")
+            word = "tile" if n == 1 else "tiles"
+            self.lbl_lib_status.configure(
+                text=f"{n} {word} selected — click Export Bad Tiles to save")
+
+    def _lib_export_bad_tiles(self):
+        if not self._lib_selected:
+            return
+        by_dir: dict[Path, list[Path]] = {}
+        for p in self._lib_selected:
+            by_dir.setdefault(p.parent, []).append(p)
+
+        newly_added = 0
+        for parent, paths in by_dir.items():
+            excluded_file = parent / "excluded.txt"
+            existing: set[str] = set()
+            if excluded_file.exists():
+                existing = set(excluded_file.read_text(encoding="utf-8").splitlines())
+            new_names = {p.name for p in paths}
+            combined = existing | new_names
+            excluded_file.write_text("\n".join(sorted(combined)), encoding="utf-8")
+            newly_added += len(new_names - existing)
+
+        total = len(self._lib_selected)
+        self.lbl_lib_status.configure(
+            text=f"Exported {newly_added} new tile(s) ({total} selected) to excluded.txt")
 
     # ---- LAB Coverage Map ----
 
