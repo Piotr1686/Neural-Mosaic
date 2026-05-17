@@ -30,6 +30,7 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from .engine_smart import SmartEngine
 from .engine_typo import TypoEngine
+from .preview import PreviewRenderer
 from .indexer_smart import SmartIndexer, LIBRARY_DIRS
 from .font_groups import GROUP_LABELS
 from .downloader_v2 import PoliteDownloader, DEFAULT_OUTPUT_DIR
@@ -71,6 +72,10 @@ class App(ctk.CTk):
         self._lib_loading = False
         self._lib_selected: set[Path] = set()
         self._lib_cell_frames: dict[Path, ctk.CTkFrame] = {}
+        self._preview_smart = PreviewRenderer()
+        self._preview_typo = PreviewRenderer()
+        self._preview_img_ref_p = None
+        self._preview_img_ref_t = None
 
         self._init_sidebar()
         self._init_tabs()
@@ -207,11 +212,13 @@ class App(ctk.CTk):
     def _setup_photo_tab(self):
         outer = self.tab_photo
         outer.grid_columnconfigure(0, weight=1)
+        outer.grid_columnconfigure(1, weight=1)
         outer.grid_rowconfigure(0, weight=1)
         outer.grid_rowconfigure(1, weight=0)
 
+        # LEFT — settings
         frame = ctk.CTkScrollableFrame(outer, fg_color="transparent")
-        frame.grid(row=0, column=0, sticky="nsew", padx=10, pady=(10, 0))
+        frame.grid(row=0, column=0, sticky="nsew", padx=(10, 4), pady=(10, 0))
 
         ctk.CTkLabel(frame, text="REGIONAL COLOR MOSAIC", font=ctk.CTkFont(size=18, weight="bold")).pack(pady=10)
 
@@ -233,13 +240,19 @@ class App(ctk.CTk):
         self.seg_res_p.pack(pady=5)
 
         ctk.CTkLabel(frame, text="Tile Size Multiplier", font=("Arial", 12, "bold")).pack(pady=(15, 0))
-        self.seg_scale_p = ctk.CTkSegmentedButton(frame, values=["0.5", "0.75", "1.0", "1.75", "2.0"])
+        self.seg_scale_p = ctk.CTkSegmentedButton(
+            frame, values=["0.5", "0.75", "1.0", "1.75", "2.0"],
+            command=lambda _v: self._trigger_smart_preview(),
+        )
         self.seg_scale_p.set("1.0")
         self.seg_scale_p.pack(pady=5)
 
         ctk.CTkLabel(frame, text="Tile Shape").pack(pady=(10, 0))
         shapes = ["square", "rectangle_3x1", "brick_wall", "hexagon", "hexagon_romb", "romb", "triangle", "kite"]
-        self.combo_shape = ctk.CTkComboBox(frame, values=shapes)
+        self.combo_shape = ctk.CTkComboBox(
+            frame, values=shapes,
+            command=lambda _v: self._trigger_smart_preview(),
+        )
         self.combo_shape.set("hexagon_romb")
         self.combo_shape.pack(pady=5)
 
@@ -249,7 +262,10 @@ class App(ctk.CTk):
         self.check_mirror.select()
         self.check_mirror.pack(pady=(15, 5))
 
-        self.check_border = ctk.CTkCheckBox(frame, text="Black Borders (Grout)")
+        self.check_border = ctk.CTkCheckBox(
+            frame, text="Black Borders (Grout)",
+            command=lambda: self._trigger_smart_preview(),
+        )
         self.check_border.deselect()
         self.check_border.pack(pady=5)
 
@@ -264,14 +280,46 @@ class App(ctk.CTk):
                      font=("Arial", 12, "bold")).pack(pady=(20, 5))
 
         ctk.CTkLabel(frame, text="Color Blend").pack(pady=(10, 0))
-        self.seg_blend = ctk.CTkSegmentedButton(frame, values=["0%", "10%", "20%", "30%"])
+        self.seg_blend = ctk.CTkSegmentedButton(
+            frame, values=["0%", "10%", "20%", "30%"],
+            command=lambda _v: self._trigger_smart_preview(),
+        )
         self.seg_blend.set("0%")
         self.seg_blend.pack(pady=5)
 
         ctk.CTkLabel(frame, text="Tile Tint").pack(pady=(10, 0))
-        self.seg_tint = ctk.CTkSegmentedButton(frame, values=["0%", "10%", "20%", "30%", "40%"])
+        self.seg_tint = ctk.CTkSegmentedButton(
+            frame, values=["0%", "10%", "20%", "30%", "40%"],
+            command=lambda _v: self._trigger_smart_preview(),
+        )
         self.seg_tint.set("0%")
         self.seg_tint.pack(pady=5)
+
+        # RIGHT — preview pane
+        prev_frame = ctk.CTkFrame(outer, fg_color=("#e0e0e0", "#1a1a2a"), corner_radius=8)
+        prev_frame.grid(row=0, column=1, sticky="nsew", padx=(4, 10), pady=(10, 0))
+        prev_frame.grid_columnconfigure(0, weight=1)
+        prev_frame.grid_rowconfigure(1, weight=1)
+
+        ctk.CTkLabel(
+            prev_frame, text="PREVIEW",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color="#888888",
+        ).grid(row=0, column=0, pady=(10, 0))
+
+        self.lbl_preview_p = ctk.CTkLabel(
+            prev_frame,
+            text="Select image and load index\nto enable preview",
+            text_color="#555555",
+            font=ctk.CTkFont(size=12),
+        )
+        self.lbl_preview_p.grid(row=1, column=0, sticky="nsew", padx=8, pady=8)
+
+        self.lbl_preview_status_p = ctk.CTkLabel(
+            prev_frame, text="", text_color="#777777",
+            font=ctk.CTkFont(size=10),
+        )
+        self.lbl_preview_status_p.grid(row=2, column=0, pady=(0, 8))
 
         self.btn_run_p = ctk.CTkButton(
             outer,
@@ -282,16 +330,18 @@ class App(ctk.CTk):
             font=ctk.CTkFont(size=14, weight="bold"),
             command=self.run_photo,
         )
-        self.btn_run_p.grid(row=1, column=0, sticky="ew", padx=20, pady=(10, 15))
+        self.btn_run_p.grid(row=1, column=0, columnspan=2, sticky="ew", padx=20, pady=(10, 15))
 
     def _setup_typo_tab(self):
         outer = self.tab_typo
         outer.grid_columnconfigure(0, weight=1)
+        outer.grid_columnconfigure(1, weight=1)
         outer.grid_rowconfigure(0, weight=1)
         outer.grid_rowconfigure(1, weight=0)
 
+        # LEFT — settings
         frame = ctk.CTkScrollableFrame(outer, fg_color="transparent")
-        frame.grid(row=0, column=0, sticky="nsew", padx=10, pady=(10, 0))
+        frame.grid(row=0, column=0, sticky="nsew", padx=(10, 4), pady=(10, 0))
 
         ctk.CTkLabel(frame, text="SYMBOL MOSAIC (GLOBAL FONTS)", font=ctk.CTkFont(size=18, weight="bold")).pack(pady=10)
 
@@ -321,7 +371,10 @@ class App(ctk.CTk):
         self.seg_res_t.pack(pady=5)
 
         ctk.CTkLabel(frame, text="Symbol Size Multiplier", font=("Arial", 12, "bold")).pack(pady=(15, 0))
-        self.seg_scale_t = ctk.CTkSegmentedButton(frame, values=["0.5", "0.75", "1.0", "1.75", "2.0"])
+        self.seg_scale_t = ctk.CTkSegmentedButton(
+            frame, values=["0.5", "0.75", "1.0", "1.75", "2.0"],
+            command=lambda _v: self._trigger_typo_preview(),
+        )
         self.seg_scale_t.set("1.0")
         self.seg_scale_t.pack(pady=5)
 
@@ -335,22 +388,55 @@ class App(ctk.CTk):
         default_selected = {"D_latin_clean"}
         for group_key, label in GROUP_LABELS.items():
             var = ctk.BooleanVar(value=(group_key in default_selected))
-            cb = ctk.CTkCheckBox(groups_frame, text=label, variable=var)
+            cb = ctk.CTkCheckBox(
+                groups_frame, text=label, variable=var,
+                command=lambda: self._trigger_typo_preview(),
+            )
             cb.pack(anchor="w", pady=2)
             self.font_group_vars[group_key] = var
 
         ctk.CTkLabel(frame, text="Style Mode").pack(pady=(10, 0))
         self.combo_mode = ctk.CTkComboBox(
             frame,
-            values=["black_on_white", "white_on_black"]
+            values=["black_on_white", "white_on_black"],
+            command=lambda _v: self._trigger_typo_preview(),
         )
         self.combo_mode.set("black_on_white")
         self.combo_mode.pack(pady=5)
 
         ctk.CTkLabel(frame, text="Variation (lower = sharper, higher = organic)").pack(pady=(10, 0))
-        self.seg_variation = ctk.CTkSegmentedButton(frame, values=["5", "20", "50"])
+        self.seg_variation = ctk.CTkSegmentedButton(
+            frame, values=["5", "20", "50"],
+            command=lambda _v: self._trigger_typo_preview(),
+        )
         self.seg_variation.set("20")
         self.seg_variation.pack(pady=5)
+
+        # RIGHT — preview pane
+        prev_frame = ctk.CTkFrame(outer, fg_color=("#e0e0e0", "#1a1a2a"), corner_radius=8)
+        prev_frame.grid(row=0, column=1, sticky="nsew", padx=(4, 10), pady=(10, 0))
+        prev_frame.grid_columnconfigure(0, weight=1)
+        prev_frame.grid_rowconfigure(1, weight=1)
+
+        ctk.CTkLabel(
+            prev_frame, text="PREVIEW",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color="#888888",
+        ).grid(row=0, column=0, pady=(10, 0))
+
+        self.lbl_preview_t = ctk.CTkLabel(
+            prev_frame,
+            text="Select image and load typo index\nto enable preview",
+            text_color="#555555",
+            font=ctk.CTkFont(size=12),
+        )
+        self.lbl_preview_t.grid(row=1, column=0, sticky="nsew", padx=8, pady=8)
+
+        self.lbl_preview_status_t = ctk.CTkLabel(
+            prev_frame, text="", text_color="#777777",
+            font=ctk.CTkFont(size=10),
+        )
+        self.lbl_preview_status_t.grid(row=2, column=0, pady=(0, 8))
 
         self.btn_run_t = ctk.CTkButton(
             outer,
@@ -361,7 +447,67 @@ class App(ctk.CTk):
             font=ctk.CTkFont(size=14, weight="bold"),
             command=self.run_typo,
         )
-        self.btn_run_t.grid(row=1, column=0, sticky="ew", padx=20, pady=(10, 15))
+        self.btn_run_t.grid(row=1, column=0, columnspan=2, sticky="ew", padx=20, pady=(10, 15))
+
+    # --- PREVIEW ---
+
+    def _trigger_smart_preview(self):
+        if self.smart_engine is None or not getattr(self, "path_p", None):
+            return
+        params = {
+            "shape_mode": self.combo_shape.get(),
+            "tile_scale": float(self.seg_scale_p.get() or "1.0"),
+            "border_mode": bool(self.check_border.get()),
+        }
+        self.lbl_preview_status_p.configure(text="Rendering preview...")
+        self._preview_smart.request(
+            self.smart_engine,
+            self.path_p,
+            short_edge=512,
+            params=params,
+            on_done=lambda img: self.after(0, lambda i=img: self._show_smart_preview(i)),
+            on_error=lambda msg: self.after(
+                0, lambda m=msg: self.lbl_preview_status_p.configure(text=f"Preview error: {m}")),
+        )
+
+    def _show_smart_preview(self, pil_img):
+        max_w, max_h = 440, 560
+        img_w, img_h = pil_img.size
+        scale = min(max_w / img_w, max_h / img_h, 1.0)
+        disp_w, disp_h = max(1, int(img_w * scale)), max(1, int(img_h * scale))
+        ctk_img = ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=(disp_w, disp_h))
+        self._preview_img_ref_p = ctk_img
+        self.lbl_preview_p.configure(image=ctk_img, text="")
+        self.lbl_preview_status_p.configure(text=f"Preview  {img_w}×{img_h} px")
+
+    def _trigger_typo_preview(self):
+        if not self.typo_engine.library or not getattr(self, "path_t", None):
+            return
+        params = {
+            "mode": self.combo_mode.get(),
+            "scale": float(self.seg_scale_t.get() or "1.0"),
+            "variation": int(self.seg_variation.get()),
+        }
+        self.lbl_preview_status_t.configure(text="Rendering preview...")
+        self._preview_typo.request(
+            self.typo_engine,
+            self.path_t,
+            short_edge=512,
+            params=params,
+            on_done=lambda img: self.after(0, lambda i=img: self._show_typo_preview(i)),
+            on_error=lambda msg: self.after(
+                0, lambda m=msg: self.lbl_preview_status_t.configure(text=f"Preview error: {m}")),
+        )
+
+    def _show_typo_preview(self, pil_img):
+        max_w, max_h = 440, 560
+        img_w, img_h = pil_img.size
+        scale = min(max_w / img_w, max_h / img_h, 1.0)
+        disp_w, disp_h = max(1, int(img_w * scale)), max(1, int(img_h * scale))
+        ctk_img = ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=(disp_w, disp_h))
+        self._preview_img_ref_t = ctk_img
+        self.lbl_preview_t.configure(image=ctk_img, text="")
+        self.lbl_preview_status_t.configure(text=f"Preview  {img_w}×{img_h} px")
 
     # --- TILE LIBRARY ---
 
@@ -478,6 +624,7 @@ class App(ctk.CTk):
             try:
                 self.smart_engine = SmartEngine()
                 self.log("Smart Engine Ready!")
+                self.after(0, self._trigger_smart_preview)
             except Exception as e:
                 self.log(f"Error: {e}")
         threading.Thread(target=_load).start()
@@ -491,6 +638,7 @@ class App(ctk.CTk):
                     count = len(self.typo_engine.library)
                     self.log(f"SUCCESS: Loaded {count} symbols.")
                     self.lbl_typo_status.configure(text=f"Status: Ready ({count} sym)", text_color="#33cc55")
+                    self.after(0, self._trigger_typo_preview)
                 else:
                     self.log("ERROR: Index empty.")
                     self.lbl_typo_status.configure(text="Status: Missing", text_color="#ff4444")
@@ -517,6 +665,7 @@ class App(ctk.CTk):
             self.check_edge_aware.configure(state="disabled")
         else:
             self.check_edge_aware.configure(state="normal")
+        self._trigger_smart_preview()
 
     def _on_edge_aware_toggled(self):
         if self.check_edge_aware.get():
@@ -524,9 +673,17 @@ class App(ctk.CTk):
             self.check_mirror.configure(state="disabled")
         else:
             self.check_mirror.configure(state="normal")
+        self._trigger_smart_preview()
 
-    def select_input_p(self): self.path_p = filedialog.askopenfilename()
-    def select_input_t(self): self.path_t = filedialog.askopenfilename()
+    def select_input_p(self):
+        self.path_p = filedialog.askopenfilename()
+        if self.path_p:
+            self._trigger_smart_preview()
+
+    def select_input_t(self):
+        self.path_t = filedialog.askopenfilename()
+        if self.path_t:
+            self._trigger_typo_preview()
 
     def _get_auto_filename(self, prefix, ext):
         if not self.output_dir:
