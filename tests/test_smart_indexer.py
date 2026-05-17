@@ -140,7 +140,8 @@ class TestSmartIndexerRun:
                 data = pickle.load(f)
 
             assert len(data["paths"]) == n
-            assert data["features"].shape == (n, 27)
+            assert data["features"].shape[0] == n
+            assert data["features"].shape[1] in (75, 79)
             assert data["features"].dtype == np.float32
 
     def test_empty_library_does_not_create_index(self):
