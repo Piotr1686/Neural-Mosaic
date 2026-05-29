@@ -299,7 +299,7 @@ class App(ctk.CTk):
         prev_frame = ctk.CTkFrame(outer, fg_color=("#e0e0e0", "#1a1a2a"), corner_radius=8)
         prev_frame.grid(row=0, column=1, sticky="nsew", padx=(4, 10), pady=(10, 0))
         prev_frame.grid_columnconfigure(0, weight=1)
-        prev_frame.grid_rowconfigure(1, weight=1)
+        prev_frame.grid_rowconfigure(2, weight=1)
 
         ctk.CTkLabel(
             prev_frame, text="PREVIEW",
@@ -307,19 +307,29 @@ class App(ctk.CTk):
             text_color="#888888",
         ).grid(row=0, column=0, pady=(10, 0))
 
+        self.seg_zoom_p = ctk.CTkSegmentedButton(
+            prev_frame,
+            values=["¼", "½", "Cała"],
+            command=lambda _v: self._trigger_smart_preview(),
+            font=ctk.CTkFont(size=11),
+            width=160,
+        )
+        self.seg_zoom_p.set("½")
+        self.seg_zoom_p.grid(row=1, column=0, pady=(4, 0))
+
         self.lbl_preview_p = ctk.CTkLabel(
             prev_frame,
             text="Select image and load index\nto enable preview",
             text_color="#555555",
             font=ctk.CTkFont(size=12),
         )
-        self.lbl_preview_p.grid(row=1, column=0, sticky="nsew", padx=8, pady=8)
+        self.lbl_preview_p.grid(row=2, column=0, sticky="nsew", padx=8, pady=8)
 
         self.lbl_preview_status_p = ctk.CTkLabel(
             prev_frame, text="", text_color="#777777",
             font=ctk.CTkFont(size=10),
         )
-        self.lbl_preview_status_p.grid(row=2, column=0, pady=(0, 8))
+        self.lbl_preview_status_p.grid(row=3, column=0, pady=(0, 8))
 
         self.btn_run_p = ctk.CTkButton(
             outer,
@@ -416,7 +426,7 @@ class App(ctk.CTk):
         prev_frame = ctk.CTkFrame(outer, fg_color=("#e0e0e0", "#1a1a2a"), corner_radius=8)
         prev_frame.grid(row=0, column=1, sticky="nsew", padx=(4, 10), pady=(10, 0))
         prev_frame.grid_columnconfigure(0, weight=1)
-        prev_frame.grid_rowconfigure(1, weight=1)
+        prev_frame.grid_rowconfigure(2, weight=1)
 
         ctk.CTkLabel(
             prev_frame, text="PREVIEW",
@@ -424,19 +434,29 @@ class App(ctk.CTk):
             text_color="#888888",
         ).grid(row=0, column=0, pady=(10, 0))
 
+        self.seg_zoom_t = ctk.CTkSegmentedButton(
+            prev_frame,
+            values=["¼", "½", "Cała"],
+            command=lambda _v: self._trigger_typo_preview(),
+            font=ctk.CTkFont(size=11),
+            width=160,
+        )
+        self.seg_zoom_t.set("½")
+        self.seg_zoom_t.grid(row=1, column=0, pady=(4, 0))
+
         self.lbl_preview_t = ctk.CTkLabel(
             prev_frame,
             text="Select image and load typo index\nto enable preview",
             text_color="#555555",
             font=ctk.CTkFont(size=12),
         )
-        self.lbl_preview_t.grid(row=1, column=0, sticky="nsew", padx=8, pady=8)
+        self.lbl_preview_t.grid(row=2, column=0, sticky="nsew", padx=8, pady=8)
 
         self.lbl_preview_status_t = ctk.CTkLabel(
             prev_frame, text="", text_color="#777777",
             font=ctk.CTkFont(size=10),
         )
-        self.lbl_preview_status_t.grid(row=2, column=0, pady=(0, 8))
+        self.lbl_preview_status_t.grid(row=3, column=0, pady=(0, 8))
 
         self.btn_run_t = ctk.CTkButton(
             outer,
@@ -451,6 +471,8 @@ class App(ctk.CTk):
 
     # --- PREVIEW ---
 
+    _ZOOM_SHORT_EDGE = {"¼": 450, "½": 900, "Cała": 1800}
+
     def _trigger_smart_preview(self):
         if self.smart_engine is None or not getattr(self, "path_p", None):
             return
@@ -459,11 +481,12 @@ class App(ctk.CTk):
             "tile_scale": float(self.seg_scale_p.get() or "1.0"),
             "border_mode": bool(self.check_border.get()),
         }
+        short_edge = self._ZOOM_SHORT_EDGE.get(self.seg_zoom_p.get(), 900)
         self.lbl_preview_status_p.configure(text="Rendering preview...")
         self._preview_smart.request(
             self.smart_engine,
             self.path_p,
-            short_edge=512,
+            short_edge=short_edge,
             params=params,
             on_done=lambda img: self.after(0, lambda i=img: self._show_smart_preview(i)),
             on_error=lambda msg: self.after(
@@ -488,11 +511,12 @@ class App(ctk.CTk):
             "scale": float(self.seg_scale_t.get() or "1.0"),
             "variation": int(self.seg_variation.get()),
         }
+        short_edge = self._ZOOM_SHORT_EDGE.get(self.seg_zoom_t.get(), 900)
         self.lbl_preview_status_t.configure(text="Rendering preview...")
         self._preview_typo.request(
             self.typo_engine,
             self.path_t,
-            short_edge=512,
+            short_edge=short_edge,
             params=params,
             on_done=lambda img: self.after(0, lambda i=img: self._show_typo_preview(i)),
             on_error=lambda msg: self.after(
