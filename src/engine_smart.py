@@ -222,14 +222,37 @@ class SmartEngine:
         target = target.resize((prev_w, prev_h), Image.Resampling.LANCZOS)
         return self._do_render(target, shape_mode, tile_scale, border_mode, 0.0, 0.0)
 
-    def _do_render(self, target, shape_mode, tile_scale, border_mode=False, blend_strength=0.0, tint_strength=0.0):
-        """Core rendering kernel — accepts a pre-scaled PIL Image, returns PIL Image."""
+    def _resolve_matching_modes(self):
+        """Resolve edge_aware/allow_mirror, degrading on conflicts (warns on stdout).
+
+        Returns (edge_aware, allow_mirror). Two mutually-exclusive degradations:
+          * edge_aware requested but index is 75-dim -> edge_aware off
+          * edge_aware AND allow_mirror both on -> allow_mirror off (edge_aware wins)
+
+        The second guard backs up the GUI mutex: allow_mirror reshapes tile
+        features as 75-dim (5x5x3), which is incompatible with the 79-dim
+        edge-aware features. Without this, _do_render would raise a cryptic
+        ValueError on reshape when both modes reach the engine (e.g. via CLI).
+        """
         edge_aware = self.settings.get("edge_aware", False)
+        allow_mirror = self.settings.get("allow_mirror", False)
         has_edge_features = (self.features.ndim == 2 and self.features.shape[1] == 79)
+
         if edge_aware and not has_edge_features:
             print("WARNING: Edge-Aware requested but index is 75-dim. "
                   "Rebuild index (Update / Create Index). Falling back to standard matching.")
             edge_aware = False
+
+        if edge_aware and allow_mirror:
+            print("WARNING: allow_mirror is incompatible with edge_aware (79-dim "
+                  "features). Disabling mirror for this render.")
+            allow_mirror = False
+
+        return edge_aware, allow_mirror
+
+    def _do_render(self, target, shape_mode, tile_scale, border_mode=False, blend_strength=0.0, tint_strength=0.0):
+        """Core rendering kernel — accepts a pre-scaled PIL Image, returns PIL Image."""
+        edge_aware, allow_mirror = self._resolve_matching_modes()
 
         target_w, target_h = target.size
         base_s = int(100 * tile_scale)
@@ -453,7 +476,8 @@ class SmartEngine:
             return
 
         # Select which tile features to use for matching.
-        # allow_mirror and edge_aware are mutually exclusive (enforced in GUI).
+        # edge_aware/allow_mirror conflict already resolved by _resolve_matching_modes
+        # (GUI enforces the mutex; the engine guard backs it up for CLI/programmatic use).
         tile_features = self.features if edge_aware else self.features[:, :75]
 
         print(f"Building Spatial Tree for {len(sectors_data)} tiles...")
@@ -482,12 +506,12 @@ class SmartEngine:
         sector_assignments = -1 * np.ones(len(sectors_data), dtype=np.int32)
 
         chunk_size = 500
-        allow_mirror = self.settings.get("allow_mirror", False)
 
         features_norm = tile_features
         features_flip = None
         if allow_mirror:
-            # tile_features is 75-dim here (edge_aware=False enforced by GUI mutex).
+            # tile_features is guaranteed 75-dim here: _resolve_matching_modes
+            # disables allow_mirror whenever edge_aware (79-dim) is active.
             reshaped = tile_features.reshape(-1, 5, 5, 3)
             flipped = reshaped[:, :, ::-1, :]
             features_flip = flipped.reshape(-1, 75)

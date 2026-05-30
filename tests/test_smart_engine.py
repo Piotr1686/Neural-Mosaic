@@ -167,3 +167,37 @@ class TestKiteMath:
             for flip in [True, False]:
                 _, _, k = engine._transform_kite_index(0, 0, 0, 0, 0, rot=rot, flip=flip)
                 assert 0 <= k < 6, f"k={k} out of range for rot={rot}, flip={flip}"
+
+
+# ---------------------------------------------------------------------------
+# _resolve_matching_modes (edge_aware / allow_mirror conflict guard)
+# ---------------------------------------------------------------------------
+
+class TestResolveMatchingModes:
+    """edge_aware (79-dim) and allow_mirror (75-dim reshape) are mutually
+    exclusive. The engine guard backs up the GUI mutex so a CLI/programmatic
+    caller cannot reach the cryptic reshape ValueError."""
+
+    def test_edge_aware_wins_over_mirror(self, engine):
+        """Both modes on with a 79-dim index: edge_aware kept, mirror dropped."""
+        engine.features = np.zeros((4, 79))
+        engine.settings = {"edge_aware": True, "allow_mirror": True}
+        assert engine._resolve_matching_modes() == (True, False)
+
+    def test_edge_aware_fallback_when_index_75dim(self, engine):
+        """edge_aware requested but index is 75-dim: falls back to standard."""
+        engine.features = np.zeros((4, 75))
+        engine.settings = {"edge_aware": True, "allow_mirror": False}
+        assert engine._resolve_matching_modes() == (False, False)
+
+    def test_mirror_kept_without_edge_aware(self, engine):
+        """No edge_aware: allow_mirror survives on a 75-dim index."""
+        engine.features = np.zeros((4, 75))
+        engine.settings = {"edge_aware": False, "allow_mirror": True}
+        assert engine._resolve_matching_modes() == (False, True)
+
+    def test_plain_mode(self, engine):
+        """Neither mode requested: both off."""
+        engine.features = np.zeros((4, 75))
+        engine.settings = {"edge_aware": False, "allow_mirror": False}
+        assert engine._resolve_matching_modes() == (False, False)
