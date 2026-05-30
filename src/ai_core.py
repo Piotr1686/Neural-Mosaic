@@ -1,10 +1,16 @@
 """
 src/ai_core.py
 --------------
-Singleton wrapper around the MiDaS depth-estimation model.
+LEGACY (v3-v4) — NOT used by the v5.x runtime path.
 
-Provides lazy loading so the model is only downloaded and moved to the GPU
-once, regardless of how many times AICore() is constructed.
+No module under src/ imports AICore: neither SmartEngine, TypoEngine, nor the
+GUI reference it. It is kept for reference and as the foundation for a possible
+future depth-aware mosaic feature (MASTER_PLAN v6.4, item 17). Its test suite
+(tests/test_ai_core.py) is maintained so the code stays runnable if revived.
+
+Singleton wrapper around the MiDaS depth-estimation model. Provides lazy
+loading so the model is only downloaded and moved to the GPU once, regardless
+of how many times AICore() is constructed.
 """
 import torch
 from PIL import Image
