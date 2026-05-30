@@ -201,3 +201,76 @@ class TestResolveMatchingModes:
         engine.features = np.zeros((4, 75))
         engine.settings = {"edge_aware": False, "allow_mirror": False}
         assert engine._resolve_matching_modes() == (False, False)
+
+
+# ---------------------------------------------------------------------------
+# _get_neighbors_map (concurrency-safe cache)
+# ---------------------------------------------------------------------------
+
+class TestNeighborsMapCache:
+    """The neighbour adjacency cache is mutated from preview render threads.
+    The generation token (commit 2a18ec8) gates result delivery but does NOT
+    serialise execution, so two _do_render calls can hit the cache-miss path
+    concurrently. _get_neighbors_map guards the dict with double-checked
+    locking; these tests pin that behaviour without a real index on disk."""
+
+    def _prime(self, engine):
+        import threading
+        engine._neighbors_cache = {}
+        engine._neighbors_lock = threading.Lock()
+
+    def test_miss_computes_and_stores(self, engine):
+        self._prime(engine)
+        key = (10, "square", 100, 100)
+        result = engine._get_neighbors_map(key, [(0, 0), (1, 1)], 5.0)
+        assert engine._neighbors_cache[key] is result
+
+    def test_hit_returns_cached_without_recompute(self, engine, monkeypatch):
+        """Fast path must not touch cKDTree when the key is already cached."""
+        self._prime(engine)
+        key = (10, "square", 100, 100)
+        sentinel = object()
+        engine._neighbors_cache[key] = sentinel
+
+        def _boom(*a, **k):  # pragma: no cover - must never run
+            raise AssertionError("cKDTree built on a cache hit")
+
+        monkeypatch.setattr("src.engine_smart.cKDTree", _boom)
+        assert engine._get_neighbors_map(key, [(0, 0)], 5.0) is sentinel
+
+    def test_eviction_caps_cache_at_eight(self, engine):
+        self._prime(engine)
+        for i in range(10):
+            engine._get_neighbors_map((i, "square", 100, 100), [(0, 0)], 5.0)
+        assert len(engine._neighbors_cache) <= 9
+
+    def test_concurrent_miss_builds_tree_once(self, engine, monkeypatch):
+        """Two threads racing the same key must build cKDTree exactly once."""
+        import threading
+        self._prime(engine)
+        key = (10, "square", 100, 100)
+        calls = []
+        start = threading.Barrier(2)
+
+        class _FakeTree:
+            def __init__(self, points):
+                calls.append(1)
+
+            def query_ball_tree(self, other, r):
+                return [[0]]
+
+        monkeypatch.setattr("src.engine_smart.cKDTree", _FakeTree)
+
+        results = {}
+
+        def worker(name):
+            start.wait()
+            results[name] = engine._get_neighbors_map(key, [(0, 0)], 5.0)
+
+        t1 = threading.Thread(target=worker, args=("a",))
+        t2 = threading.Thread(target=worker, args=("b",))
+        t1.start(); t2.start()
+        t1.join(); t2.join()
+
+        assert len(calls) == 1
+        assert results["a"] is results["b"]

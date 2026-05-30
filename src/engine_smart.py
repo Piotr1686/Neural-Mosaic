@@ -17,6 +17,7 @@ import numpy as np
 import pickle
 import random
 import math
+import threading
 from collections import defaultdict
 from PIL import Image, ImageOps, ImageDraw
 from tqdm import tqdm
@@ -57,12 +58,37 @@ class SmartEngine:
                 "freq_penalty": 30.0,
             }
             self._neighbors_cache: dict = {}
+            self._neighbors_lock = threading.Lock()
             print(f"Smart Engine Ready. Images: {len(self.paths)}  "
                   f"schema: {schema}  dim: {actual_dim}")
         except FileNotFoundError:
             print("Error: Smart Index not found. Run 'Update / Create Index' in GUI.")
             self.paths = []
             self.features = []
+
+    def _get_neighbors_map(self, _nkey, points, search_radius):
+        """Return the cached neighbour adjacency for this render geometry.
+
+        Concurrent preview renders may run two _do_render calls in parallel
+        (the generation token only gates result delivery, not execution), so
+        the cache-miss path is serialised with double-checked locking to avoid
+        racing mutation of self._neighbors_cache. The fast path is a lock-free
+        dict read; the tree is built at most once per key under the lock.
+        """
+        neighbors_map = self._neighbors_cache.get(_nkey)
+        if neighbors_map is not None:
+            return neighbors_map
+        with self._neighbors_lock:
+            # Re-check under lock: another thread may have populated it while
+            # we waited, so we don't recompute the tree needlessly.
+            neighbors_map = self._neighbors_cache.get(_nkey)
+            if neighbors_map is None:
+                tree = cKDTree(points)
+                neighbors_map = tree.query_ball_tree(tree, r=search_radius)
+                if len(self._neighbors_cache) > 8:
+                    self._neighbors_cache.pop(next(iter(self._neighbors_cache)))
+                self._neighbors_cache[_nkey] = neighbors_map
+        return neighbors_map
 
     # ==========================================
     # FEATURE EXTRACTION HELPER
@@ -484,14 +510,7 @@ class SmartEngine:
         points = [(s["meta"][1] + s["meta"][4]/2.0, s["meta"][2] + s["meta"][5]/2.0) for s in sectors_data]
         search_radius = base_s * 1.5
         _nkey = (base_s, shape_mode, target_w, target_h)
-        if _nkey in self._neighbors_cache:
-            neighbors_map = self._neighbors_cache[_nkey]
-        else:
-            tree = cKDTree(points)
-            neighbors_map = tree.query_ball_tree(tree, r=search_radius)
-            if len(self._neighbors_cache) > 8:
-                self._neighbors_cache.pop(next(iter(self._neighbors_cache)))
-            self._neighbors_cache[_nkey] = neighbors_map
+        neighbors_map = self._get_neighbors_map(_nkey, points, search_radius)
 
         print("Matching and generating final mosaic...")
         if tint_strength > 0.0:
