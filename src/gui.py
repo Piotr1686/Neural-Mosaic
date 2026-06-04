@@ -57,14 +57,77 @@ _L_RANGES = {
 _TEX_THRESHOLD = 0.10
 
 
+class _TextboxStream:
+    """Mirror a stdout/stderr stream into a CTkTextbox.
+
+    Everything written to the wrapped stream (plain ``print`` from the
+    engines, indexers, AND ``tqdm`` progress bars) is forwarded both to the
+    original terminal stream and to the GUI console, so the sidebar shows
+    exactly what PowerShell shows.  Carriage returns (used by tqdm to redraw
+    a bar in place) overwrite the current console line instead of spamming
+    new ones.  Writes are marshalled onto the Tk main loop via ``after``.
+    """
+
+    def __init__(self, textbox: "ctk.CTkTextbox", after_fn, original):
+        self._textbox = textbox
+        self._after = after_fn
+        self._original = original
+
+    def write(self, s):
+        if self._original is not None:
+            try:
+                self._original.write(s)
+                self._original.flush()
+            except Exception:
+                pass
+        if s:
+            self._after(0, lambda text=s: self._append(text))
+        return len(s)
+
+    def _append(self, s):
+        try:
+            tb = self._textbox
+            s = s.replace("\r\n", "\n")
+            if "\r" in s:
+                # tqdm redraw — keep only the text after the last CR and
+                # overwrite the current (last) console line.
+                tail = s.split("\r")[-1]
+                tb.delete("end-1c linestart", "end-1c")
+                tb.insert("end", tail)
+            else:
+                tb.insert("end", s)
+            tb.see("end")
+        except Exception:
+            pass
+
+    def flush(self):
+        if self._original is not None:
+            try:
+                self._original.flush()
+            except Exception:
+                pass
+
+    def isatty(self):
+        # Delegate so tqdm keeps its rich, in-place progress format when the
+        # app was launched from a real terminal.
+        return bool(self._original is not None and self._original.isatty())
+
+
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
+        # Slightly enlarge every widget/font for readability.
+        ctk.set_widget_scaling(1.1)
+
         self.title("Neural-Mosaic 5.7 (Solid Geometry)")
         self.geometry("1250x900")
 
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
+
+        # Shared fonts (created after the root window exists).
+        self.FONT_CONSOLE = ctk.CTkFont(size=12)
+        self.FONT_SMALL = ctk.CTkFont(size=12)
 
         self.output_dir = None
         self._active_dl: PoliteDownloader | None = None
@@ -76,12 +139,29 @@ class App(ctk.CTk):
         self._preview_typo = PreviewRenderer()
         self._preview_img_ref_p = None
         self._preview_img_ref_t = None
+        self._preview_pil_p = None        # last full-res preview (for refit on resize)
+        self._preview_pil_t = None
+        self._preview_last_fit_p = None
+        self._preview_last_fit_t = None
 
         self._init_sidebar()
         self._init_tabs()
 
+        # Mirror all stdout/stderr (engine prints + tqdm bars) into the
+        # sidebar console so the GUI shows exactly what the terminal shows.
+        self._stdout_orig = sys.stdout
+        self._stderr_orig = sys.stderr
+        sys.stdout = _TextboxStream(self.console, self.after, self._stdout_orig)
+        sys.stderr = _TextboxStream(self.console, self.after, self._stderr_orig)
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
+
         self.smart_engine = None
         self.typo_engine = TypoEngine()
+
+    def _on_close(self):
+        sys.stdout = self._stdout_orig
+        sys.stderr = self._stderr_orig
+        self.destroy()
 
     def _init_sidebar(self):
         self.sidebar = ctk.CTkFrame(self, width=250, corner_radius=0)
@@ -149,7 +229,7 @@ class App(ctk.CTk):
         self.entry_project_name = ctk.CTkEntry(self.sidebar, placeholder_text="Project Name")
         self.entry_project_name.grid(row=13, column=0, padx=20, pady=5)
 
-        self.console = ctk.CTkTextbox(self.sidebar, width=220)
+        self.console = ctk.CTkTextbox(self.sidebar, width=220, font=self.FONT_CONSOLE)
         self.console.grid(row=14, column=0, padx=10, pady=20, sticky="nsew")
         self.sidebar.grid_rowconfigure(14, weight=1)
 
@@ -208,6 +288,56 @@ class App(ctk.CTk):
                 anchor="w",
                 wraplength=400,
             ).pack(side="left", anchor="w")
+
+    def _make_info_banner(self, parent, title, subtitle, steps, warn=None):
+        """Return (not place) an explainer banner frame; caller grids/packs it."""
+        outer = ctk.CTkFrame(parent, fg_color=("#d4d4e8", "#23233a"), corner_radius=8)
+
+        ctk.CTkFrame(outer, width=3, fg_color="#4a3a7a", corner_radius=0).pack(
+            side="left", fill="y"
+        )
+
+        content = ctk.CTkFrame(outer, fg_color="transparent")
+        content.pack(side="left", fill="both", expand=True, padx=(8, 12), pady=10)
+
+        ctk.CTkLabel(
+            content, text=title,
+            font=ctk.CTkFont(size=14, weight="bold"),
+            text_color=("#4a3a7a", "#c0b8e8"),
+        ).pack(anchor="w", pady=(0, 2))
+
+        ctk.CTkLabel(
+            content, text=subtitle,
+            font=ctk.CTkFont(size=12),
+            text_color=("#444444", "#a8a0c8"),
+            justify="left", anchor="w", wraplength=820,
+        ).pack(anchor="w", pady=(0, 8))
+
+        for i, step in enumerate(steps, 1):
+            row = ctk.CTkFrame(content, fg_color="transparent")
+            row.pack(anchor="w", fill="x", pady=2)
+            ctk.CTkLabel(
+                row, text=str(i),
+                width=22, height=22, corner_radius=11,
+                fg_color="#3a2e6a", text_color="#9999bb",
+                font=ctk.CTkFont(size=11, weight="bold"),
+            ).pack(side="left", padx=(0, 10))
+            ctk.CTkLabel(
+                row, text=step,
+                font=ctk.CTkFont(size=12),
+                text_color=("#333333", "#b8b0d8"),
+                justify="left", anchor="w", wraplength=780,
+            ).pack(side="left", anchor="w")
+
+        if warn:
+            ctk.CTkLabel(
+                content, text="⚠  " + warn,
+                font=ctk.CTkFont(size=12),
+                text_color=("#8a5a00", "#e0b060"),
+                justify="left", anchor="w", wraplength=820,
+            ).pack(anchor="w", pady=(8, 0))
+
+        return outer
 
     def _setup_photo_tab(self):
         outer = self.tab_photo
@@ -309,7 +439,7 @@ class App(ctk.CTk):
 
         self.seg_zoom_p = ctk.CTkSegmentedButton(
             prev_frame,
-            values=["¼", "½", "Cała"],
+            values=["¼", "½", "Full"],
             command=lambda _v: self._trigger_smart_preview(),
             font=ctk.CTkFont(size=11),
             width=160,
@@ -321,13 +451,14 @@ class App(ctk.CTk):
             prev_frame,
             text="Select image and load index\nto enable preview",
             text_color="#555555",
-            font=ctk.CTkFont(size=12),
+            font=ctk.CTkFont(size=14),
         )
         self.lbl_preview_p.grid(row=2, column=0, sticky="nsew", padx=8, pady=8)
+        self.lbl_preview_p.bind("<Configure>", self._on_preview_resize_p)
 
         self.lbl_preview_status_p = ctk.CTkLabel(
             prev_frame, text="", text_color="#777777",
-            font=ctk.CTkFont(size=10),
+            font=self.FONT_SMALL,
         )
         self.lbl_preview_status_p.grid(row=3, column=0, pady=(0, 8))
 
@@ -436,7 +567,7 @@ class App(ctk.CTk):
 
         self.seg_zoom_t = ctk.CTkSegmentedButton(
             prev_frame,
-            values=["¼", "½", "Cała"],
+            values=["¼", "½", "Full"],
             command=lambda _v: self._trigger_typo_preview(),
             font=ctk.CTkFont(size=11),
             width=160,
@@ -448,13 +579,14 @@ class App(ctk.CTk):
             prev_frame,
             text="Select image and load typo index\nto enable preview",
             text_color="#555555",
-            font=ctk.CTkFont(size=12),
+            font=ctk.CTkFont(size=14),
         )
         self.lbl_preview_t.grid(row=2, column=0, sticky="nsew", padx=8, pady=8)
+        self.lbl_preview_t.bind("<Configure>", self._on_preview_resize_t)
 
         self.lbl_preview_status_t = ctk.CTkLabel(
             prev_frame, text="", text_color="#777777",
-            font=ctk.CTkFont(size=10),
+            font=self.FONT_SMALL,
         )
         self.lbl_preview_status_t.grid(row=3, column=0, pady=(0, 8))
 
@@ -471,7 +603,7 @@ class App(ctk.CTk):
 
     # --- PREVIEW ---
 
-    _ZOOM_SHORT_EDGE = {"¼": 450, "½": 900, "Cała": 1800}
+    _ZOOM_SHORT_EDGE = {"¼": 450, "½": 900, "Full": 1800}
 
     def _trigger_smart_preview(self):
         if self.smart_engine is None or not getattr(self, "path_p", None):
@@ -493,15 +625,46 @@ class App(ctk.CTk):
                 0, lambda m=msg: self.lbl_preview_status_p.configure(text=f"Preview error: {m}")),
         )
 
-    def _show_smart_preview(self, pil_img):
-        max_w, max_h = 440, 560
+    def _fit_preview(self, label, pil_img, which, avail):
+        """Scale pil_img to fill the available label area and show it.
+
+        Allows upscaling so small zoom levels still fill the (large) preview
+        pane — the old hard 440x560 cap left the image tiny in a big frame.
+        """
+        avail_w = max(avail[0] - 16, 80)
+        avail_h = max(avail[1] - 16, 80)
         img_w, img_h = pil_img.size
-        scale = min(max_w / img_w, max_h / img_h, 1.0)
-        disp_w, disp_h = max(1, int(img_w * scale)), max(1, int(img_h * scale))
+        scale = min(avail_w / img_w, avail_h / img_h)
+        disp_w = max(1, int(img_w * scale))
+        disp_h = max(1, int(img_h * scale))
         ctk_img = ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=(disp_w, disp_h))
-        self._preview_img_ref_p = ctk_img
-        self.lbl_preview_p.configure(image=ctk_img, text="")
-        self.lbl_preview_status_p.configure(text=f"Preview  {img_w}×{img_h} px")
+        if which == "p":
+            self._preview_img_ref_p = ctk_img
+        else:
+            self._preview_img_ref_t = ctk_img
+        label.configure(image=ctk_img, text="")
+
+    def _avail_for(self, label):
+        w, h = label.winfo_width(), label.winfo_height()
+        if w <= 1 or h <= 1:
+            w, h = 560, 620
+        return w, h
+
+    def _show_smart_preview(self, pil_img):
+        self._preview_pil_p = pil_img
+        self._preview_last_fit_p = None
+        self._fit_preview(self.lbl_preview_p, pil_img, "p", self._avail_for(self.lbl_preview_p))
+        self.lbl_preview_status_p.configure(
+            text=f"Preview  {pil_img.size[0]}×{pil_img.size[1]} px")
+
+    def _on_preview_resize_p(self, event):
+        if self._preview_pil_p is None:
+            return
+        size = (event.width, event.height)
+        if size == self._preview_last_fit_p:
+            return
+        self._preview_last_fit_p = size
+        self._fit_preview(self.lbl_preview_p, self._preview_pil_p, "p", size)
 
     def _trigger_typo_preview(self):
         if not self.typo_engine.library or not getattr(self, "path_t", None):
@@ -524,14 +687,20 @@ class App(ctk.CTk):
         )
 
     def _show_typo_preview(self, pil_img):
-        max_w, max_h = 440, 560
-        img_w, img_h = pil_img.size
-        scale = min(max_w / img_w, max_h / img_h, 1.0)
-        disp_w, disp_h = max(1, int(img_w * scale)), max(1, int(img_h * scale))
-        ctk_img = ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=(disp_w, disp_h))
-        self._preview_img_ref_t = ctk_img
-        self.lbl_preview_t.configure(image=ctk_img, text="")
-        self.lbl_preview_status_t.configure(text=f"Preview  {img_w}×{img_h} px")
+        self._preview_pil_t = pil_img
+        self._preview_last_fit_t = None
+        self._fit_preview(self.lbl_preview_t, pil_img, "t", self._avail_for(self.lbl_preview_t))
+        self.lbl_preview_status_t.configure(
+            text=f"Preview  {pil_img.size[0]}×{pil_img.size[1]} px")
+
+    def _on_preview_resize_t(self, event):
+        if self._preview_pil_t is None:
+            return
+        size = (event.width, event.height)
+        if size == self._preview_last_fit_t:
+            return
+        self._preview_last_fit_t = size
+        self._fit_preview(self.lbl_preview_t, self._preview_pil_t, "t", size)
 
     # --- TILE LIBRARY ---
 
@@ -621,11 +790,9 @@ class App(ctk.CTk):
         self._check_library_status()
 
     def log(self, msg):
+        # stdout is mirrored into the sidebar console by _TextboxStream, so a
+        # plain print reaches both the terminal and the GUI exactly once.
         print(msg)
-        def _update():
-            self.console.insert("end", msg + "\n")
-            self.console.see("end")
-        self.after(0, _update)
 
     # --- ENGINE AND INDEX MANAGEMENT ---
 
@@ -797,14 +964,35 @@ class App(ctk.CTk):
     def _setup_library_tab(self):
         outer = self.tab_library
         outer.grid_columnconfigure(0, weight=1)
-        outer.grid_rowconfigure(0, weight=0)
-        outer.grid_rowconfigure(1, weight=0)
-        outer.grid_rowconfigure(2, weight=1)
-        outer.grid_rowconfigure(3, weight=0)
+        outer.grid_rowconfigure(0, weight=0)   # explainer
+        outer.grid_rowconfigure(1, weight=0)   # header
+        outer.grid_rowconfigure(2, weight=0)   # filter
+        outer.grid_rowconfigure(3, weight=1)   # grid
+        outer.grid_rowconfigure(4, weight=0)   # action bar
+
+        # Explainer banner — what this tab is for and how to use it
+        self._make_info_banner(
+            outer,
+            "What is the Tile Library?",
+            "This is the quality-control panel for your tile collection — the "
+            "photos used as mosaic pieces. Use it BEFORE rendering.",
+            [
+                "Click  Refresh  to load thumbnails of every tile "
+                "(library + imported photos).",
+                "Filter by filename, lightness or texture to find weak tiles "
+                "(too dark, flat/boring).",
+                "Click tiles to select them, then  Export Bad Tiles  to add them "
+                "to excluded.txt — the indexer skips them, no files deleted.",
+                "LAB Coverage Map  shows whether your tiles cover the full colour "
+                "range (gaps = poorer matches).",
+            ],
+            warn="Large libraries (tens of thousands of tiles) take a while to "
+                 "load and only the first matches are shown — use the filters.",
+        ).grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 0))
 
         # Header row
         header = ctk.CTkFrame(outer, fg_color="transparent")
-        header.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 0))
+        header.grid(row=1, column=0, sticky="ew", padx=10, pady=(10, 0))
         header.columnconfigure(1, weight=1)
 
         ctk.CTkLabel(
@@ -822,7 +1010,7 @@ class App(ctk.CTk):
 
         # Filter bar — row 0: filename + sort / row 1: lightness + texture
         filter_frame = ctk.CTkFrame(outer, fg_color=("#e8e8e8", "#1e1e2e"), corner_radius=6)
-        filter_frame.grid(row=1, column=0, sticky="ew", padx=10, pady=(8, 0))
+        filter_frame.grid(row=2, column=0, sticky="ew", padx=10, pady=(8, 0))
         filter_frame.columnconfigure(1, weight=1)
 
         ctk.CTkLabel(filter_frame, text="Filter:", width=50).grid(
@@ -867,7 +1055,7 @@ class App(ctk.CTk):
 
         # Main scrollable grid
         self.lib_scroll = ctk.CTkScrollableFrame(outer, fg_color="transparent")
-        self.lib_scroll.grid(row=2, column=0, sticky="nsew", padx=10, pady=5)
+        self.lib_scroll.grid(row=3, column=0, sticky="nsew", padx=10, pady=5)
         for c in range(_GRID_COLS):
             self.lib_scroll.grid_columnconfigure(c, weight=1)
 
@@ -875,7 +1063,7 @@ class App(ctk.CTk):
 
         # Action bar
         action_bar = ctk.CTkFrame(outer, fg_color="transparent")
-        action_bar.grid(row=3, column=0, sticky="ew", padx=10, pady=(0, 10))
+        action_bar.grid(row=4, column=0, sticky="ew", padx=10, pady=(0, 10))
 
         self.lbl_lib_status = ctk.CTkLabel(action_bar, text="Ready", text_color="#aaaaaa")
         self.lbl_lib_status.pack(side="left", padx=5)
@@ -1039,7 +1227,7 @@ class App(ctk.CTk):
                         img_lbl.pack(pady=(5, 2))
                         name_lbl = ctk.CTkLabel(
                             cell, text=lbl,
-                            font=ctk.CTkFont(size=9),
+                            font=ctk.CTkFont(size=11),
                             text_color="#999999",
                         )
                         name_lbl.pack()
