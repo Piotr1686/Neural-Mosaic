@@ -372,7 +372,6 @@ class App(ctk.CTk):
         ctk.CTkLabel(frame, text="Tile Size Multiplier", font=("Arial", 12, "bold")).pack(pady=(15, 0))
         self.seg_scale_p = ctk.CTkSegmentedButton(
             frame, values=["0.5", "0.75", "1.0", "1.75", "2.0"],
-            command=lambda _v: self._trigger_smart_preview(),
         )
         self.seg_scale_p.set("1.0")
         self.seg_scale_p.pack(pady=5)
@@ -381,7 +380,6 @@ class App(ctk.CTk):
         shapes = ["square", "rectangle_3x1", "brick_wall", "hexagon", "hexagon_romb", "romb", "triangle", "kite"]
         self.combo_shape = ctk.CTkComboBox(
             frame, values=shapes,
-            command=lambda _v: self._trigger_smart_preview(),
         )
         self.combo_shape.set("hexagon_romb")
         self.combo_shape.pack(pady=5)
@@ -394,7 +392,6 @@ class App(ctk.CTk):
 
         self.check_border = ctk.CTkCheckBox(
             frame, text="Black Borders (Grout)",
-            command=lambda: self._trigger_smart_preview(),
         )
         self.check_border.deselect()
         self.check_border.pack(pady=5)
@@ -412,7 +409,6 @@ class App(ctk.CTk):
         ctk.CTkLabel(frame, text="Color Blend").pack(pady=(10, 0))
         self.seg_blend = ctk.CTkSegmentedButton(
             frame, values=["0%", "10%", "20%", "30%"],
-            command=lambda _v: self._trigger_smart_preview(),
         )
         self.seg_blend.set("0%")
         self.seg_blend.pack(pady=5)
@@ -420,7 +416,6 @@ class App(ctk.CTk):
         ctk.CTkLabel(frame, text="Tile Tint").pack(pady=(10, 0))
         self.seg_tint = ctk.CTkSegmentedButton(
             frame, values=["0%", "10%", "20%", "30%", "40%"],
-            command=lambda _v: self._trigger_smart_preview(),
         )
         self.seg_tint.set("0%")
         self.seg_tint.pack(pady=5)
@@ -437,15 +432,23 @@ class App(ctk.CTk):
             text_color="#888888",
         ).grid(row=0, column=0, pady=(10, 0))
 
+        ctrl_p = ctk.CTkFrame(prev_frame, fg_color="transparent")
+        ctrl_p.grid(row=1, column=0, pady=(4, 0))
+
         self.seg_zoom_p = ctk.CTkSegmentedButton(
-            prev_frame,
+            ctrl_p,
             values=["¼", "½", "Full"],
-            command=lambda _v: self._trigger_smart_preview(),
             font=ctk.CTkFont(size=11),
             width=160,
         )
         self.seg_zoom_p.set("½")
-        self.seg_zoom_p.grid(row=1, column=0, pady=(4, 0))
+        self.seg_zoom_p.pack(side="left", padx=(0, 8))
+
+        self.btn_preview_p = ctk.CTkButton(
+            ctrl_p, text="Generate Preview", width=130,
+            command=self._trigger_smart_preview,
+        )
+        self.btn_preview_p.pack(side="left")
 
         self.lbl_preview_p = ctk.CTkLabel(
             prev_frame,
@@ -514,7 +517,6 @@ class App(ctk.CTk):
         ctk.CTkLabel(frame, text="Symbol Size Multiplier", font=("Arial", 12, "bold")).pack(pady=(15, 0))
         self.seg_scale_t = ctk.CTkSegmentedButton(
             frame, values=["0.5", "0.75", "1.0", "1.75", "2.0"],
-            command=lambda _v: self._trigger_typo_preview(),
         )
         self.seg_scale_t.set("1.0")
         self.seg_scale_t.pack(pady=5)
@@ -531,7 +533,6 @@ class App(ctk.CTk):
             var = ctk.BooleanVar(value=(group_key in default_selected))
             cb = ctk.CTkCheckBox(
                 groups_frame, text=label, variable=var,
-                command=lambda: self._trigger_typo_preview(),
             )
             cb.pack(anchor="w", pady=2)
             self.font_group_vars[group_key] = var
@@ -540,7 +541,6 @@ class App(ctk.CTk):
         self.combo_mode = ctk.CTkComboBox(
             frame,
             values=["black_on_white", "white_on_black"],
-            command=lambda _v: self._trigger_typo_preview(),
         )
         self.combo_mode.set("black_on_white")
         self.combo_mode.pack(pady=5)
@@ -548,7 +548,6 @@ class App(ctk.CTk):
         ctk.CTkLabel(frame, text="Variation (lower = sharper, higher = organic)").pack(pady=(10, 0))
         self.seg_variation = ctk.CTkSegmentedButton(
             frame, values=["5", "20", "50"],
-            command=lambda _v: self._trigger_typo_preview(),
         )
         self.seg_variation.set("20")
         self.seg_variation.pack(pady=5)
@@ -565,15 +564,23 @@ class App(ctk.CTk):
             text_color="#888888",
         ).grid(row=0, column=0, pady=(10, 0))
 
+        ctrl_t = ctk.CTkFrame(prev_frame, fg_color="transparent")
+        ctrl_t.grid(row=1, column=0, pady=(4, 0))
+
         self.seg_zoom_t = ctk.CTkSegmentedButton(
-            prev_frame,
+            ctrl_t,
             values=["¼", "½", "Full"],
-            command=lambda _v: self._trigger_typo_preview(),
             font=ctk.CTkFont(size=11),
             width=160,
         )
         self.seg_zoom_t.set("½")
-        self.seg_zoom_t.grid(row=1, column=0, pady=(4, 0))
+        self.seg_zoom_t.pack(side="left", padx=(0, 8))
+
+        self.btn_preview_t = ctk.CTkButton(
+            ctrl_t, text="Generate Preview", width=130,
+            command=self._trigger_typo_preview,
+        )
+        self.btn_preview_t.pack(side="left")
 
         self.lbl_preview_t = ctk.CTkLabel(
             prev_frame,
@@ -607,6 +614,8 @@ class App(ctk.CTk):
 
     def _trigger_smart_preview(self):
         if self.smart_engine is None or not getattr(self, "path_p", None):
+            self.lbl_preview_status_p.configure(
+                text="Load index and select an image first")
             return
         params = {
             "shape_mode": self.combo_shape.get(),
@@ -614,6 +623,7 @@ class App(ctk.CTk):
             "border_mode": bool(self.check_border.get()),
         }
         short_edge = self._ZOOM_SHORT_EDGE.get(self.seg_zoom_p.get(), 900)
+        self.btn_preview_p.configure(state="disabled")
         self.lbl_preview_status_p.configure(text="Rendering preview...")
         self._preview_smart.request(
             self.smart_engine,
@@ -622,8 +632,12 @@ class App(ctk.CTk):
             params=params,
             on_done=lambda img: self.after(0, lambda i=img: self._show_smart_preview(i)),
             on_error=lambda msg: self.after(
-                0, lambda m=msg: self.lbl_preview_status_p.configure(text=f"Preview error: {m}")),
+                0, lambda m=msg: self._on_smart_preview_error(m)),
         )
+
+    def _on_smart_preview_error(self, msg):
+        self.btn_preview_p.configure(state="normal")
+        self.lbl_preview_status_p.configure(text=f"Preview error: {msg}")
 
     def _fit_preview(self, label, pil_img, which, avail):
         """Scale pil_img to fill the available label area and show it.
@@ -656,6 +670,7 @@ class App(ctk.CTk):
         self._fit_preview(self.lbl_preview_p, pil_img, "p", self._avail_for(self.lbl_preview_p))
         self.lbl_preview_status_p.configure(
             text=f"Preview  {pil_img.size[0]}×{pil_img.size[1]} px")
+        self.btn_preview_p.configure(state="normal")
 
     def _on_preview_resize_p(self, event):
         if self._preview_pil_p is None:
@@ -668,6 +683,8 @@ class App(ctk.CTk):
 
     def _trigger_typo_preview(self):
         if not self.typo_engine.library or not getattr(self, "path_t", None):
+            self.lbl_preview_status_t.configure(
+                text="Load typo index and select an image first")
             return
         params = {
             "mode": self.combo_mode.get(),
@@ -675,6 +692,7 @@ class App(ctk.CTk):
             "variation": int(self.seg_variation.get()),
         }
         short_edge = self._ZOOM_SHORT_EDGE.get(self.seg_zoom_t.get(), 900)
+        self.btn_preview_t.configure(state="disabled")
         self.lbl_preview_status_t.configure(text="Rendering preview...")
         self._preview_typo.request(
             self.typo_engine,
@@ -683,8 +701,12 @@ class App(ctk.CTk):
             params=params,
             on_done=lambda img: self.after(0, lambda i=img: self._show_typo_preview(i)),
             on_error=lambda msg: self.after(
-                0, lambda m=msg: self.lbl_preview_status_t.configure(text=f"Preview error: {m}")),
+                0, lambda m=msg: self._on_typo_preview_error(m)),
         )
+
+    def _on_typo_preview_error(self, msg):
+        self.btn_preview_t.configure(state="normal")
+        self.lbl_preview_status_t.configure(text=f"Preview error: {msg}")
 
     def _show_typo_preview(self, pil_img):
         self._preview_pil_t = pil_img
@@ -692,6 +714,7 @@ class App(ctk.CTk):
         self._fit_preview(self.lbl_preview_t, pil_img, "t", self._avail_for(self.lbl_preview_t))
         self.lbl_preview_status_t.configure(
             text=f"Preview  {pil_img.size[0]}×{pil_img.size[1]} px")
+        self.btn_preview_t.configure(state="normal")
 
     def _on_preview_resize_t(self, event):
         if self._preview_pil_t is None:
@@ -815,7 +838,6 @@ class App(ctk.CTk):
             try:
                 self.smart_engine = SmartEngine()
                 self.log("Smart Engine Ready!")
-                self.after(0, self._trigger_smart_preview)
             except Exception as e:
                 self.log(f"Error: {e}")
         threading.Thread(target=_load).start()
@@ -829,7 +851,6 @@ class App(ctk.CTk):
                     count = len(self.typo_engine.library)
                     self.log(f"SUCCESS: Loaded {count} symbols.")
                     self.lbl_typo_status.configure(text=f"Status: Ready ({count} sym)", text_color="#33cc55")
-                    self.after(0, self._trigger_typo_preview)
                 else:
                     self.log("ERROR: Index empty.")
                     self.lbl_typo_status.configure(text="Status: Missing", text_color="#ff4444")
@@ -856,7 +877,6 @@ class App(ctk.CTk):
             self.check_edge_aware.configure(state="disabled")
         else:
             self.check_edge_aware.configure(state="normal")
-        self._trigger_smart_preview()
 
     def _on_edge_aware_toggled(self):
         if self.check_edge_aware.get():
@@ -864,17 +884,18 @@ class App(ctk.CTk):
             self.check_mirror.configure(state="disabled")
         else:
             self.check_mirror.configure(state="normal")
-        self._trigger_smart_preview()
 
     def select_input_p(self):
         self.path_p = filedialog.askopenfilename()
         if self.path_p:
-            self._trigger_smart_preview()
+            self.lbl_preview_status_p.configure(
+                text="Image selected — click Generate Preview")
 
     def select_input_t(self):
         self.path_t = filedialog.askopenfilename()
         if self.path_t:
-            self._trigger_typo_preview()
+            self.lbl_preview_status_t.configure(
+                text="Image selected — click Generate Preview")
 
     def _get_auto_filename(self, prefix, ext):
         if not self.output_dir:
