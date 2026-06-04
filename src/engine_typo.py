@@ -98,7 +98,7 @@ class TypoEngine:
         return img
 
     def process(self, input_path, output_path, res_key="4K", mode="black_on_white",
-                scale=1.0, variation=20):
+                scale=1.0, variation=20, progress_cb=None):
         """Public API — resolves res_key and delegates to _do_render."""
         if not self.library:
             return
@@ -114,18 +114,18 @@ class TypoEngine:
         w, h = original.size
         out_w = target_res
         out_h = int(target_res * h / w)
-        result = self._do_render(original, out_w, out_h, cell_w, cell_h, mode, variation)
+        result = self._do_render(original, out_w, out_h, cell_w, cell_h, mode, variation, progress_cb=progress_cb)
         result.save(output_path, dpi=(300, 300))
 
     def render_sized(self, input_path, output_path, out_w, out_h, mode="black_on_white",
-                     scale=1.0, variation=20):
+                     scale=1.0, variation=20, progress_cb=None):
         """Render at explicit pixel dimensions — used by the preview pipeline."""
         if not self.library:
             return
         cell_w = max(6, int(14 * scale))
         cell_h = int(cell_w * 1.6)
         original = Image.open(input_path).convert("RGB")
-        result = self._do_render(original, out_w, out_h, cell_w, cell_h, mode, variation)
+        result = self._do_render(original, out_w, out_h, cell_w, cell_h, mode, variation, progress_cb=progress_cb)
         result.save(output_path, dpi=(300, 300))
 
     def render_preview(self, input_path, short_edge=512, mode="black_on_white",
@@ -142,8 +142,13 @@ class TypoEngine:
         cell_h = int(cell_w * 1.6)
         return self._do_render(original, out_w, out_h, cell_w, cell_h, mode, variation)
 
-    def _do_render(self, original, out_w, out_h, cell_w, cell_h, mode, variation):
-        """Core rendering kernel — accepts a pre-opened PIL Image, returns PIL Image."""
+    def _do_render(self, original, out_w, out_h, cell_w, cell_h, mode, variation, progress_cb=None):
+        """Core rendering kernel — accepts a pre-opened PIL Image, returns PIL Image.
+
+        ``progress_cb``, if given, is called ``progress_cb(done, total)`` every 50 rows
+        (and once at completion), where ``total`` is the row count. Used by the GUI to
+        drive a progress bar.
+        """
         font_size = int(cell_h * 0.9)
         cols = out_w // cell_w
         rows = out_h // cell_h
@@ -206,5 +211,9 @@ class TypoEngine:
 
             if r % 50 == 0:
                 print(f"Progress: {(r/rows)*100:.1f}%", end='\r')
+                if progress_cb is not None:
+                    progress_cb(r, rows)
 
+        if progress_cb is not None:
+            progress_cb(rows, rows)
         return final_img

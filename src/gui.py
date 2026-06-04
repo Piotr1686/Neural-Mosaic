@@ -465,6 +465,11 @@ class App(ctk.CTk):
         )
         self.lbl_preview_status_p.grid(row=3, column=0, pady=(0, 8))
 
+        self.progress_render_p = ctk.CTkProgressBar(prev_frame, width=260)
+        self.progress_render_p.set(0)
+        self.progress_render_p.grid(row=4, column=0, pady=(0, 10))
+        self.progress_render_p.grid_remove()
+
         self.btn_run_p = ctk.CTkButton(
             outer,
             text="RENDER SMART MOSAIC",
@@ -596,6 +601,11 @@ class App(ctk.CTk):
             font=self.FONT_SMALL,
         )
         self.lbl_preview_status_t.grid(row=3, column=0, pady=(0, 8))
+
+        self.progress_render_t = ctk.CTkProgressBar(prev_frame, width=260)
+        self.progress_render_t.set(0)
+        self.progress_render_t.grid(row=4, column=0, pady=(0, 10))
+        self.progress_render_t.grid_remove()
 
         self.btn_run_t = ctk.CTkButton(
             outer,
@@ -926,19 +936,34 @@ class App(ctk.CTk):
             self.log(f"NOTE: {res} rendering requires ~2-4 GB free RAM. "
                      f"Close other applications for best performance.")
 
+        self.btn_run_p.configure(state="disabled")
+        self.progress_render_p.set(0)
+        self.progress_render_p.grid()
+
+        def _progress(done, total):
+            frac = done / total if total else 0
+            self.after(0, lambda f=frac: self.progress_render_p.set(f))
+
         def _run():
             try:
                 self.smart_engine.create_mosaic(
                     self.path_p, out, res, shape,
                     tile_scale=scale, border_mode=border_mode,
                     blend_strength=blend_strength, tint_strength=tint_strength,
+                    progress_cb=_progress,
                 )
                 self.log("DONE! Smart Mosaic saved.")
             except Exception as e:
                 self.log(f"Error: {e}")
                 import traceback
                 traceback.print_exc()
+            finally:
+                self.after(0, self._finish_render_p)
         threading.Thread(target=_run).start()
+
+    def _finish_render_p(self):
+        self.progress_render_p.grid_remove()
+        self.btn_run_p.configure(state="normal")
 
     def run_typo(self):
         if not hasattr(self, 'path_t'):
@@ -957,6 +982,14 @@ class App(ctk.CTk):
             return
         variation = int(self.seg_variation.get())
 
+        self.btn_run_t.configure(state="disabled")
+        self.progress_render_t.set(0)
+        self.progress_render_t.grid()
+
+        def _progress(done, total):
+            frac = done / total if total else 0
+            self.after(0, lambda f=frac: self.progress_render_t.set(f))
+
         def _run():
             self.log(f"Starting Multi-Font Render...")
             self.log(f"Groups: {', '.join(selected_groups)}")
@@ -970,13 +1003,20 @@ class App(ctk.CTk):
                     self.path_t, out, res, mode,
                     scale=scale,
                     variation=variation,
+                    progress_cb=_progress,
                 )
                 self.log("DONE! Symbol Mosaic saved.")
             except Exception as e:
                 self.log(f"Error: {e}")
                 import traceback
                 traceback.print_exc()
+            finally:
+                self.after(0, self._finish_render_t)
         threading.Thread(target=_run).start()
+
+    def _finish_render_t(self):
+        self.progress_render_t.grid_remove()
+        self.btn_run_t.configure(state="normal")
 
     # ------------------------------------------------------------------ #
     # Tab 3: Tile Library Browser                                         #

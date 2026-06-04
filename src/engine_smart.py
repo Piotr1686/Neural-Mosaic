@@ -211,7 +211,7 @@ class SmartEngine:
             box = (0, offset, src_w, offset + new_h)
         return img.crop(box).resize((target_w, target_h), Image.Resampling.LANCZOS)
 
-    def create_mosaic(self, target_path, output_path, resolution_key, shape_mode, tile_scale, border_mode=False, blend_strength=0.0, tint_strength=0.0):
+    def create_mosaic(self, target_path, output_path, resolution_key, shape_mode, tile_scale, border_mode=False, blend_strength=0.0, tint_strength=0.0, progress_cb=None):
         """Public API — resolves resolution_key and delegates to _do_render."""
         if not self.paths:
             print("ERROR: Index not loaded.")
@@ -222,17 +222,17 @@ class SmartEngine:
         img_w, img_h = target.size
         scale_res = target_long / max(img_w, img_h)
         target = target.resize((int(img_w * scale_res), int(img_h * scale_res)), Image.Resampling.LANCZOS)
-        result = self._do_render(target, shape_mode, tile_scale, border_mode, blend_strength, tint_strength)
+        result = self._do_render(target, shape_mode, tile_scale, border_mode, blend_strength, tint_strength, progress_cb=progress_cb)
         result.save(output_path, quality=95)
 
-    def render_sized(self, target_path, output_path, target_w, target_h, shape_mode, tile_scale, border_mode=False, blend_strength=0.0, tint_strength=0.0):
+    def render_sized(self, target_path, output_path, target_w, target_h, shape_mode, tile_scale, border_mode=False, blend_strength=0.0, tint_strength=0.0, progress_cb=None):
         """Render at explicit pixel dimensions — used by the preview pipeline."""
         if not self.paths:
             print("ERROR: Index not loaded.")
             return
         target = Image.open(target_path).convert("RGB")
         target = target.resize((target_w, target_h), Image.Resampling.LANCZOS)
-        result = self._do_render(target, shape_mode, tile_scale, border_mode, blend_strength, tint_strength)
+        result = self._do_render(target, shape_mode, tile_scale, border_mode, blend_strength, tint_strength, progress_cb=progress_cb)
         result.save(output_path, quality=95)
 
     def render_preview(self, target_path, short_edge=512, shape_mode="hexagon_romb",
@@ -276,8 +276,13 @@ class SmartEngine:
 
         return edge_aware, allow_mirror
 
-    def _do_render(self, target, shape_mode, tile_scale, border_mode=False, blend_strength=0.0, tint_strength=0.0):
-        """Core rendering kernel — accepts a pre-scaled PIL Image, returns PIL Image."""
+    def _do_render(self, target, shape_mode, tile_scale, border_mode=False, blend_strength=0.0, tint_strength=0.0, progress_cb=None):
+        """Core rendering kernel — accepts a pre-scaled PIL Image, returns PIL Image.
+
+        ``progress_cb``, if given, is called ``progress_cb(done, total)`` after each
+        matching chunk during the final assembly loop (the dominant cost), where
+        ``total`` is the number of sectors. Used by the GUI to drive a progress bar.
+        """
         edge_aware, allow_mirror = self._resolve_matching_modes()
 
         target_w, target_h = target.size
@@ -611,6 +616,9 @@ class SmartEngine:
                         img.putalpha(mask)
                         final_mosaic.alpha_composite(img, (px, py))
                 except Exception: pass
+
+            if progress_cb is not None:
+                progress_cb(end, len(sectors_data))
 
         mosaic_rgb = final_mosaic.convert("RGB")
         if blend_strength > 0.0:
