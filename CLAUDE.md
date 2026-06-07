@@ -63,22 +63,40 @@ pytest tests/test_processor.py::test_cuda_availability
 ```
 
 ## Pliki stanu sesji
-- **MEMORY.md**       — długoterminowa pamięć projektu (czytaj na /start)
-- **last_session.md** — stan ostatniej sesji (czytaj na /start, pisz na /end)
+- **MEMORY.md**               — długoterminowa pamięć projektu (czytaj na /start)
+- **last_session.md**         — stan ostatniej sesji + punkt odniesienia git (czytaj na /start, pisz na /end)
+- **last_session.archive.md** — archiwum 5 ostatnich sesji (bezpiecznik /end; powstaje przy pierwszym /end)
 
 ## Komendy dostępne w tym projekcie
-| Komenda    | Kiedy używać                      | Co robi                                    |
-|------------|-----------------------------------|--------------------------------------------|
-| `/start`   | Na początku każdej sesji          | Czyta MEMORY.md + last_session.md          |
-| `/save`    | Checkpoint w trakcie pracy        | Aktualizuje last_session.md (sesja trwa)   |
-| `/end`     | Na końcu sesji                    | Nadpisuje last_session.md + update MEMORY  |
-| `/status`  | Szybki podgląd (bez modyfikacji)  | Wyświetla aktualny stan z last_session.md  |
+| Komenda    | Kiedy używać                        | Co robi                                          |
+|------------|-------------------------------------|--------------------------------------------------|
+| `/start`   | Na początku każdej sesji            | Czyta MEMORY.md + last_session.md; sanity-check  |
+| `/save`    | Checkpoint w trakcie pracy          | Aktualizuje last_session.md (sesja trwa)         |
+| `/recover` | Przed /end lub po chaotycznej pracy | Audyt zmian od punktu odniesienia; lista napraw  |
+| `/end`     | Na końcu sesji                      | Weryfikacja → archiwizacja → nadpis + MEMORY     |
+| `/status`  | Szybki podgląd (bez modyfikacji)    | Wyświetla aktualny stan z last_session.md        |
+
+### Komendy model routing (pakiet `MODEL_ROUTING.md`)
+HIGH = `claude-opus-4-8`, LOW = `claude-sonnet-4-6`. Pełne reguły: `MODEL_ROUTING.md`.
+- `/route <opis>` — klasyfikacja zadania bez wykonania (Haiku, grosze)
+- `/architect`, `/deep-debug`, `/code-audit` — wymuszają HIGH
+- `/quick`, `/explain`, `/sonnet` — wymuszają LOW
+- `/opus`, `/sonnet` — jawne przełączenie z uzasadnieniem
+
+### Komendy projektowe (specyficzne dla Neural-Mosaic)
+- `/checkpoint` — szybki checkpoint stanu
+- `/debug-vram` — diagnostyka zużycia VRAM (OOM, fragmentacja)
+- `/test` — uruchomienie pakietu testów
+- `/new-project` — bootstrap nowego projektu
 
 ## Sprzęt / Ograniczenia
 - **GPU:** RTX 3050 Laptop 4GB VRAM — nie ładuj modeli >3.5GB w FP16
 - **CPU:** i5-12500H
 - **RAM:** 32GB DDR4
-- **Preferencje AI:** kwantyzacja GGUF Q4_K_M dla LLM, CPU offload dla zbyt dużych warstw
+- **Profil obliczeniowy (CV, brak LLM):** MiDaS DPT_Hybrid FP16 jako singleton
+  (lazy-load przez `ai_core.py`); dopasowanie kafelków 5×5 LAB (75-dim) + `cKDTree`
+  na CPU. `torch.cuda.empty_cache()` po inferencji depth. CPU offload dla warstw
+  nie mieszczących się w VRAM.
 
 ## Struktura katalogów (wykryta)
 ```
