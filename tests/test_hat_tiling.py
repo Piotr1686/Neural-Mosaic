@@ -92,6 +92,18 @@ class TestGenerateHatTiling:
         b = generate_hat_tiling(400, 300, 60)
         assert a == b
 
+    def test_full_coverage_at_8k_dimensions(self):
+        """Regression: at 7680x5760 (substitution level 6+) the supertile
+        boundary wiggle exceeded the fixed margin and left a hole near the
+        bottom edge before the guard substitution level was added."""
+        w, h, k = 7680, 5760, 4  # rasterised at 1/4 scale
+        hats = generate_hat_tiling(w, h, 100)
+        acc = Image.new("L", (w // k, h // k), 0)
+        draw = ImageDraw.Draw(acc)
+        for hat in hats:
+            draw.polygon([(x / k, y / k) for x, y in hat.points], fill=255)
+        assert int((np.asarray(acc) == 0).sum()) == 0
+
     def test_smaller_hats_mean_more_hats(self):
         few = generate_hat_tiling(600, 400, 80)
         many = generate_hat_tiling(600, 400, 40)

@@ -380,10 +380,17 @@ def _collect_hats(geom: _Geom, m: Affine, rect: Tuple[float, float, float, float
 
     if geom.shape:
         pts_o = [_trans_pt(m, p) for p in geom.shape]
-        if (max(p[0] for p in pts_o) < rect[0] - margin
-                or min(p[0] for p in pts_o) > rect[2] + margin
-                or max(p[1] for p in pts_o) < rect[1] - margin
-                or min(p[1] for p in pts_o) > rect[3] + margin):
+        min_x = min(p[0] for p in pts_o)
+        max_x = max(p[0] for p in pts_o)
+        min_y = min(p[1] for p in pts_o)
+        max_y = max(p[1] for p in pts_o)
+        # A metatile's hats can protrude past its ideal outline by a wiggle
+        # proportional to the metatile's own size (the true boundary is
+        # fractal-like), so the pruning pad must scale with the node, with
+        # a fixed hat-sized slack for the lowest levels.
+        pad = 0.5 * math.hypot(max_x - min_x, max_y - min_y) + margin
+        if (max_x < rect[0] - pad or min_x > rect[2] + pad
+                or max_y < rect[1] - pad or min_y > rect[3] + pad):
             return
 
     for ct, child in geom.children:
@@ -425,6 +432,16 @@ def generate_hat_tiling(width: int, height: int, hat_size: float,
     while level < max_levels:
         h_outline_px = [_trans_pt(to_screen, p) for p in tiles[0].shape]
         if all(_point_in_polygon(c, h_outline_px) for c in corners):
+            # The outline is only the ideal supertile boundary; the actual
+            # hat-covered region recedes from it by a wiggle that grows with
+            # the substitution level (the boundary is fractal-like), so a
+            # fixed margin is not sufficient on its own. One extra guard
+            # level puts the rectangle deep in the supertile interior with
+            # clearance of the order of the whole previous-generation
+            # supertile. Collection below is bbox-pruned, so the extra
+            # level adds no meaningful cost.
+            tiles = _construct_metatiles(_construct_patch(*tiles))
+            level += 1
             break
         tiles = _construct_metatiles(_construct_patch(*tiles))
         level += 1
