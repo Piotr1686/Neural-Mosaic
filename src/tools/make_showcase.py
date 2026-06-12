@@ -267,7 +267,7 @@ def main():
     parser.add_argument(
         "--shape",
         choices=["square", "triangle", "hexagon", "hexagon_romb", "romb", "brick_wall",
-                 "rectangle_3x1", "kite", "einstein_hat"],
+                 "rectangle_3x1", "kite", "einstein_hat", "spectre"],
         default="square",
         help="Tile shape for Smart Engine (default: square)",
     )

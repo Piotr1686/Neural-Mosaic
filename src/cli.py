@@ -26,6 +26,7 @@ _RESOLUTIONS = ["2K", "4K", "8K", "16K"]
 _SMART_SHAPES = [
     "square", "rectangle_3x1", "brick_wall",
     "hexagon", "hexagon_romb", "romb", "triangle", "kite", "einstein_hat",
+    "spectre",
 ]
 _TYPO_MODES = ["black_on_white", "white_on_black"]
 _FONT_GROUPS = [

@@ -4,7 +4,8 @@ src/engine_smart.py
 Colour-matched photomosaic engine (SmartEngine).
 
 Supports multiple tile geometries including the kite (diamond) shape and
-the aperiodic "einstein hat" monotile (see src/hat_tiling.py).
+the aperiodic monotiles: "einstein hat" (src/hat_tiling.py) and the
+chiral "spectre" (src/spectre_tiling.py).
 Each sector of the target image is matched to the best-fitting tile from
 the pre-built CIELAB feature index with spatial anti-repetition enforcement.
 
@@ -27,6 +28,7 @@ from scipy.spatial import cKDTree
 import skimage.color
 
 from .hat_tiling import generate_hat_tiling
+from .spectre_tiling import generate_spectre_tiling
 
 # Must match EDGE_WEIGHT in indexer_smart.py.
 EDGE_WEIGHT = 2.0
@@ -429,18 +431,21 @@ class SmartEngine:
                     })
 
         # ==========================================
-        # EINSTEIN HAT TILING (APERIODIC MONOTILE)
+        # APERIODIC MONOTILES (EINSTEIN HAT / SPECTRE)
         # ==========================================
-        elif shape_mode == "einstein_hat":
-            print(f"Mode: Einstein Hat (aperiodic monotile). Borders: {border_mode}")
+        elif shape_mode in ("einstein_hat", "spectre"):
+            print(f"Mode: Aperiodic monotile ({shape_mode}). Borders: {border_mode}")
 
-            hats = generate_hat_tiling(target_w, target_h, base_s)
+            if shape_mode == "spectre":
+                hats = generate_spectre_tiling(target_w, target_h, base_s)
+            else:
+                hats = generate_hat_tiling(target_w, target_h, base_s)
             n_mirrored = sum(1 for h in hats if h.mirrored)
-            print(f"Aperiodic tiling ready: {len(hats)} hats "
-                  f"({n_mirrored} mirrored anti-hats)")
+            print(f"Aperiodic tiling ready: {len(hats)} tiles "
+                  f"({n_mirrored} mirrored)")
 
             scale_aa = 4
-            for i_hat, hat in enumerate(tqdm(hats, desc="Sampling hat sectors")):
+            for i_hat, hat in enumerate(tqdm(hats, desc="Sampling monotile sectors")):
                 hat_cx = sum(p[0] for p in hat.points) / len(hat.points)
                 hat_cy = sum(p[1] for p in hat.points) / len(hat.points)
                 padded_poly = [
