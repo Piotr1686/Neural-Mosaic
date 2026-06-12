@@ -1,60 +1,80 @@
 # last_session.md
 
-**Sesja:** 2026-04-29 · 20:00-20:42
+**Sesja:** 2026-06-12 · 20:45-23:05
 **Status:** ✓ Zakończona poprawnie
+**Punkt odniesienia (git):** 094c8f4 @ main
 
 ---
 
 ## ▸ NASTĘPNY KROK (zacznij tutaj)
 
-**Krok 5.2 — ręcznie uruchom `make_all_tiles`, potem Claude Code buduje viewer:**
+**Wyeliminować czarne kliny przy górnej/lewej krawędzi siatek w `src/engine_smart.py`
+(gałąź STANDARD GRID, pętla „Scanning grid...").**
 
-```bash
-"C:/Users/plazo/miniconda3/envs/mosaic/python.exe" -m src.tools.make_all_tiles --max-level 13
-```
+Konkretnie: pętle `for r in range(rows)` / `for c in range(cols)` zaczynają od 0, więc
+kształty z offsetem nieparzystych wierszy (hexagon, hexagon_romb, romb, brick_wall) i
+trójkąty nie mają wiersza/kolumny „-1" — przy górnej i lewej krawędzi zostają czarne
+kliny (zmierzono na syntetyku: romb ~8.6%, hexagon ~4.8% ciemnych px; większość to
+kliny krawędziowe + szwy AA). Zmienić na `range(-1, rows)` / `range(-1, cols)` i
+sprawdzić, że warunki `safe`/`px > target_w` poprawnie klipują ujemne pozycje
+(meta px,py mogą być ujemne — Pillow 11.1 akceptuje ujemny dest w alpha_composite,
+zweryfikowane w tej sesji). Weryfikacja: harness „dark%" z tej sesji (bright tiles,
+target 801×603) — wartości powinny spaść do ~poziomu szwów AA.
 
-Potem sprawdź rozmiar `docs/tiles/` (powinno być < 150 MB) i wróć do Claude Code.
-Claude Code zbuduje `docs/index.html` z OpenSeadragon viewerem (dark theme, przełączanie 2 mozaik, keyboard shortcuts 1/2/H/F, `.nojekyll`, `robots.txt`, link w README).
-
-Kontekst: Krok 5.1 (make_dzi.py + make_all_tiles.py) jest gotowy i committed (`d27eaf1`). Flaga `--max-level 13` obcina piramidę do poziomu ~8K (~2^13 px), co daje ~60-75 MB na mozaikę zamiast ~300 MB dla pełnego 16K. Po uruchomieniu skryptu Claude Code dokończy część webową (HTML/CSS/JS viewer).
+Kontekst: jedyny pozostały defekt jakościowy znaleziony w code-review kształtów
+(2026-06-12); wszystkie pozostałe punkty review już naprawione (commit dd4e5d6).
 
 ---
 
 ## Co zrobiono w tej sesji
 
-- ✓ /start — wczytano MEMORY.md + last_session.md
-- ✓ Diagnoza stanu po przerwanej sesji: root `engine_smart.py` (525 linii) był stałym artefaktem — usunięty
-- ✓ Commit zaległych plików: MASTER_PLAN_v6.4.md, MODEL_ROUTING.md, last_session.md → commit `e35dcf1`
-- ✓ Krok 4.2: `assets/examples/symbol_zoom.gif` wygenerowany (9 MB, 40 klatek z 16K PNG) → commit `fc87bc6`
-- ✓ Krok 4.2: README — mosaic_zoom.gif + symbol_zoom.gif w Gallery, sekcja Print Size Guide (tabela 16K/8K/4K/2K × 300/150 DPI), sekcja Troubleshooting (4 Q&A) → commit `fc87bc6`
-- ✓ Krok 4.3: README — sekcja "Symbol Mosaic Gallery" (tabela 2 trybów, symbol_zoom.gif, tabela kontrolek, font groups 7 kategorii) → commit `1eb370c`
-- ✓ Krok 5.1: `src/tools/make_dzi.py` — generator DZI (TileSize=256, Overlap=1, JPEG q70, `--max-level` cap) → commit `d27eaf1`
-- ✓ Krok 5.1: `src/tools/make_all_tiles.py` — batch runner dla 2 mozaik → `docs/tiles/`, ostrzeżenie >150 MB → commit `d27eaf1`
+- ✓ **Einstein hat** — pełna implementacja (substytucja H/T/P/F z arXiv:2303.10798,
+  port hatviz): `src/hat_tiling.py`, integracja engine/GUI/CLI, 12 testów, showcase,
+  pyramida DZI (commity e34d55c, 9b66704, 30d01ba, 127d323)
+- ✓ **Bug pokrycia hat przy 8K+** znaleziony na renderze usera i naprawiony: margines
+  przycinania proporcjonalny do przekątnej węzła + poziom zapasowy substytucji (9b66704)
+- ✓ **Tile Library OOM naprawiony** (eaaffa7): paginacja `_LIB_PAGE_SIZE=200` +
+  `_LIB_SCAN_CAP=2000` + przycisk Load More; zweryfikowane na żywym GUI z 455 448 plikami
+  (pierwsza strona ~27 s, responsywne)
+- ✓ **Spectre** — chiralny monotile (arXiv:2305.17743, port spectre.js Kaplana):
+  `src/spectre_tiling.py` (9 metakafli, mystic Γ, dokładne bboxy bottom-up, wspólne
+  recentrowanie ramki), integracja + 13 testów + showcase + DZI (3d55a6d, 127d323)
+- ✓ **Decyzja usera: einstein_hat USUNIĘTY** (fe9db96) — kształty łudząco podobne,
+  spectre mocniejszy matematycznie (zero odbić); prymitywy afiniczne przeniesione
+  do spectre_tiling.py; viewer Pages: spectre = przycisk 5
+- ✓ **Code-review pozostałych kształtów** + wszystkie poprawki (dd4e5d6): kite
+  deterministyczny (seed RNG → naprawa cache sąsiadów i potencjalnego IndexError),
+  mask-mean fill cech w kite, ValueError zamiast None z `_do_render`, licznik
+  nieudanych kafelków, hexagon_romb bez pustych masek, float-stepy dla hexagon/romb
+  (z weryfikacją zero-regresji względem HEAD dla wszystkich 7 kształtów siatkowych)
+- ✓ Testy końcowe: **182 passed**; wszystko wypchnięte na origin/main
+- ✓ `.gitignore` (konsolidacja backupów) zacommitowany (094c8f4)
 
 ## Co zostało (backlog sesji)
 
-- ⟳ Krok 5.2: 👤 uruchom `make_all_tiles --max-level 13` → potem 🤖 `docs/index.html` + CSS + JS (OpenSeadragon viewer)
-- ⟳ Krok 5.3: 👤 test lokalny (`python -m http.server 8000`) + git push + GitHub Pages deploy
-- ⟳ Fazy 6-7 wg MASTER_PLAN_v6.4.md
-- ⟳ `assets/demo.gif` — manualne nagranie GUI (OBS/ShareX)
-- ⟳ Render 16K kite — brakuje w tabeli Performance (benchmark bez `--quick`, ~15-30 min)
-- ⟳ Opcjonalnie: MCP wrapper dla Gemini CLI (poza Neural-Mosaic)
+- ⟳ Czarne kliny przy krawędziach siatek (patrz NASTĘPNY KROK)
+- ⟳ `padding=1.02` częściowo clippowany do płótna maski — świadomie zostawione
+  (naprawa = powiększenie płótna masek we wszystkich kształtach, zysk znikomy)
+- ⟳ Zoom-GIF dla spectre do README (`make_zoom_gif.py`) — sekcja „Zoom animations"
+  ma 6 kształtów, spectre by ją uzupełnił
+- ⟳ Stary backlog UX z 2026-06-04 (auto-preview toggle, otwarcie folderu wyniku itd.)
 
 ## Aktywne pliki
 
-- `data/smart_index.pkl` — gotowy, 454 857 obrazów, 79-dim, schema 5x5_edge
-- `src/tools/make_dzi.py` — committed `d27eaf1`
-- `src/tools/make_all_tiles.py` — committed `d27eaf1`
-- `assets/examples/` — 8 gallery JPG + mosaic_zoom.gif + symbol_zoom.gif, wszystkie committed
-- `README.md` — committed `1eb370c` (Faza 4 complete + Symbol Mosaic Gallery)
-- `output/showcase_square_20260428_200622.jpg` — wejście dla DZI mosaic #1 (63 MB)
-- `output/showcase_symbol_black_on_white_20260428_202842.png` — wejście dla DZI mosaic #2 (49 MB)
+- `src/spectre_tiling.py` — NOWY, samodzielny (prymitywy afiniczne w środku)
+- `src/engine_smart.py` — gałąź spectre + poprawki review (kite/grid/matching)
+- `src/gui.py` — paginacja Tile Library + spectre w liście kształtów
+- `src/cli.py`, `src/tools/make_showcase.py`, `tests/test_spectre_tiling.py`
+- `docs/index.html` + `docs/tiles/showcase_spectre_*` — viewer Pages (5 mozaik)
+- `README.md` — sekcja spectre + galeria (papuga 8K)
 
 ## Otwarte pytania
 
-- Render 16K kite do tabeli Performance — `python -m tests.benchmark` (bez `--quick`) gdy jest czas; zajmie ~15-30 min.
-- Rozmiar `docs/tiles/` po `make_all_tiles --max-level 13` — jeśli >150 MB, zmniejszyć do `--max-level 12`.
+- Czy rendery usera w `output/einstein hat/` zostawić (powstały przed usunięciem kształtu)?
+- Kolejność backlogu: kliny krawędziowe → zoom-GIF spectre → UX?
 
 ## Do MEMORY.md (przeniesiono)
 
-- Brak nowych wpisów w tej sesji.
+- `project_spectre_only_no_hat.md` — einstein_hat usunięty (2026-06-12), zostaje spectre;
+  nie proponować hat ponownie + notatki techniczne substytucji (wspólne recentrowanie!)
+- `project_tile_library_scale_bug.md` — zaktualizowany: bug NAPRAWIONY (paginacja 200/stronę)
