@@ -56,6 +56,11 @@ _L_RANGES = {
 # Texture threshold: std-dev of grayscale channel (normalised)
 _TEX_THRESHOLD = 0.10
 
+# Tile Library pagination — hard caps so huge libraries (hundreds of
+# thousands of tiles) can never flood the Tk widget tree or RAM.
+_LIB_PAGE_SIZE = 200   # tiles added to the grid per Refresh / Load More
+_LIB_SCAN_CAP = 2000   # max files examined per click (thumbnail cost)
+
 
 class _TextboxStream:
     """Mirror a stdout/stderr stream into a CTkTextbox.
@@ -135,6 +140,9 @@ class App(ctk.CTk):
         self._lib_loading = False
         self._lib_selected: set[Path] = set()
         self._lib_cell_frames: dict[Path, ctk.CTkFrame] = {}
+        self._lib_paths: list[Path] = []  # filtered+sorted scan list (paginated)
+        self._lib_scan_pos = 0            # resume index into _lib_paths
+        self._lib_shown = 0               # tiles currently in the grid
         self._preview_smart = PreviewRenderer()
         self._preview_typo = PreviewRenderer()
         self._preview_img_ref_p = None
@@ -1047,8 +1055,9 @@ class App(ctk.CTk):
                 "LAB Coverage Map  shows whether your tiles cover the full colour "
                 "range (gaps = poorer matches).",
             ],
-            warn="Large libraries (tens of thousands of tiles) take a while to "
-                 "load and only the first matches are shown — use the filters.",
+            warn="Tiles load in pages of "
+                 f"{_LIB_PAGE_SIZE} — click  Load More  to continue scanning. "
+                 "With huge libraries use the filters to narrow the search.",
         ).grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 0))
 
         # Header row
@@ -1135,6 +1144,13 @@ class App(ctk.CTk):
             command=self._lib_export_bad_tiles,
         )
         self.btn_export_bad.pack(side="right", padx=5)
+
+        self.btn_lib_more = ctk.CTkButton(
+            action_bar, text="Load More", width=110,
+            fg_color="gray", state="disabled",
+            command=self._lib_load_more,
+        )
+        self.btn_lib_more.pack(side="right", padx=5)
 
         ctk.CTkButton(
             action_bar, text="LAB Coverage Map", width=160,
@@ -1228,37 +1244,65 @@ class App(ctk.CTk):
         self._lib_selected.clear()
         self._lib_cell_frames.clear()
         self.btn_export_bad.configure(state="disabled")
+        self.btn_lib_more.configure(state="disabled", fg_color="gray")
         self.after(0, lambda: self.lbl_lib_status.configure(text="Scanning..."))
-        threading.Thread(target=self._lib_load_grid, daemon=True).start()
+        threading.Thread(target=self._lib_load_grid,
+                         kwargs={"fresh": True}, daemon=True).start()
 
-    def _lib_load_grid(self):
+    def _lib_load_more(self):
+        if self._lib_loading:
+            return
+        self._lib_loading = True
+        self.btn_lib_more.configure(state="disabled", fg_color="gray")
+        self.after(0, lambda: self.lbl_lib_status.configure(text="Loading more..."))
+        threading.Thread(target=self._lib_load_grid,
+                         kwargs={"fresh": False}, daemon=True).start()
+
+    def _lib_load_grid(self, fresh: bool = True):
+        """Scan the library incrementally and append one page to the grid.
+
+        Pagination guards: at most _LIB_PAGE_SIZE thumbnails are added and
+        at most _LIB_SCAN_CAP files are examined per call, so a huge
+        library (hundreds of thousands of tiles) can never flood the Tk
+        widget tree or RAM. 'Load More' resumes from self._lib_scan_pos.
+        """
         try:
-            paths = self._lib_collect_paths()
-            total_scanned = len(paths)
+            if fresh:
+                self._lib_paths = self._lib_collect_paths()
+                self._lib_scan_pos = 0
+                self._lib_shown = 0
+                self._lib_images = []
+                self._lib_cell_frames.clear()
+                self._check_library_status()
 
-            self.after(0, lambda: self.lbl_lib_count.configure(
-                text=f"{total_scanned} tiles"))
-            self._check_library_status()
+                if not self._lib_paths:
+                    self.after(0, lambda: self.lbl_lib_count.configure(
+                        text="0 tiles"))
+                    self.after(0, lambda: self._lib_show_placeholder(
+                        "No tiles found. Download tiles using the sidebar."))
+                    self.after(0, lambda: self.lbl_lib_status.configure(
+                        text="Ready — 0 tiles"))
+                    return
 
-            if total_scanned == 0:
-                self.after(0, lambda: self._lib_show_placeholder(
-                    "No tiles found. Download tiles using the sidebar."))
-                self.after(0, lambda: self.lbl_lib_status.configure(text="Ready — 0 tiles"))
-                return
+                self.after(0, lambda: [w.destroy()
+                                       for w in self.lib_scroll.winfo_children()])
 
-            self.after(0, lambda: [w.destroy()
-                                   for w in self.lib_scroll.winfo_children()])
-            self._lib_images = []
-            self._lib_cell_frames.clear()
-
+            paths = self._lib_paths
+            total = len(paths)
             px = _THUMB_DISPLAY_PX
-            grid_row = 0
-            grid_col = 0
-            shown = 0
+            page_shown = 0
+            scanned = 0
 
-            for i, src in enumerate(paths):
+            while self._lib_scan_pos < total:
                 if not self._lib_loading:
                     break
+                if page_shown >= _LIB_PAGE_SIZE or scanned >= _LIB_SCAN_CAP:
+                    break
+
+                src = paths[self._lib_scan_pos]
+                self._lib_scan_pos += 1
+                scanned += 1
+
                 try:
                     thumb_path, stats = self._lib_make_thumb(src)
                     if not self._lib_passes_filter(stats):
@@ -1271,7 +1315,8 @@ class App(ctk.CTk):
                     )
                     self._lib_images.append(ctk_img)
 
-                    r, c = grid_row, grid_col
+                    r = self._lib_shown // _GRID_COLS
+                    c = self._lib_shown % _GRID_COLS
                     name = src.name if len(src.name) <= 16 else src.name[:14] + ".."
 
                     def _add(row=r, col=c, img=ctk_img, lbl=name, path=src):
@@ -1299,30 +1344,35 @@ class App(ctk.CTk):
                         name_lbl.bind("<Button-1>", handler)
 
                     self.after(0, _add)
-                    shown += 1
-                    grid_col += 1
-                    if grid_col >= _GRID_COLS:
-                        grid_col = 0
-                        grid_row += 1
+                    self._lib_shown += 1
+                    page_shown += 1
 
                 except Exception:
                     pass
 
-                if (i + 1) % 25 == 0:
-                    done = i + 1
+                if scanned % 25 == 0:
+                    done = self._lib_scan_pos
                     self.after(0, lambda n=done: self.lbl_lib_status.configure(
-                        text=f"Loading {n}/{total_scanned}..."))
+                        text=f"Scanning {n}/{total}..."))
 
-            if shown == 0:
+            remaining = total - self._lib_scan_pos
+
+            if self._lib_shown == 0 and remaining == 0:
                 self.after(0, lambda: self._lib_show_placeholder(
                     "No tiles match the current filters."))
 
-            n_shown = shown
-            n_total = total_scanned
+            n_shown = self._lib_shown
             self.after(0, lambda: self.lbl_lib_count.configure(
-                text=f"{n_shown} / {n_total} tiles"))
-            self.after(0, lambda: self.lbl_lib_status.configure(
-                text=f"Ready — {n_shown} of {n_total} tiles shown"))
+                text=f"{n_shown} / {total} tiles"))
+
+            if remaining > 0:
+                self.after(0, lambda: self.btn_lib_more.configure(
+                    state="normal", fg_color="#1f538d"))
+                status = (f"Ready — {n_shown} tiles shown, "
+                          f"{remaining} files not scanned yet (Load More)")
+            else:
+                status = f"Ready — {n_shown} tiles shown of {total} scanned"
+            self.after(0, lambda s=status: self.lbl_lib_status.configure(text=s))
 
         finally:
             self._lib_loading = False
