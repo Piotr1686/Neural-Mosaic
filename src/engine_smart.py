@@ -342,6 +342,13 @@ class SmartEngine:
             occupied   = set()
             placed_hats = []
 
+            # Deterministic per render geometry: an unseeded RNG produced a
+            # different hat layout (and sector count) every run, which both
+            # broke preview/render reproducibility and poisoned the
+            # _neighbors_cache entry shared by renders with the same _nkey
+            # (stale adjacency, possible IndexError on the second render).
+            rng = random.Random(f"kite_{base_s}_{target_w}_{target_h}")
+
             kite_to_hats = defaultdict(list)
             for target_k in target_kites:
                 t_q, t_r, t_k = target_k
@@ -372,7 +379,7 @@ class SmartEngine:
                 ]
 
                 if valid_hats:
-                    chosen_hat = random.choice(valid_hats)
+                    chosen_hat = rng.choice(valid_hats)
                     placed_hats.append(chosen_hat)
                     for k in chosen_hat:
                         occupied.add(k)
@@ -423,9 +430,23 @@ class SmartEngine:
                     shifted_poly = [(p[0] - min_x, p[1] - min_y) for p in padded_poly]
                     draw_k.polygon(shifted_poly, fill=255)
 
+                    # Replace outside-mask pixels with the kite's mean colour
+                    # so the bounding box does not leak neighbouring content
+                    # into the LAB match (same treatment as the spectre mode).
+                    arr = np.asarray(s_img, dtype=np.float32)
+                    m = np.asarray(mask_kite, dtype=np.float32)[:, :, None] / 255.0
+                    m_sum = float(m.sum())
+                    if m_sum > 0.0:
+                        mean_rgb = (arr * m).sum(axis=(0, 1)) / m_sum
+                        filled = arr * m + mean_rgb * (1.0 - m)
+                        feat_img = Image.fromarray(
+                            np.clip(filled, 0, 255).astype(np.uint8))
+                    else:
+                        feat_img = s_img
+
                     sectors_data.append({
                         "meta": (i_hat, int(min_x), int(min_y), mask_kite, bw, bh, len(hat_kites) > 1),
-                        "feature": self._compute_sector_feature(s_img, edge_aware)
+                        "feature": self._compute_sector_feature(feat_img, edge_aware)
                     })
 
         # ==========================================
@@ -500,28 +521,39 @@ class SmartEngine:
         # ==========================================
         else:
             print(f"Mode: Grid ({shape_mode}). Borders: {border_mode}")
+            # Mask canvases (tile_w/tile_h) stay integer. Grid steps are kept
+            # as floats ONLY for geometries whose mask overlaps past the step
+            # (hexagon, romb) — there the old int() truncation compounded row
+            # after row into a ~0.7% vertical squeeze. Shapes that abut
+            # exactly (rectangle, brick, triangle rows) must keep the step
+            # equal to the integer canvas size or 1-px gaps open up.
+            hr3 = math.sqrt(3) / 2
             tile_w, tile_h = base_s, base_s
-            step_x, step_y = base_s, base_s
-            offset_odd_row_x = 0
+            step_x, step_y = float(base_s), float(base_s)
+            offset_odd_row_x = 0.0
 
-            if shape_mode == "rectangle_3x1": tile_h=base_s//3; step_y=tile_h
-            elif shape_mode == "brick_wall": tile_h=base_s//2; step_y=tile_h; offset_odd_row_x=base_s//2
+            if shape_mode == "rectangle_3x1": tile_h=base_s//3; step_y=float(tile_h)
+            elif shape_mode == "brick_wall": tile_h=base_s//2; step_y=float(tile_h); offset_odd_row_x=base_s//2
             elif "hexagon" in shape_mode or shape_mode == "hexagon_romb":
                 tile_w=base_s; tile_h=int(base_s*1.155)
-                step_x=tile_w; step_y=int(tile_h*0.75); offset_odd_row_x=tile_w//2
-            elif shape_mode == "triangle": tile_w=base_s; tile_h=int(base_s*0.866); step_x=tile_w//2; step_y=tile_h
-            elif shape_mode == "romb": tile_w=base_s; tile_h=int(base_s*1.5); step_x=tile_w; step_y=int(tile_h*0.5); offset_odd_row_x=int(tile_w*0.5)
+                step_x=float(tile_w); step_y=base_s*hr3; offset_odd_row_x=base_s/2
+            elif shape_mode == "triangle": tile_w=base_s; tile_h=int(base_s*0.866); step_x=base_s/2; step_y=float(tile_h)
+            elif shape_mode == "romb": tile_w=base_s; tile_h=int(base_s*1.5); step_x=float(tile_w); step_y=base_s*0.75; offset_odd_row_x=base_s/2
 
-            cols = (target_w // step_x) + 2
-            rows = (target_h // step_y) + 2
-
-            mask_norm = self._get_shape_mask(shape_mode, tile_w, tile_h, False, padding=render_padding)
-            mask_flip = self._get_shape_mask(shape_mode, tile_w, tile_h, True, padding=render_padding)
+            cols = int(target_w / step_x) + 2
+            rows = int(target_h / step_y) + 2
 
             if shape_mode == "hexagon_romb":
+                # The composite hexagon is drawn from the three romb masks
+                # below; _get_shape_mask has no "hexagon_romb" branch and
+                # would silently return a blank mask here.
+                mask_norm = mask_flip = None
                 mask_left = self._get_shape_mask("mask_left", tile_w, tile_h, padding=render_padding)
                 mask_right = self._get_shape_mask("mask_right", tile_w, tile_h, padding=render_padding)
                 mask_top = self._get_shape_mask("mask_top", tile_w, tile_h, padding=render_padding)
+            else:
+                mask_norm = self._get_shape_mask(shape_mode, tile_w, tile_h, False, padding=render_padding)
+                mask_flip = self._get_shape_mask(shape_mode, tile_w, tile_h, True, padding=render_padding)
 
             print("Scanning grid...")
             for r in range(rows):
@@ -573,8 +605,12 @@ class SmartEngine:
         # PHOTO-TO-TILE MATCHING (SHARED PASS)
         # ==========================================
         if not sectors_data:
-            print("No tiles generated.")
-            return
+            # Returning None here used to surface as a cryptic AttributeError
+            # in create_mosaic/render_sized (result.save on None).
+            raise ValueError(
+                f"No tiles generated for {target_w}x{target_h} target with "
+                f"shape '{shape_mode}' and tile scale {tile_scale} — the "
+                f"target is too small for the chosen tile size.")
 
         # Select which tile features to use for matching.
         # edge_aware/allow_mirror conflict already resolved by _resolve_matching_modes
@@ -598,6 +634,7 @@ class SmartEngine:
         tgt_features = np.array([x["feature"] for x in sectors_data])
         used_counts = np.zeros(len(self.paths), dtype=np.int32)
         sector_assignments = -1 * np.ones(len(sectors_data), dtype=np.int32)
+        failed_tiles = 0
 
         chunk_size = 500
 
@@ -685,10 +722,18 @@ class SmartEngine:
 
                         img.putalpha(mask)
                         final_mosaic.alpha_composite(img, (px, py))
-                except Exception: pass
+                except Exception:
+                    # One bad tile must not abort the render, but silent
+                    # holes are debugging hell — count and report below.
+                    failed_tiles += 1
 
             if progress_cb is not None:
                 progress_cb(end, len(sectors_data))
+
+        if failed_tiles > 0:
+            print(f"WARNING: {failed_tiles} of {len(sectors_data)} tiles "
+                  f"failed to load/composite and were skipped (holes show "
+                  f"the black background).")
 
         mosaic_rgb = final_mosaic.convert("RGB")
         if blend_strength > 0.0:
