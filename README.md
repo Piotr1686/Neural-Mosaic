@@ -41,12 +41,23 @@
   <em>Hexagon tiling — same portrait, honeycomb geometry</em>
 </p>
 
+<p align="center">
+  <img src="assets/examples/mosaic_portrait_einstein_hat.jpg" width="60%" alt="Einstein hat tiling" />
+</p>
+
+<p align="center">
+  <em>Einstein hat tiling — the aperiodic monotile (<a href="https://arxiv.org/abs/2303.10798">arXiv:2303.10798</a>); the pattern never repeats</em>
+</p>
+
 <details>
 <summary>🔍 Tile detail — click to expand</summary>
 <p align="center">
   <img src="assets/examples/detail_square.jpg" width="30%" />
   <img src="assets/examples/detail_triangle.jpg" width="30%" />
   <img src="assets/examples/detail_hexagon.jpg" width="30%" />
+</p>
+<p align="center">
+  <img src="assets/examples/detail_einstein_hat.jpg" width="45%" />
 </p>
 </details>
 
@@ -208,13 +219,20 @@ Reconstructs the target image by tiling it with photographs from your personal l
 |---|---|
 | Output resolution | 2K · 4K · 8K · **16K** |
 | Tile size multiplier | 0.5 · 0.75 · 1.0 · 1.75 · 2.0 |
-| Tile shape | `square` · `rectangle_3x1` · `brick_wall` · `hexagon` · `hexagon_romb` · `romb` · `triangle` · `kite` |
+| Tile shape | `square` · `rectangle_3x1` · `brick_wall` · `hexagon` · `hexagon_romb` · `romb` · `triangle` · `kite` · `einstein_hat` |
 | Allow Mirroring | Horizontally flips tiles on the fly, doubling the effective library size without using extra disk space |
 | Black Borders (Grout) | Adds a dark gap between tiles — simulates real mosaic grout lines |
 | Color Blend | 0%–30% — blends the original photo over the mosaic for softer colour transitions |
 | Tile Tint | 0%–40% — shifts each tile's colours toward the target sector mean for tighter colour accuracy |
 
 The `kite` shape arranges tiles in a distinctive non-rectangular diamond geometry.
+
+The `einstein_hat` shape tiles the image with the **aperiodic "hat" monotile**
+([Smith, Myers, Kaplan, Goodman-Strauss, 2023](https://arxiv.org/abs/2303.10798)) —
+a 13-sided polykite that can cover the plane only in a pattern that *never
+repeats*. Hats cannot sit on a regular grid, so the engine generates the exact
+tiling through the H/T/P/F metatile substitution system and places one
+photograph per hat, including the mirrored "anti-hats" the tiling requires.
 
 **Anti-repetition system:** The engine enforces a hard neighbour constraint (no tile from the same source image may touch another) combined with a frequency penalty that gradually discourages reuse of popular tiles across the entire composition. Together these prevent any single photograph from dominating the output.
 
@@ -418,7 +436,7 @@ Batch output names are **timestamp-free** — `{stem}_{engine}_{res}_{shape|mode
 | `--engine {smart,typo}` | both | required | Which renderer to use |
 | `--res {2K,4K,8K,16K}` | both | `8K` | Output resolution |
 | `--index PATH` | both | `data/<engine>_index.pkl` | Override pre-built index location |
-| `--shape SHAPE` | smart | `square` | `square` · `rectangle_3x1` · `brick_wall` · `hexagon` · `hexagon_romb` · `romb` · `triangle` · `kite` |
+| `--shape SHAPE` | smart | `square` | `square` · `rectangle_3x1` · `brick_wall` · `hexagon` · `hexagon_romb` · `romb` · `triangle` · `kite` · `einstein_hat` |
 | `--scale FLOAT` | both | `1.0` | Tile size multiplier (0.5–2.0) |
 | `--blend FLOAT` | smart | `0.0` | Original-over-mosaic blend, 0.0–0.3 |
 | `--tint FLOAT` | smart | `0.0` | Tile tinting toward sector colour, 0.0–0.4 |

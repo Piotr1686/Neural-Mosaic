@@ -49,9 +49,11 @@ GALLERY_FILES = [
     ("mosaic_portrait_square.jpg",   "Smart mosaic - square tiles"),
     ("mosaic_portrait_triangle.jpg", "Smart mosaic - triangle tiles"),
     ("mosaic_portrait_hexagon.jpg",  "Smart mosaic - hexagon tiles"),
+    ("mosaic_portrait_einstein_hat.jpg", "Smart mosaic - einstein hat tiles"),
     ("detail_square.jpg",            "Tile detail crop - square mosaic"),
     ("detail_triangle.jpg",          "Tile detail crop - triangle mosaic"),
     ("detail_hexagon.jpg",           "Tile detail crop - hexagon mosaic"),
+    ("detail_einstein_hat.jpg",      "Tile detail crop - einstein hat mosaic"),
     ("symbol_bw.jpg",                "Symbol mosaic - black_on_white"),
     ("symbol_detail.jpg",            "Glyph detail crop - B&W symbol mosaic"),
 ]
@@ -265,7 +267,7 @@ def main():
     parser.add_argument(
         "--shape",
         choices=["square", "triangle", "hexagon", "hexagon_romb", "romb", "brick_wall",
-                 "rectangle_3x1", "kite"],
+                 "rectangle_3x1", "kite", "einstein_hat"],
         default="square",
         help="Tile shape for Smart Engine (default: square)",
     )
