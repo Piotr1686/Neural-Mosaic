@@ -86,7 +86,7 @@ class TestGenerateSpectreTiling:
         assert overlap_fraction < 0.05
 
     def test_full_coverage_at_8k_dimensions(self):
-        """Regression guard mirroring the einstein-hat 8K coverage test."""
+        """Coverage must hold at high substitution levels (8K render)."""
         w, h, k = 7680, 5760, 4  # rasterised at 1/4 scale
         tiles = generate_spectre_tiling(w, h, 100)
         acc = Image.new("L", (w // k, h // k), 0)

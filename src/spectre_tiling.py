@@ -22,9 +22,6 @@ step conjugates the whole system by a reflection, so within any generated
 patch every spectre has the same handedness (the defining property of
 the chiral tiling).
 
-Affine primitives are shared with the einstein-hat generator
-(src/hat_tiling.py).
-
 Public API:
     generate_spectre_tiling(width, height, tile_size) -> list[SpectrePlacement]
 """
@@ -33,24 +30,53 @@ import math
 from dataclasses import dataclass
 from typing import Dict, List, Tuple, Union
 
-from .hat_tiling import (
-    Affine,
-    Point,
-    _IDENT,
-    _mul,
-    _polygon_area,
-    _trans_pt,
-    _trot,
-    _ttrans,
-)
-
 logger = logging.getLogger(__name__)
 
-_HR3 = math.sqrt(3.0) / 2.0
+Point = Tuple[float, float]
+Affine = Tuple[float, float, float, float, float, float]  # row-major 2x3
 
-# See _BOUNDARY_MARGIN_HATS in hat_tiling.py — same role: the patch
-# boundary wiggles around the quad anchor polygon, so containment is
-# tested with a safety margin and one guard substitution level.
+_HR3 = math.sqrt(3.0) / 2.0
+_IDENT: Affine = (1.0, 0.0, 0.0, 0.0, 1.0, 0.0)
+
+
+# ==========================================
+# AFFINE GEOMETRY PRIMITIVES
+# ==========================================
+def _mul(a: Affine, b: Affine) -> Affine:
+    """Compose two affine transforms (a applied after b)."""
+    return (a[0] * b[0] + a[1] * b[3],
+            a[0] * b[1] + a[1] * b[4],
+            a[0] * b[2] + a[1] * b[5] + a[2],
+            a[3] * b[0] + a[4] * b[3],
+            a[3] * b[1] + a[4] * b[4],
+            a[3] * b[2] + a[4] * b[5] + a[5])
+
+
+def _trans_pt(m: Affine, p: Point) -> Point:
+    return (m[0] * p[0] + m[1] * p[1] + m[2],
+            m[3] * p[0] + m[4] * p[1] + m[5])
+
+
+def _trot(ang: float) -> Affine:
+    c, s = math.cos(ang), math.sin(ang)
+    return (c, -s, 0.0, s, c, 0.0)
+
+
+def _ttrans(tx: float, ty: float) -> Affine:
+    return (1.0, 0.0, tx, 0.0, 1.0, ty)
+
+
+def _polygon_area(pts) -> float:
+    """Absolute polygon area via the shoelace formula."""
+    acc = 0.0
+    for i in range(len(pts)):
+        x1, y1 = pts[i]
+        x2, y2 = pts[(i + 1) % len(pts)]
+        acc += x1 * y2 - x2 * y1
+    return abs(acc) / 2.0
+
+# The patch boundary wiggles around its anchor geometry, so containment
+# is tested with a safety margin and one guard substitution level.
 _BOUNDARY_MARGIN_TILES = 3.0
 
 
@@ -244,7 +270,7 @@ def _node_bbox(geom: _Geom, memo: Dict[int, _BBox]) -> _BBox:
     """True conservative bbox of a node in its own coordinates.
 
     Computed bottom-up from actual child geometry, so pruning against it
-    needs no fractal-wiggle margin (unlike the hat's ideal outlines).
+    needs no fractal-wiggle margin (ideal-outline anchors would).
     """
     cached = memo.get(id(geom))
     if cached is not None:
@@ -304,7 +330,7 @@ def generate_spectre_tiling(width: int, height: int, tile_size: float,
         width, height: Target rectangle in pixels.
         tile_size:     Desired granularity; each spectre covers an area of
                        roughly tile_size**2 pixels (parity with square
-                       tiles and the einstein hat).
+                       tiles).
         max_levels:    Safety cap on substitution depth.
 
     Returns:
@@ -332,7 +358,7 @@ def generate_spectre_tiling(width: int, height: int, tile_size: float,
         # centre; requiring the inflated rectangle to fit inside the bbox
         # shrunk to half extents keeps it conservatively in the interior.
         # One guard substitution then adds clearance of the order of the
-        # whole previous-generation patch (same reasoning as hat_tiling).
+        # whole previous-generation patch.
         bbox = _transform_bbox(to_screen, _node_bbox(sys["Delta"], {}))
         half_w = (bbox[2] - bbox[0]) / 4.0
         half_h = (bbox[3] - bbox[1]) / 4.0

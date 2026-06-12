@@ -108,11 +108,10 @@
     <button id="btn2" onclick="switchTo(1)">2 — Symbol Mosaic</button>
     <button id="btn3" onclick="switchTo(2)">3 — Triangle</button>
     <button id="btn4" onclick="switchTo(3)">4 — Hexagon</button>
-    <button id="btn5" onclick="switchTo(4)">5 — Einstein Hat</button>
-    <button id="btn6" onclick="switchTo(5)">6 — Spectre</button>
+    <button id="btn5" onclick="switchTo(4)">5 — Spectre</button>
   </div>
   <div class="shortcuts">
-    <kbd>1</kbd>–<kbd>6</kbd> Switch &nbsp;
+    <kbd>1</kbd>–<kbd>5</kbd> Switch &nbsp;
     <kbd>H</kbd> Reset &nbsp;
     <kbd>F</kbd> Fullscreen &nbsp;
     <kbd>scroll</kbd> Zoom
@@ -141,10 +140,6 @@
       label: "Hexagon Mosaic — 15 360 × 8 647 px · scroll to zoom"
     },
     {
-      tileSources: "tiles/showcase_einstein_hat_20260612_214453.dzi",
-      label: "Einstein Hat Mosaic — aperiodic monotile (arXiv:2303.10798) · scroll to zoom"
-    },
-    {
       tileSources: "tiles/showcase_spectre_20260612_222738.dzi",
       label: "Spectre Mosaic — chiral aperiodic monotile (arXiv:2305.17743) · scroll to zoom"
     }
@@ -171,7 +166,7 @@
     current = idx;
     viewer.open(mosaics[idx].tileSources);
     document.getElementById("label").textContent = mosaics[idx].label;
-    [1,2,3,4,5,6].forEach(n =>
+    [1,2,3,4,5].forEach(n =>
       document.getElementById("btn" + n).classList.toggle("active", idx === n - 1)
     );
   }
@@ -185,7 +180,6 @@
       case "3": switchTo(2); break;
       case "4": switchTo(3); break;
       case "5": switchTo(4); break;
-      case "6": switchTo(5); break;
       case "h": case "H": viewer.viewport.goHome(); break;
       case "f": case "F":
         if (!document.fullscreenElement) document.documentElement.requestFullscreen();

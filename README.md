@@ -42,13 +42,11 @@
 </p>
 
 <p align="center">
-  <img src="assets/examples/mosaic_portrait_einstein_hat.jpg" width="48%" alt="Einstein hat tiling" />
-  <img src="assets/examples/mosaic_portrait_spectre.jpg" width="48%" alt="Spectre tiling" />
+  <img src="assets/examples/mosaic_portrait_spectre.jpg" width="60%" alt="Spectre tiling" />
 </p>
 
 <p align="center">
-  <em>Aperiodic monotiles — left: einstein hat (<a href="https://arxiv.org/abs/2303.10798">arXiv:2303.10798</a>),
-  right: chiral spectre (<a href="https://arxiv.org/abs/2305.17743">arXiv:2305.17743</a>); the patterns never repeat</em>
+  <em>Spectre tiling — the chiral aperiodic monotile (<a href="https://arxiv.org/abs/2305.17743">arXiv:2305.17743</a>); the pattern never repeats</em>
 </p>
 
 <details>
@@ -59,7 +57,6 @@
   <img src="assets/examples/detail_hexagon.jpg" width="30%" />
 </p>
 <p align="center">
-  <img src="assets/examples/detail_einstein_hat.jpg" width="45%" />
   <img src="assets/examples/detail_spectre.jpg" width="45%" />
 </p>
 </details>
@@ -222,7 +219,7 @@ Reconstructs the target image by tiling it with photographs from your personal l
 |---|---|
 | Output resolution | 2K · 4K · 8K · **16K** |
 | Tile size multiplier | 0.5 · 0.75 · 1.0 · 1.75 · 2.0 |
-| Tile shape | `square` · `rectangle_3x1` · `brick_wall` · `hexagon` · `hexagon_romb` · `romb` · `triangle` · `kite` · `einstein_hat` · `spectre` |
+| Tile shape | `square` · `rectangle_3x1` · `brick_wall` · `hexagon` · `hexagon_romb` · `romb` · `triangle` · `kite` · `spectre` |
 | Allow Mirroring | Horizontally flips tiles on the fly, doubling the effective library size without using extra disk space |
 | Black Borders (Grout) | Adds a dark gap between tiles — simulates real mosaic grout lines |
 | Color Blend | 0%–30% — blends the original photo over the mosaic for softer colour transitions |
@@ -230,20 +227,14 @@ Reconstructs the target image by tiling it with photographs from your personal l
 
 The `kite` shape arranges tiles in a distinctive non-rectangular diamond geometry.
 
-The `einstein_hat` shape tiles the image with the **aperiodic "hat" monotile**
-([Smith, Myers, Kaplan, Goodman-Strauss, 2023](https://arxiv.org/abs/2303.10798)) —
-a 13-sided polykite that can cover the plane only in a pattern that *never
-repeats*. Hats cannot sit on a regular grid, so the engine generates the exact
-tiling through the H/T/P/F metatile substitution system and places one
-photograph per hat, including the mirrored "anti-hats" the tiling requires.
-
-The `spectre` shape uses the **strictly chiral aperiodic monotile**
-([Smith, Myers, Kaplan, Goodman-Strauss, 2023](https://arxiv.org/abs/2305.17743)) —
-a 14-sided successor of the hat that tiles the plane aperiodically *without
-any reflections*: every spectre in the mosaic has the same handedness. The
+The `spectre` shape tiles the image with the **strictly chiral aperiodic
+monotile** ([Smith, Myers, Kaplan, Goodman-Strauss, 2023](https://arxiv.org/abs/2305.17743)) —
+a 14-sided shape that can cover the plane only in a pattern that *never
+repeats*, using rotations alone (no reflections: every spectre in the mosaic
+has the same handedness). Spectres cannot sit on a regular grid, so the
 engine ports the authors' nine-metatile substitution system
-(Γ Δ Θ Λ Ξ Π Σ Φ Ψ, with the Γ "mystic" pair) to place one photograph per
-spectre.
+(Γ Δ Θ Λ Ξ Π Σ Φ Ψ, with the Γ "mystic" pair) to compute the exact tiling
+and places one photograph per spectre.
 
 **Anti-repetition system:** The engine enforces a hard neighbour constraint (no tile from the same source image may touch another) combined with a frequency penalty that gradually discourages reuse of popular tiles across the entire composition. Together these prevent any single photograph from dominating the output.
 
@@ -447,7 +438,7 @@ Batch output names are **timestamp-free** — `{stem}_{engine}_{res}_{shape|mode
 | `--engine {smart,typo}` | both | required | Which renderer to use |
 | `--res {2K,4K,8K,16K}` | both | `8K` | Output resolution |
 | `--index PATH` | both | `data/<engine>_index.pkl` | Override pre-built index location |
-| `--shape SHAPE` | smart | `square` | `square` · `rectangle_3x1` · `brick_wall` · `hexagon` · `hexagon_romb` · `romb` · `triangle` · `kite` · `einstein_hat` · `spectre` |
+| `--shape SHAPE` | smart | `square` | `square` · `rectangle_3x1` · `brick_wall` · `hexagon` · `hexagon_romb` · `romb` · `triangle` · `kite` · `spectre` |
 | `--scale FLOAT` | both | `1.0` | Tile size multiplier (0.5–2.0) |
 | `--blend FLOAT` | smart | `0.0` | Original-over-mosaic blend, 0.0–0.3 |
 | `--tint FLOAT` | smart | `0.0` | Tile tinting toward sector colour, 0.0–0.4 |

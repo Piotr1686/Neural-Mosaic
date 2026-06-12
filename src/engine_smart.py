@@ -4,8 +4,7 @@ src/engine_smart.py
 Colour-matched photomosaic engine (SmartEngine).
 
 Supports multiple tile geometries including the kite (diamond) shape and
-the aperiodic monotiles: "einstein hat" (src/hat_tiling.py) and the
-chiral "spectre" (src/spectre_tiling.py).
+the chiral aperiodic "spectre" monotile (src/spectre_tiling.py).
 Each sector of the target image is matched to the best-fitting tile from
 the pre-built CIELAB feature index with spatial anti-repetition enforcement.
 
@@ -27,7 +26,6 @@ from scipy.spatial.distance import cdist
 from scipy.spatial import cKDTree
 import skimage.color
 
-from .hat_tiling import generate_hat_tiling
 from .spectre_tiling import generate_spectre_tiling
 
 # Must match EDGE_WEIGHT in indexer_smart.py.
@@ -431,27 +429,22 @@ class SmartEngine:
                     })
 
         # ==========================================
-        # APERIODIC MONOTILES (EINSTEIN HAT / SPECTRE)
+        # SPECTRE TILING (CHIRAL APERIODIC MONOTILE)
         # ==========================================
-        elif shape_mode in ("einstein_hat", "spectre"):
-            print(f"Mode: Aperiodic monotile ({shape_mode}). Borders: {border_mode}")
+        elif shape_mode == "spectre":
+            print(f"Mode: Spectre (chiral aperiodic monotile). Borders: {border_mode}")
 
-            if shape_mode == "spectre":
-                hats = generate_spectre_tiling(target_w, target_h, base_s)
-            else:
-                hats = generate_hat_tiling(target_w, target_h, base_s)
-            n_mirrored = sum(1 for h in hats if h.mirrored)
-            print(f"Aperiodic tiling ready: {len(hats)} tiles "
-                  f"({n_mirrored} mirrored)")
+            spectres = generate_spectre_tiling(target_w, target_h, base_s)
+            print(f"Aperiodic tiling ready: {len(spectres)} spectres")
 
             scale_aa = 4
-            for i_hat, hat in enumerate(tqdm(hats, desc="Sampling monotile sectors")):
-                hat_cx = sum(p[0] for p in hat.points) / len(hat.points)
-                hat_cy = sum(p[1] for p in hat.points) / len(hat.points)
+            for i_spec, spec in enumerate(tqdm(spectres, desc="Sampling spectre sectors")):
+                spec_cx = sum(p[0] for p in spec.points) / len(spec.points)
+                spec_cy = sum(p[1] for p in spec.points) / len(spec.points)
                 padded_poly = [
-                    (hat_cx + (px - hat_cx) * render_padding,
-                     hat_cy + (py - hat_cy) * render_padding)
-                    for px, py in hat.points
+                    (spec_cx + (px - spec_cx) * render_padding,
+                     spec_cy + (py - spec_cy) * render_padding)
+                    for px, py in spec.points
                 ]
 
                 # Clamp the bounding box at the top/left edges so the paste
@@ -475,18 +468,19 @@ class SmartEngine:
                     s_img = tmp
 
                 # Anti-aliased polygon mask (supersampled, like _get_shape_mask).
-                mask_hat = Image.new("L", (bw * scale_aa, bh * scale_aa), 0)
-                draw_h = ImageDraw.Draw(mask_hat)
+                mask_spec = Image.new("L", (bw * scale_aa, bh * scale_aa), 0)
+                draw_s = ImageDraw.Draw(mask_spec)
                 shifted_poly = [((p[0] - min_x) * scale_aa, (p[1] - min_y) * scale_aa)
                                 for p in padded_poly]
-                draw_h.polygon(shifted_poly, fill=255)
-                mask_hat = mask_hat.resize((bw, bh), Image.Resampling.LANCZOS)
+                draw_s.polygon(shifted_poly, fill=255)
+                mask_spec = mask_spec.resize((bw, bh), Image.Resampling.LANCZOS)
 
-                # The hat is non-convex, so its bounding box contains a lot of
-                # neighbouring content; replace outside-mask pixels with the
-                # hat's mean colour so they do not pollute the LAB match.
+                # The spectre is non-convex, so its bounding box contains a
+                # lot of neighbouring content; replace outside-mask pixels
+                # with the tile's mean colour so they do not pollute the
+                # LAB match.
                 arr = np.asarray(s_img, dtype=np.float32)
-                m = np.asarray(mask_hat, dtype=np.float32)[:, :, None] / 255.0
+                m = np.asarray(mask_spec, dtype=np.float32)[:, :, None] / 255.0
                 m_sum = float(m.sum())
                 if m_sum > 0.0:
                     mean_rgb = (arr * m).sum(axis=(0, 1)) / m_sum
@@ -497,7 +491,7 @@ class SmartEngine:
                     feat_img = s_img
 
                 sectors_data.append({
-                    "meta": (i_hat, int(min_x), int(min_y), mask_hat, bw, bh, False),
+                    "meta": (i_spec, int(min_x), int(min_y), mask_spec, bw, bh, False),
                     "feature": self._compute_sector_feature(feat_img, edge_aware)
                 })
 
