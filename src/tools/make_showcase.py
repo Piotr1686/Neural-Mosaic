@@ -50,10 +50,12 @@ GALLERY_FILES = [
     ("mosaic_portrait_triangle.jpg", "Smart mosaic - triangle tiles"),
     ("mosaic_portrait_hexagon.jpg",  "Smart mosaic - hexagon tiles"),
     ("mosaic_portrait_einstein_hat.jpg", "Smart mosaic - einstein hat tiles"),
+    ("mosaic_portrait_spectre.jpg",  "Smart mosaic - spectre tiles"),
     ("detail_square.jpg",            "Tile detail crop - square mosaic"),
     ("detail_triangle.jpg",          "Tile detail crop - triangle mosaic"),
     ("detail_hexagon.jpg",           "Tile detail crop - hexagon mosaic"),
     ("detail_einstein_hat.jpg",      "Tile detail crop - einstein hat mosaic"),
+    ("detail_spectre.jpg",           "Tile detail crop - spectre mosaic"),
     ("symbol_bw.jpg",                "Symbol mosaic - black_on_white"),
     ("symbol_detail.jpg",            "Glyph detail crop - B&W symbol mosaic"),
 ]

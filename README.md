@@ -42,11 +42,13 @@
 </p>
 
 <p align="center">
-  <img src="assets/examples/mosaic_portrait_einstein_hat.jpg" width="60%" alt="Einstein hat tiling" />
+  <img src="assets/examples/mosaic_portrait_einstein_hat.jpg" width="48%" alt="Einstein hat tiling" />
+  <img src="assets/examples/mosaic_portrait_spectre.jpg" width="48%" alt="Spectre tiling" />
 </p>
 
 <p align="center">
-  <em>Einstein hat tiling — the aperiodic monotile (<a href="https://arxiv.org/abs/2303.10798">arXiv:2303.10798</a>); the pattern never repeats</em>
+  <em>Aperiodic monotiles — left: einstein hat (<a href="https://arxiv.org/abs/2303.10798">arXiv:2303.10798</a>),
+  right: chiral spectre (<a href="https://arxiv.org/abs/2305.17743">arXiv:2305.17743</a>); the patterns never repeat</em>
 </p>
 
 <details>
@@ -58,6 +60,7 @@
 </p>
 <p align="center">
   <img src="assets/examples/detail_einstein_hat.jpg" width="45%" />
+  <img src="assets/examples/detail_spectre.jpg" width="45%" />
 </p>
 </details>
 
