@@ -377,7 +377,7 @@ class App(ctk.CTk):
         self.seg_scale_p.pack(pady=5)
 
         ctk.CTkLabel(frame, text="Tile Shape").pack(pady=(10, 0))
-        shapes = ["square", "rectangle_3x1", "brick_wall", "hexagon", "hexagon_romb", "romb", "triangle", "kite"]
+        shapes = ["square", "rectangle_3x1", "brick_wall", "hexagon", "hexagon_romb", "romb", "triangle", "kite", "einstein_hat"]
         self.combo_shape = ctk.CTkComboBox(
             frame, values=shapes,
         )

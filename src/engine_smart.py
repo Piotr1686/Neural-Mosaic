@@ -3,7 +3,8 @@ src/engine_smart.py
 -------------------
 Colour-matched photomosaic engine (SmartEngine).
 
-Supports multiple tile geometries including the kite (diamond) shape.
+Supports multiple tile geometries including the kite (diamond) shape and
+the aperiodic "einstein hat" monotile (see src/hat_tiling.py).
 Each sector of the target image is matched to the best-fitting tile from
 the pre-built CIELAB feature index with spatial anti-repetition enforcement.
 
@@ -24,6 +25,8 @@ from tqdm import tqdm
 from scipy.spatial.distance import cdist
 from scipy.spatial import cKDTree
 import skimage.color
+
+from .hat_tiling import generate_hat_tiling
 
 # Must match EDGE_WEIGHT in indexer_smart.py.
 EDGE_WEIGHT = 2.0
@@ -424,6 +427,74 @@ class SmartEngine:
                         "meta": (i_hat, int(min_x), int(min_y), mask_kite, bw, bh, len(hat_kites) > 1),
                         "feature": self._compute_sector_feature(s_img, edge_aware)
                     })
+
+        # ==========================================
+        # EINSTEIN HAT TILING (APERIODIC MONOTILE)
+        # ==========================================
+        elif shape_mode == "einstein_hat":
+            print(f"Mode: Einstein Hat (aperiodic monotile). Borders: {border_mode}")
+
+            hats = generate_hat_tiling(target_w, target_h, base_s)
+            n_mirrored = sum(1 for h in hats if h.mirrored)
+            print(f"Aperiodic tiling ready: {len(hats)} hats "
+                  f"({n_mirrored} mirrored anti-hats)")
+
+            scale_aa = 4
+            for i_hat, hat in enumerate(tqdm(hats, desc="Sampling hat sectors")):
+                hat_cx = sum(p[0] for p in hat.points) / len(hat.points)
+                hat_cy = sum(p[1] for p in hat.points) / len(hat.points)
+                padded_poly = [
+                    (hat_cx + (px - hat_cx) * render_padding,
+                     hat_cy + (py - hat_cy) * render_padding)
+                    for px, py in hat.points
+                ]
+
+                # Clamp the bounding box at the top/left edges so the paste
+                # origin stays non-negative (alpha_composite requirement).
+                min_x = max(0.0, min(p[0] for p in padded_poly))
+                min_y = max(0.0, min(p[1] for p in padded_poly))
+                max_x = max(p[0] for p in padded_poly)
+                max_y = max(p[1] for p in padded_poly)
+
+                bw, bh = int(max_x - min_x), int(max_y - min_y)
+                if bw <= 0 or bh <= 0: continue
+
+                safe_box = (int(min_x), int(min_y),
+                            min(target_w, int(max_x)), min(target_h, int(max_y)))
+                if safe_box[2] <= safe_box[0] or safe_box[3] <= safe_box[1]: continue
+
+                s_img = target.crop(safe_box)
+                if s_img.size != (bw, bh):
+                    tmp = Image.new("RGB", (bw, bh), (0,0,0))
+                    tmp.paste(s_img, (0, 0))
+                    s_img = tmp
+
+                # Anti-aliased polygon mask (supersampled, like _get_shape_mask).
+                mask_hat = Image.new("L", (bw * scale_aa, bh * scale_aa), 0)
+                draw_h = ImageDraw.Draw(mask_hat)
+                shifted_poly = [((p[0] - min_x) * scale_aa, (p[1] - min_y) * scale_aa)
+                                for p in padded_poly]
+                draw_h.polygon(shifted_poly, fill=255)
+                mask_hat = mask_hat.resize((bw, bh), Image.Resampling.LANCZOS)
+
+                # The hat is non-convex, so its bounding box contains a lot of
+                # neighbouring content; replace outside-mask pixels with the
+                # hat's mean colour so they do not pollute the LAB match.
+                arr = np.asarray(s_img, dtype=np.float32)
+                m = np.asarray(mask_hat, dtype=np.float32)[:, :, None] / 255.0
+                m_sum = float(m.sum())
+                if m_sum > 0.0:
+                    mean_rgb = (arr * m).sum(axis=(0, 1)) / m_sum
+                    filled = arr * m + mean_rgb * (1.0 - m)
+                    feat_img = Image.fromarray(
+                        np.clip(filled, 0, 255).astype(np.uint8))
+                else:
+                    feat_img = s_img
+
+                sectors_data.append({
+                    "meta": (i_hat, int(min_x), int(min_y), mask_hat, bw, bh, False),
+                    "feature": self._compute_sector_feature(feat_img, edge_aware)
+                })
 
         # ==========================================
         # STANDARD GRID (HexagonRomb, Square, Triangle, …)
