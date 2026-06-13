@@ -556,8 +556,18 @@ class SmartEngine:
                 mask_flip = self._get_shape_mask(shape_mode, tile_w, tile_h, True, padding=render_padding)
 
             print("Scanning grid...")
-            for r in range(rows):
-                for c in range(cols):
+            # Start at -1, not 0: offset/half-step geometries (hexagon,
+            # hexagon_romb, romb, brick_wall, triangle) leave a triangular or
+            # half-tile gap along the top/left edge because odd rows are pushed
+            # right by offset_odd_row_x and rows below the first don't cover the
+            # canvas top. The phantom -1 row/column fills those wedges; its
+            # tiles land at negative px/py and are clipped by the safe-box +
+            # safe[2]<=safe[0] guards below (off-canvas tiles, e.g. square's
+            # even-row c=-1, collapse to zero width and are skipped). Pillow
+            # 11.1 accepts negative dest in alpha_composite, so the partially
+            # visible edge tiles composite correctly.
+            for r in range(-1, rows):
+                for c in range(-1, cols):
                     pos_x = c * step_x
                     pos_y = r * step_y
                     is_flipped = False
