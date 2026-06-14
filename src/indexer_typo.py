@@ -22,6 +22,30 @@ INDEX_FILE = Path("data/typo_index.pkl")
 SAMPLE_SIZE = 40  # Glyph render size (px) used for density analysis.
 
 
+def _supported_codepoints(font_path):
+    """Return the set of Unicode codepoints the font actually maps.
+
+    Used to skip codepoints a font does not define: those render as the
+    font's ``.notdef`` glyph (often a visible "tofu" box) whose ink density
+    passes the blank-glyph filter, scattering identical boxes through the
+    mosaic. Returns None if the cmap cannot be read, so analyse falls back
+    to bbox-only filtering.
+    """
+    try:
+        from fontTools.ttLib import TTFont
+        tt = TTFont(str(font_path), fontNumber=0, lazy=True)
+        try:
+            cps = set()
+            for table in tt["cmap"].tables:
+                if table.isUnicode():
+                    cps.update(table.cmap.keys())
+            return cps
+        finally:
+            tt.close()
+    except Exception:
+        return None
+
+
 def analyze_font(font_path, full_cjk: bool = False):
     """Analyse a single font file and return character density data.
 
@@ -44,6 +68,10 @@ def analyze_font(font_path, full_cjk: bool = False):
     except Exception:
         return []
 
+    # Codepoints the font actually maps; None => cmap unreadable, fall back
+    # to the bbox/brightness filters only.
+    supported = _supported_codepoints(font_path)
+
     # Unicode ranges to probe.
     cjk_end = 40960 if full_cjk else 20100  # U+9FFF vs sample
 
@@ -65,6 +93,10 @@ def analyze_font(font_path, full_cjk: bool = False):
 
     for start, end in ranges:
         for code in range(start, end):
+            # Skip codepoints the font does not define (they render as .notdef
+            # tofu boxes that slip past the brightness filter).
+            if supported is not None and code not in supported:
+                continue
             char = chr(code)
             try:
                 # 1. Check that the glyph has non-zero dimensions.

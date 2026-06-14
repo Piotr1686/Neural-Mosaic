@@ -635,6 +635,12 @@ class App(ctk.CTk):
             self.lbl_preview_status_p.configure(
                 text="Load index and select an image first")
             return
+        # allow_mirror / edge_aware affect matching but render_preview reads them
+        # from engine.settings (not kwargs). Sync from the checkboxes here, on the
+        # main thread before the debounced render fires, so the preview reflects
+        # the current settings instead of the last full render's state.
+        self.smart_engine.settings["allow_mirror"] = bool(self.check_mirror.get())
+        self.smart_engine.settings["edge_aware"] = bool(self.check_edge_aware.get())
         params = {
             "shape_mode": self.combo_shape.get(),
             "tile_scale": float(self.seg_scale_p.get() or "1.0"),
@@ -699,10 +705,34 @@ class App(ctk.CTk):
         self._preview_last_fit_p = size
         self._fit_preview(self.lbl_preview_p, self._preview_pil_p, "p", size)
 
+    def _typo_engine_for_groups(self, selected_groups):
+        """Return a TypoEngine filtered to selected_groups, cached by group set.
+
+        Rebuilds (re-reads the index) only when the selection changes, so
+        previews that only tweak scale/mode/zoom reuse the same engine.
+        """
+        key = frozenset(selected_groups)
+        if getattr(self, "_typo_preview_key", None) != key:
+            self._typo_preview_engine = TypoEngine(selected_groups=selected_groups)
+            self._typo_preview_key = key
+        return self._typo_preview_engine
+
     def _trigger_typo_preview(self):
-        if not self.typo_engine.library or not getattr(self, "path_t", None):
+        if not getattr(self, "path_t", None):
             self.lbl_preview_status_t.configure(
                 text="Load typo index and select an image first")
+            return
+        # Match run_typo: the preview must reflect the selected Font Groups,
+        # not the all-groups self.typo_engine used only as a load sanity check.
+        selected_groups = [k for k, v in self.font_group_vars.items() if v.get()]
+        if not selected_groups:
+            self.lbl_preview_status_t.configure(
+                text="Select at least one Font Group")
+            return
+        engine = self._typo_engine_for_groups(selected_groups)
+        if not engine.library:
+            self.lbl_preview_status_t.configure(
+                text="No glyphs after filter — select more groups")
             return
         params = {
             "mode": self.combo_mode.get(),
@@ -713,7 +743,7 @@ class App(ctk.CTk):
         self.btn_preview_t.configure(state="disabled")
         self.lbl_preview_status_t.configure(text="Rendering preview...")
         self._preview_typo.request(
-            self.typo_engine,
+            engine,
             self.path_t,
             short_edge=short_edge,
             params=params,

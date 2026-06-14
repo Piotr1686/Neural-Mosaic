@@ -646,7 +646,10 @@ class SmartEngine:
             print("  Edge-Aware Matching active (79-dim features)")
 
         tgt_features = np.array([x["feature"] for x in sectors_data])
-        used_counts = np.zeros(len(self.paths), dtype=np.int32)
+        # int64: used_counts**2 in the frequency penalty (below) overflows int32
+        # once a tile is reused >46340 times (huge render + tiny library), which
+        # would wrap negative and invert the penalty.
+        used_counts = np.zeros(len(self.paths), dtype=np.int64)
         sector_assignments = -1 * np.ones(len(sectors_data), dtype=np.int32)
         failed_tiles = 0
 
