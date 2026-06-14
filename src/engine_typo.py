@@ -89,7 +89,7 @@ class TypoEngine:
                 self.loaded_fonts[key] = ImageFont.load_default()
         return self.loaded_fonts[key]
 
-    def _preprocess_image(self, img, mode):
+    def _preprocess_image(self, img):
         img = ImageOps.autocontrast(img, cutoff=2)
         img = img.filter(ImageFilter.UnsharpMask(radius=2, percent=150, threshold=3))
         enhancer = ImageEnhance.Contrast(img)
@@ -114,17 +114,6 @@ class TypoEngine:
         w, h = original.size
         out_w = target_res
         out_h = int(target_res * h / w)
-        result = self._do_render(original, out_w, out_h, cell_w, cell_h, mode, variation, progress_cb=progress_cb)
-        result.save(output_path, dpi=(300, 300))
-
-    def render_sized(self, input_path, output_path, out_w, out_h, mode="black_on_white",
-                     scale=1.0, variation=20, progress_cb=None):
-        """Render at explicit pixel dimensions — used by the preview pipeline."""
-        if not self.library:
-            return
-        cell_w = max(6, int(14 * scale))
-        cell_h = int(cell_w * 1.6)
-        original = Image.open(input_path).convert("RGB")
         result = self._do_render(original, out_w, out_h, cell_w, cell_h, mode, variation, progress_cb=progress_cb)
         result.save(output_path, dpi=(300, 300))
 
@@ -153,7 +142,7 @@ class TypoEngine:
         cols = out_w // cell_w
         rows = out_h // cell_h
 
-        processed = self._preprocess_image(original, mode)
+        processed = self._preprocess_image(original)
         map_img = processed.resize((cols, rows), Image.Resampling.LANCZOS)
         gray_data = np.array(map_img.convert("L")) / 255.0
 

@@ -359,7 +359,7 @@ def _run_batch(args: argparse.Namespace, log: logging.Logger) -> None:
     for i, src in enumerate(sources, 1):
         out = _batch_output_path(args.output_dir, src.stem, args)
 
-        if out.exists():
+        if out.exists() and out.stat().st_size > 0:
             log.info("[%d/%d] SKIP (exists): %s", i, len(sources), out.name)
             skipped += 1
             continue

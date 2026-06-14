@@ -228,16 +228,6 @@ class SmartEngine:
         result = self._do_render(target, shape_mode, tile_scale, border_mode, blend_strength, tint_strength, progress_cb=progress_cb)
         result.save(output_path, quality=95)
 
-    def render_sized(self, target_path, output_path, target_w, target_h, shape_mode, tile_scale, border_mode=False, blend_strength=0.0, tint_strength=0.0, progress_cb=None):
-        """Render at explicit pixel dimensions — used by the preview pipeline."""
-        if not self.paths:
-            print("ERROR: Index not loaded.")
-            return
-        target = Image.open(target_path).convert("RGB")
-        target = target.resize((target_w, target_h), Image.Resampling.LANCZOS)
-        result = self._do_render(target, shape_mode, tile_scale, border_mode, blend_strength, tint_strength, progress_cb=progress_cb)
-        result.save(output_path, quality=95)
-
     def render_preview(self, target_path, short_edge=512, shape_mode="hexagon_romb",
                        tile_scale=1.0, border_mode=False):
         """Return a PIL Image preview at ~short_edge px short side — no file I/O."""
@@ -616,7 +606,7 @@ class SmartEngine:
         # ==========================================
         if not sectors_data:
             # Returning None here used to surface as a cryptic AttributeError
-            # in create_mosaic/render_sized (result.save on None).
+            # in create_mosaic (result.save on None).
             raise ValueError(
                 f"No tiles generated for {target_w}x{target_h} target with "
                 f"shape '{shape_mode}' and tile scale {tile_scale} — the "

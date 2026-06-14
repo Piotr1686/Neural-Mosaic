@@ -161,6 +161,7 @@ class PoliteDownloader:
         headers = {"Authorization": f"Bearer {token}"} if token else {}
         page_size = 20
         fetched = 0
+        auth_failures = 0  # consecutive 401s; bail if re-auth keeps failing
 
         while fetched < limit:
             if self._stop_event.is_set():
@@ -185,6 +186,10 @@ class PoliteDownloader:
             if resp is None:
                 break
             if resp.status_code == 401:
+                auth_failures += 1
+                if auth_failures >= 3:
+                    self._log("Openverse: repeated 401 after re-auth — giving up.")
+                    break
                 self._openverse_token = None
                 token = self._get_openverse_token()
                 headers = {"Authorization": f"Bearer {token}"} if token else {}
@@ -196,6 +201,7 @@ class PoliteDownloader:
                 continue
             if not resp.ok:
                 break
+            auth_failures = 0  # successful response — reset the 401 counter
 
             results = resp.json().get("results", [])
             for item in results:
@@ -296,7 +302,7 @@ class PoliteDownloader:
                     return
                 links = item.get("links", [])
                 href = next((l["href"] for l in links if l.get("rel") == "preview"), None)
-                nasa_id = item.get("data", [{}])[0].get("nasa_id", "")
+                nasa_id = (item.get("data") or [{}])[0].get("nasa_id", "")
                 img_id = f"nasa_{nasa_id}"
                 if href and nasa_id and img_id not in self._downloaded_ids:
                     yield href, img_id
@@ -379,7 +385,7 @@ class PoliteDownloader:
             return None
         pages = resp.json().get("query", {}).get("pages", {})
         for page in pages.values():
-            info = page.get("imageinfo", [{}])[0]
+            info = (page.get("imageinfo") or [{}])[0]
             meta = info.get("extmetadata", {})
             license_id = meta.get("LicenseShortName", {}).get("value", "")
             # Only CC0 and PD — reject CC-BY, CC-BY-SA etc.

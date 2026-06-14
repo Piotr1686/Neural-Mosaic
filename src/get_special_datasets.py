@@ -72,6 +72,13 @@ def download_file_resume(url, filename):
 
     resp = requests.get(url, headers=headers, stream=True)
 
+    # If we asked for a Range but the server ignored it (replied 200 with the
+    # whole body instead of 206), appending would corrupt the file. Restart.
+    if mode == 'ab' and resp.status_code != 206:
+        print("   [WARN] Server ignored Range request; restarting from scratch.")
+        mode = 'wb'
+        existing_size = 0
+
     with open(filename, mode) as f, tqdm(
         total=total_size,
         initial=existing_size,

@@ -180,6 +180,7 @@ def main(full_cjk: bool = False):
         global_library[0]["norm_density"] = 0.5
 
     print(f"Saving {len(global_library)} glyphs to {INDEX_FILE}...")
+    INDEX_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(INDEX_FILE, "wb") as f:
         pickle.dump(global_library, f)
 

@@ -93,6 +93,14 @@ def download_file_resume(url, filename):
 
     # 4. Stream the response and write in 1 MB chunks.
     response = requests.get(url, headers=headers, stream=True)
+
+    # If we asked for a Range but the server ignored it (replied 200 with the
+    # whole body instead of 206), appending would corrupt the file. Restart.
+    if mode == 'ab' and response.status_code != 206:
+        print("   [WARN] Server ignored Range request; restarting from scratch.")
+        mode = 'wb'
+        existing_size = 0
+
     chunk_size = 1024 * 1024  # 1 MB
 
     with open(filename, mode) as file, tqdm(

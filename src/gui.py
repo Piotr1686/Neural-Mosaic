@@ -960,7 +960,7 @@ class App(ctk.CTk):
         return os.path.join(self.output_dir, f"{proj}_{prefix}_{ts}{ext}")
 
     def run_photo(self):
-        if not self.smart_engine or not hasattr(self, 'path_p'):
+        if not self.smart_engine or not getattr(self, 'path_p', None):
             self.log("Error: Load Smart Index and Select Image first!")
             return
         out = self._get_auto_filename("Smart", ".jpg")
@@ -973,8 +973,8 @@ class App(ctk.CTk):
         shape = self.combo_shape.get()
         scale = float(self.seg_scale_p.get() or "1.0")
         border_mode = bool(self.check_border.get())
-        blend_strength = int(self.seg_blend.get().replace("%", "")) / 100.0
-        tint_strength = int(self.seg_tint.get().replace("%", "")) / 100.0
+        blend_strength = int((self.seg_blend.get() or "0%").replace("%", "")) / 100.0
+        tint_strength = int((self.seg_tint.get() or "0%").replace("%", "")) / 100.0
 
         if res in ("8K", "16K"):
             self.log(f"NOTE: {res} rendering requires ~2-4 GB free RAM. "
@@ -1010,7 +1010,7 @@ class App(ctk.CTk):
         self.btn_run_p.configure(state="normal")
 
     def run_typo(self):
-        if not hasattr(self, 'path_t'):
+        if not getattr(self, 'path_t', None):
             self.log("Error: Select Input Image first")
             return
         out = self._get_auto_filename("Symbol", ".png")
@@ -1026,6 +1026,14 @@ class App(ctk.CTk):
             return
         variation = int(self.seg_variation.get())
 
+        # Reuse the group-filtered engine the preview already built (cached by
+        # group set, resolved on the main thread) instead of re-reading the
+        # index pickle on every render.
+        active_engine = self._typo_engine_for_groups(selected_groups)
+        if not active_engine.library:
+            self.log("ERROR: No glyphs after filter. Select more groups.")
+            return
+
         self.btn_run_t.configure(state="disabled")
         self.progress_render_t.set(0)
         self.progress_render_t.grid()
@@ -1038,11 +1046,6 @@ class App(ctk.CTk):
             self.log(f"Starting Multi-Font Render...")
             self.log(f"Groups: {', '.join(selected_groups)}")
             try:
-                from .engine_typo import TypoEngine
-                active_engine = TypoEngine(selected_groups=selected_groups)
-                if not active_engine.library:
-                    self.log("ERROR: No glyphs after filter. Select more groups.")
-                    return
                 active_engine.process(
                     self.path_t, out, res, mode,
                     scale=scale,

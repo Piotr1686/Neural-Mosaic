@@ -28,6 +28,7 @@ LIBRARY_DIRS = [
     Path("data/library_public_2/tiles"),
     Path("data/library_extended/tiles"),
     Path("data/library_private/tiles"),
+    Path("data/tiles"),  # legacy downloader.py / get_* target (config.DATA_DIR)
 ]
 
 # Must match EDGE_WEIGHT in engine_smart.py.
@@ -64,13 +65,15 @@ class SmartIndexer:
             scan_dirs = LIBRARY_DIRS
 
         for lib_dir in scan_dirs:
-            count = len(list(lib_dir.glob("*.jpg")) + list(lib_dir.glob("*.jpeg")) +
-                        list(lib_dir.glob("*.png")) + list(lib_dir.glob("*.webp")))
-            print(f"  {lib_dir}: {count} images")
+            # Count from the same recursive walk that collects paths, so the
+            # printed count matches what is actually indexed (the old top-level
+            # glob omitted subfolders and .bmp, and scanned each dir twice).
+            before = len(image_paths)
             for root, _dirs, files in os.walk(lib_dir):
                 for file in files:
                     if os.path.splitext(file)[1].lower() in valid_extensions:
                         image_paths.append(os.path.join(root, file))
+            print(f"  {lib_dir}: {len(image_paths) - before} images")
 
         if not image_paths:
             print("No images found! Place tile images in one of the LIBRARY_DIRS.")

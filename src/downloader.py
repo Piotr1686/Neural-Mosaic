@@ -9,6 +9,7 @@ images) without saturating RAM or leaving broken files on disk.
 """
 import asyncio
 import logging
+import os
 import sys
 import random
 import aiohttp
@@ -69,8 +70,13 @@ class FastDownloader:
                         content = await response.read()
                         # Reject suspiciously small responses — likely error pages.
                         if len(content) > 1000:
-                            async with aiofiles.open(filename, mode='wb') as f:
+                            # Write to a temp file then atomically rename, so an
+                            # interrupted write never leaves a truncated .jpg that
+                            # the size>0 skip-check would treat as complete.
+                            tmp = filename.with_suffix(".part")
+                            async with aiofiles.open(tmp, mode='wb') as f:
                                 await f.write(content)
+                            os.replace(tmp, filename)
                     pbar.update(1)
         except Exception:
             # At 100 k downloads, transient failures are expected — skip silently.
