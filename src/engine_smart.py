@@ -630,7 +630,11 @@ class SmartEngine:
         print(f"Building Spatial Tree for {len(sectors_data)} tiles...")
         points = [(s["meta"][1] + s["meta"][4]/2.0, s["meta"][2] + s["meta"][5]/2.0) for s in sectors_data]
         search_radius = base_s * 1.5
-        _nkey = (base_s, shape_mode, target_w, target_h)
+        # border_mode changes render_padding (0.94 vs 1.02), which can shift the
+        # sector count of edge tiles for kite/spectre. Without it in the key, a
+        # second render of the same geometry with the border toggled reuses a
+        # stale neighbors_map of the wrong length -> IndexError.
+        _nkey = (base_s, shape_mode, target_w, target_h, border_mode)
         neighbors_map = self._get_neighbors_map(_nkey, points, search_radius)
 
         print("Matching and generating final mosaic...")

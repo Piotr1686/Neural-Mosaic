@@ -98,8 +98,11 @@ def _check_paths(index_paths: list, disk_paths: set) -> dict:
 
 
 def _check_lab_coverage(features: np.ndarray) -> dict:
-    # Mean L across the 5×5 grid per tile; L is every 3rd element from index 0
-    L_vals = features[:, 0::3].mean(axis=1)
+    # Mean L across the 5x5 grid per tile; L is every 3rd element from index 0.
+    # Slice the first 75 dims first: the index is written as 79-dim (5x5_edge),
+    # and the 4 trailing edge features (scaled by EDGE_WEIGHT) would otherwise
+    # be picked up by [::3] and contaminate the luminance histogram.
+    L_vals = features[:, :75][:, 0::3].mean(axis=1)
     hist, edges = np.histogram(L_vals, bins=LAB_BUCKETS, range=(0.0, 1.0))
     total = len(L_vals)
     fractions = hist / total

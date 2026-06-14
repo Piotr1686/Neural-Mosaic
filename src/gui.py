@@ -848,7 +848,7 @@ class App(ctk.CTk):
                 self.log("Engine Reloaded with new data.")
             except Exception as e:
                 self.log(f"Indexer Error: {e}")
-        threading.Thread(target=_run).start()
+        threading.Thread(target=_run, daemon=True).start()
 
     def load_index(self):
         def _load():
@@ -858,9 +858,15 @@ class App(ctk.CTk):
                 self.log("Smart Engine Ready!")
             except Exception as e:
                 self.log(f"Error: {e}")
-        threading.Thread(target=_load).start()
+        threading.Thread(target=_load, daemon=True).start()
 
     def load_typo_index(self):
+        def _set_status(text, color):
+            # Tkinter is not thread-safe: marshal the widget update onto the
+            # main loop instead of configuring from this worker thread.
+            self.after(0, lambda: self.lbl_typo_status.configure(
+                text=text, text_color=color))
+
         def _load():
             self.log("Loading Font Index from disk...")
             try:
@@ -868,21 +874,21 @@ class App(ctk.CTk):
                 if self.typo_engine.library:
                     count = len(self.typo_engine.library)
                     self.log(f"SUCCESS: Loaded {count} symbols.")
-                    self.lbl_typo_status.configure(text=f"Status: Ready ({count} sym)", text_color="#33cc55")
+                    _set_status(f"Status: Ready ({count} sym)", "#33cc55")
                 else:
                     self.log("ERROR: Index empty.")
-                    self.lbl_typo_status.configure(text="Status: Missing", text_color="#ff4444")
+                    _set_status("Status: Missing", "#ff4444")
             except Exception as e:
                 self.log(f"Error loading typo index: {e}")
-                self.lbl_typo_status.configure(text="Status: Error", text_color="#ff4444")
-        threading.Thread(target=_load).start()
+                _set_status("Status: Error", "#ff4444")
+        threading.Thread(target=_load, daemon=True).start()
 
     def scan_fonts(self):
         def _scan():
             self.log("Starting Font Scan...")
             subprocess.run([sys.executable, "-m", "src.indexer_typo"], check=False)
             self.log("Scan Complete! Click 'Load Typo Index'.")
-        threading.Thread(target=_scan).start()
+        threading.Thread(target=_scan, daemon=True).start()
 
     def select_output_dir(self):
         self.output_dir = filedialog.askdirectory()
@@ -967,7 +973,7 @@ class App(ctk.CTk):
                 traceback.print_exc()
             finally:
                 self.after(0, self._finish_render_p)
-        threading.Thread(target=_run).start()
+        threading.Thread(target=_run, daemon=True).start()
 
     def _finish_render_p(self):
         self.progress_render_p.grid_remove()
@@ -1020,7 +1026,7 @@ class App(ctk.CTk):
                 traceback.print_exc()
             finally:
                 self.after(0, self._finish_render_t)
-        threading.Thread(target=_run).start()
+        threading.Thread(target=_run, daemon=True).start()
 
     def _finish_render_t(self):
         self.progress_render_t.grid_remove()
@@ -1273,7 +1279,10 @@ class App(ctk.CTk):
                 self._lib_shown = 0
                 self._lib_images = []
                 self._lib_cell_frames.clear()
-                self._check_library_status()
+                # Runs on a worker thread; _check_library_status configures
+                # sidebar widgets, so marshal it onto the main loop (Tk is
+                # not thread-safe).
+                self.after(0, self._check_library_status)
 
                 if not self._lib_paths:
                     self.after(0, lambda: self.lbl_lib_count.configure(
