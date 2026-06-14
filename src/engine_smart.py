@@ -57,7 +57,6 @@ class SmartEngine:
             self.settings = {
                 "allow_mirror": True,
                 "edge_aware": False,
-                "tile_size": 100,
                 "freq_penalty": 30.0,
             }
             self._neighbors_cache: dict = {}
@@ -269,6 +268,24 @@ class SmartEngine:
 
         return edge_aware, allow_mirror
 
+    @staticmethod
+    def _mean_fill_outside_mask(s_img, mask):
+        """Replace pixels outside *mask* with the in-mask mean colour.
+
+        A non-convex tile (kite, spectre) carries a lot of neighbouring content
+        in its bounding box; filling the outside with the tile's own mean keeps
+        that content from polluting the LAB feature match. Returns *s_img*
+        unchanged if the mask is empty.
+        """
+        arr = np.asarray(s_img, dtype=np.float32)
+        m = np.asarray(mask, dtype=np.float32)[:, :, None] / 255.0
+        m_sum = float(m.sum())
+        if m_sum <= 0.0:
+            return s_img
+        mean_rgb = (arr * m).sum(axis=(0, 1)) / m_sum
+        filled = arr * m + mean_rgb * (1.0 - m)
+        return Image.fromarray(np.clip(filled, 0, 255).astype(np.uint8))
+
     def _do_render(self, target, shape_mode, tile_scale, border_mode=False, blend_strength=0.0, tint_strength=0.0, progress_cb=None):
         """Core rendering kernel — accepts a pre-scaled PIL Image, returns PIL Image.
 
@@ -423,16 +440,7 @@ class SmartEngine:
                     # Replace outside-mask pixels with the kite's mean colour
                     # so the bounding box does not leak neighbouring content
                     # into the LAB match (same treatment as the spectre mode).
-                    arr = np.asarray(s_img, dtype=np.float32)
-                    m = np.asarray(mask_kite, dtype=np.float32)[:, :, None] / 255.0
-                    m_sum = float(m.sum())
-                    if m_sum > 0.0:
-                        mean_rgb = (arr * m).sum(axis=(0, 1)) / m_sum
-                        filled = arr * m + mean_rgb * (1.0 - m)
-                        feat_img = Image.fromarray(
-                            np.clip(filled, 0, 255).astype(np.uint8))
-                    else:
-                        feat_img = s_img
+                    feat_img = self._mean_fill_outside_mask(s_img, mask_kite)
 
                     sectors_data.append({
                         "meta": (i_hat, int(min_x), int(min_y), mask_kite, bw, bh, len(hat_kites) > 1),
@@ -490,16 +498,7 @@ class SmartEngine:
                 # lot of neighbouring content; replace outside-mask pixels
                 # with the tile's mean colour so they do not pollute the
                 # LAB match.
-                arr = np.asarray(s_img, dtype=np.float32)
-                m = np.asarray(mask_spec, dtype=np.float32)[:, :, None] / 255.0
-                m_sum = float(m.sum())
-                if m_sum > 0.0:
-                    mean_rgb = (arr * m).sum(axis=(0, 1)) / m_sum
-                    filled = arr * m + mean_rgb * (1.0 - m)
-                    feat_img = Image.fromarray(
-                        np.clip(filled, 0, 255).astype(np.uint8))
-                else:
-                    feat_img = s_img
+                feat_img = self._mean_fill_outside_mask(s_img, mask_spec)
 
                 sectors_data.append({
                     "meta": (i_spec, int(min_x), int(min_y), mask_spec, bw, bh, False),

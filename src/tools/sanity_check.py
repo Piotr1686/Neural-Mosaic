@@ -27,16 +27,14 @@ import numpy as np
 from PIL import Image
 from tqdm import tqdm
 
+from src.library_dirs import LIBRARY_DIRS as _LIBRARY_DIRS
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 INDEX_PATH = PROJECT_ROOT / "data" / "smart_index.pkl"
 
-LIBRARY_DIRS = [
-    PROJECT_ROOT / "data" / "library_starter" / "tiles",
-    PROJECT_ROOT / "data" / "library_public" / "tiles",
-    PROJECT_ROOT / "data" / "library_public_2" / "tiles",
-    PROJECT_ROOT / "data" / "library_extended" / "tiles",
-    PROJECT_ROOT / "data" / "library_private" / "tiles",
-]
+# Resolve the shared (relative) library dirs against the project root so the
+# tool works regardless of the current working directory.
+LIBRARY_DIRS = [PROJECT_ROOT / d for d in _LIBRARY_DIRS]
 
 VALID_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
 INTEGRITY_SAMPLE_SIZE = 500

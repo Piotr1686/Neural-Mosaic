@@ -21,15 +21,7 @@ from PIL import Image
 from tqdm import tqdm
 import skimage.color
 
-
-LIBRARY_DIRS = [
-    Path("data/library_starter/tiles"),
-    Path("data/library_public/tiles"),
-    Path("data/library_public_2/tiles"),
-    Path("data/library_extended/tiles"),
-    Path("data/library_private/tiles"),
-    Path("data/tiles"),  # legacy downloader.py / get_* target (config.DATA_DIR)
-]
+from src.library_dirs import LIBRARY_DIRS  # single source of truth (re-exported)
 
 # Must match EDGE_WEIGHT in engine_smart.py.
 EDGE_WEIGHT = 2.0

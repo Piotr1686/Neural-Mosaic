@@ -32,6 +32,9 @@ class Config:
     GHOSTING_OPACITY: float = float(os.getenv("GHOSTING_OPACITY", 0.25))
     
     # --- DATA ---
+    # Downloader target count only (read by downloader.FastDownloader). NOT a cap
+    # on the indexer or engine — both process every tile they find. Env key is
+    # NUM_TILES for historical reasons.
     NUM_IMAGES: int = int(os.getenv("NUM_TILES", 300000))
     
     # --- HARDWARE ---

@@ -13,11 +13,10 @@ import shutil
 from pathlib import Path
 from tqdm import tqdm
 
+from src.library_dirs import LIBRARY_DIRS
+
 # --- CONFIGURATION ---
-FOLDERS_TO_SCAN = [
-    Path("data/library_public/tiles"),
-    Path("data/library_private/tiles")
-]
+FOLDERS_TO_SCAN = LIBRARY_DIRS  # all library dirs, kept in sync via library_dirs
 TRASH_FOLDER = Path("data/duplicates_trash")
 
 def get_file_hash(filepath):

@@ -13,12 +13,11 @@ from pathlib import Path
 from PIL import Image
 from tqdm import tqdm
 
+from src.library_dirs import LIBRARY_DIRS
+
 # --- CONFIGURATION ---
-# Folders to scan and optimise.
-TARGET_DIRS = [
-    Path("data/tiles"),                 # Public-domain tile dump (~800 k images)
-    Path("data/library_private/tiles"), # Private tile library (~32.5 k images)
-]
+# Folders to scan and optimise — the full library set (see library_dirs).
+TARGET_DIRS = LIBRARY_DIRS
 
 # Target: resize images whose short side exceeds this value.
 # Images already smaller or equal are left untouched.
