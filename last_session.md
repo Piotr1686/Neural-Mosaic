@@ -1,52 +1,51 @@
 # last_session.md
 
-**Sesja:** 2026-06-14 · 11:00-12:18
+**Sesja:** 2026-06-21 · 20:45-23:35
 **Status:** ✓ Zakończona poprawnie
-**Punkt odniesienia (git):** 7bc6c07 @ main
+**Punkt odniesienia (git):** 59a0bff @ main
 
 ---
 
 ## ▸ NASTĘPNY KROK (zacznij tutaj)
 
-**Przebudować `data/typo_index.pkl` (`python -m src.indexer_typo` lub przycisk „Update Database (Scan Assets)" w GUI), by aktywować fix tofu `.notdef` z tej sesji — potem wyrenderować testową mozaikę typo i potwierdzić brak kwadracików tofu.**
+**Po przebudowie GitHub Pages (~1-2 min) zweryfikować live demo na żywo (Ctrl+F5, twardy refresh): przycisk „4 — Hexagon" = skok na drodze (IMG_20220727) i „5 — Spectre" = papuga (portrait3) ładują się w 8K bez czarnego ekranu. Jeśli OK — opcjonalnie zróżnicować pozostałe: `photo_mosaic`=portrait.jpg i `triangle`=portrait2.jpg to wciąż ta sama osoba (różne sceny).**
 
-Kontekst: `indexer_typo` pomija teraz codepointy spoza cmap fontu (fontTools), ale istniejący pickle wciąż zawiera stare tofu — fix z Fali 2 **nie zadziała bez reindeksacji**. To jedyny krok wymagający akcji użytkownika, by zmiany z tej sesji były w pełni widoczne w runtime.
+Kontekst: w tej sesji naprawiono duplikat źródeł w viewerze (spectre i hexagon były oba papugą). Pozostałe dwie mozaiki to różne zdjęcia tej samej osoby — do decyzji, czy to wystarczająco różne. Weryfikacja deployu to jedyny krok wymagający oka użytkownika (przeglądarka cache'uje kafelki).
 
 ---
 
 ## Co zrobiono w tej sesji
 
-- ✓ **Polski README** — utworzono prywatną wersję `D:\Programming_Projects\zz_INNE\README_PL.md` (poza repo, niewersjonowana)
-- ✓ **Code-review całości repo** (`/code-review high`, 4 etapy: silniki, GUI, CLI/config/indeksery, pipeline/tools) — 39 findingów po weryfikacji
-- ✓ **Fala 1** (`27ba89d`): crash `_nkey`+border_mode, cross-thread Tk (self.after), daemon=True na wątkach, sanity_check LAB `[:, :75]`, `src/fast_downloader.py` (alias)
-- ✓ **Fala 2** (`7c62ccf`): podgląd smart syncuje mirror/edge, podgląd typo po grupach (cache), tofu `.notdef` via fontTools cmap, `used_counts` int64
-- ✓ **Fala 3** (`d9aaf4d`): downloadery (cap 401, guard pustych list, HTTP 206 przy resume, atomowy zapis), indexer_smart skanuje data/tiles, batch skip niepuste, getattr-guard ścieżek
-- ✓ **Fala 4** (`7bc6c07`): `src/library_dirs.py` single source of truth, helper `_mean_fill_outside_mask`, usunięty martwy `tile_size`+`render_sized`
-- ✓ **182 testy passed** po każdej fali; wszystkie 4 commity **wypchnięte na origin/main**
-- ✓ MEMORY.md zaktualizowane (Rozwiązane problemy + Odrzucone podejścia)
+- ✓ **Głęboki audyt README** — 4 tiery, ~20 znalezisk (błędy faktograficzne vs kod, sprzeczności, wizualia, marketing)
+- ✓ **Opcja B — realne pisma egzotyczne w TypoEngine** (commit `1fbad26`): `indexer_typo` pełne pokrycie ~44 bloków Unicode + `--full-scan`; `engine_typo` filtr świadomy grup (`_LATIN_GROUPS`); testy zaktualizowane; reindeks → **43 829 glifów**, wszystkie 7 grup żyją; 184 testy passed; walidacja wizualna (mozaika z hieroglifów)
+- ✓ **Rendery demo 16K**: spectre+grout (papuga) + tryptyk zbliżeń, macierz grup fontów, glyph-detail (CJK/hieroglify/odręczne), macierz rozmiaru; nowy `src/tools/make_matrices.py`
+- ✓ **Benchmark** (`tests/benchmark.py`): format jednokolumnowy (koniec atrapy GPU/CPU) + prawdziwe liczby (16K kite 21 min itd.)
+- ✓ **README przepisane** (commit `bb59a1f`): nazwa Neural-Mosaic, EN, TOC, diagram Mermaid, Tech Highlights, downloadery sprostowane (Picsum/LoremFlickr + Openverse/Met/Artic), wzór anti-rep, NUM_TILES, wymiary 16K, stopka autora; usunięto `symbol_color.jpg` + 6 zoom GIF (~47 MB)
+- ✓ **Live demo (docs/, GitHub Pages)**: spectre→papuga 8K (`aa787ea`), hexagon→skok 8K (`59a0bff`); różne źródła per kształt; sprostowane kłamliwe etykiety triangle/hexagon
+- ✓ Wszystkie 4 commity **wypchnięte na origin/main**; MEMORY.md zaktualizowane (3 wpisy 2026-06-21)
 
 ## Co zostało (backlog sesji)
 
-- ⟳ **Reindeksacja typo** dla aktywacji fixu tofu (patrz NASTĘPNY KROK)
-- ⟳ **Refaktory świadomie odłożone** (Fala 4, opisane w MEMORY.md „Odrzucone podejścia"):
-  dedup handlerów preview, unifikacja 4 downloaderów, centralizacja res_map, range() indexer_typo, CACHE_PATH
-- ⟳ Zoom-GIF dla spectre do README (standing backlog z 2026-06-13)
-- ⟳ Stary backlog UX z 2026-06-04 (auto-preview toggle, otwarcie folderu wyniku, statusbar, codename)
+- ⟳ Live demo: `photo`(portrait.jpg) i `triangle`(portrait2.jpg) to ta sama osoba — ewentualne dalsze zróżnicowanie
+- ⟳ Opcjonalnie: wariant `white_on_black` do galerii typo w README
+- ⟳ `benchmark.py`: pomiar peak-RAM niewiarygodny (psutil delta ~0.46 GB vs realne ~10 GB) — ewentualny sampling-thread
+- ⟳ Niereferowane assety (`symbol_bw`, `symbol_detail`, `mosaic_portrait_spectre`, `mosaic_zoom`) — zostawione (używa ich `make_showcase`)
+- ⟳ Stary backlog: `feature/semantic-clip` TODO w MEMORY nieaktualne (CLIP odrzucony); zoom-GIF spectre; UX backlog z 2026-06-04
 
 ## Aktywne pliki
 
-- `src/engine_smart.py`, `src/engine_typo.py`, `src/gui.py`, `src/indexer_smart.py`, `src/indexer_typo.py` — fixy review
-- `src/library_dirs.py` (NOWY), `src/fast_downloader.py` (NOWY)
-- `src/downloader.py`, `src/downloader_v2.py`, `src/get_mega_pack.py`, `src/get_special_datasets.py`, `src/cli.py`, `src/config.py`, `src/optimizer.py`, `src/clean_duplicates.py`, `src/tools/sanity_check.py`
-- MEMORY.md — zaktualizowane
+- `src/indexer_typo.py`, `src/engine_typo.py`, `tests/test_typo_engine.py` (Opcja B)
+- `README.md`, `tests/benchmark.py`, `src/config.py`, `src/tools/make_matrices.py` (README + benchmark)
+- `docs/index.html`, `docs/tiles/spectre_parrot.*`, `docs/tiles/hexagon_jump_16K.*` (live demo)
+- Mastery 16K w `output/github_readme/` (gitignored) — do reprodukcji DZI/macierzy
 
 ## Otwarte pytania
 
-- Czy zrobić którykolwiek z odłożonych refaktorów (Fala 4 backlog), czy zostawić jako dług?
-- Czy `optimizer` rozszerzony na pełny zestaw bibliotek (skaluje w miejscu) jest OK przy następnym uruchomieniu?
+- Czy zróżnicować pozostałe źródła live-demo (triangle/photo = ta sama osoba)?
+- Czy dodać wariant `white_on_black` do galerii typo w README?
 
 ## Do MEMORY.md (przeniesiono)
 
-- „Code-review całości repo — 4 fale napraw" (sekcja Rozwiązane problemy) z kluczowymi inwariantami:
-  `_nkey` musi zawierać border_mode; widgety Tk tylko przez self.after; tofu wymaga reindeksacji; LIBRARY_DIRS w `src/library_dirs.py`
-- „Refaktory świadomie odłożone po code-review" (sekcja Odrzucone podejścia)
+- „Opcja B — realne pisma egzotyczne w TypoEngine" (Rozwiązane problemy) z inwariantem: zakresy `indexer_typo` ↔ `_LATIN_GROUPS`; reindeks po zmianie; sprostowanie nieaktualnych color modes
+- „README przepisane + sprostowane fakty vs kod" (downloadery Picsum/LoremFlickr vs v2; TARGET_SHORT_SIDE ignorowane; wzór anti-rep; nazwa Neural-Mosaic)
+- „Live demo — różne źródła per kształt, 8K" (make_dzi --max-level 13, Format=jpg, 5 mozaik)

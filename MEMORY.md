@@ -44,6 +44,26 @@
 - Fala 4: `src/library_dirs.py` = single source of truth dla LIBRARY_DIRS (6 katalogów; indexer/clean_duplicates/optimizer/sanity_check importują — koniec driftu list); helper `_mean_fill_outside_mask` (dedup kite/spectre); usunięty martwy `settings["tile_size"]` i `render_sized` z obu silników
 - UWAGA: `optimizer`/`clean_duplicates` pokrywają teraz pełny zestaw bibliotek; `optimizer` skaluje w miejscu
 
+[2026-06-21] **Opcja B — realne pisma egzotyczne w TypoEngine** (commit 1fbad26; 184 testy passed)
+- Problem: grupy B_ancient/C_symbols/G_uncategorized były praktycznie martwe — dwa niezsynchronizowane filtry (wąskie zakresy w `indexer_typo` + twardy filtr ASCII+CJK w `engine_typo`) wyrzucały ich glify; indexer renderował też strzałki/math/box/runy, które engine i tak kasował (marnotrawstwo)
+- `indexer_typo`: `FULL_BLOCKS` (~44 bloki Unicode: hieroglify, klinopis, Linear A/B, Phoenician, runy, math, music, emoji, arabski/bengalski/syngaleski) + `LARGE_BLOCKS` (CJK/Hangul stride-sample), flaga `--full-scan`; tofu-guard cmap bez zmian
+- `engine_typo`: filtr świadomy grup — `_LATIN_GROUPS={D_latin_clean,E_decorative,F_handwriting}` zachowują wyselekcjonowany podzbiór ASCII; reszta grup ufa indekserowi (char_ok=True)
+- **INWARIANT:** zakresy `indexer_typo.FULL_BLOCKS/LARGE_BLOCKS` ↔ `engine_typo._LATIN_GROUPS` muszą być spójne z `font_groups.py`; po zmianie zakresów ZAWSZE reindeks (`python -m src.indexer_typo`)
+- Reindeks → 43 829 glifów; wszystkie 7 grup żyją (B_ancient 9685, C_symbols 4289, G 3715)
+- SPROSTOWANIE: linie 26–27 wyżej (color_on_white/black) są NIEAKTUALNE — TypoEngine ma tylko black_on_white/white_on_black (tryby koloru usunięte 2026-05-04)
+
+[2026-06-21] **README przepisane + sprostowane fakty vs kod** (commit bb59a1f)
+- Domyślny downloader `fast_downloader`→`downloader.FastDownloader` = **Picsum + LoremFlickr** (NIE Chicago/Openverse); `downloader_v2`=`PoliteDownloader` = Openverse/Met/Art Institute z tierami starter/public/extended (+klucz Openverse z .env)
+- `TARGET_SHORT_SIDE` jest IGNOROWANE przez smart engine (rozdzielczość steruje res_map: smart 16K=15360×8640, typo 16K=16000); `NUM_TILES` = cel downloadera, NIE cap indexera/engine
+- anti-repetition (faktyczny wzór): `score = dist + used_count² × freq_penalty × 0.001` (kwadratowo, freq_penalty=30.0); sąsiedztwo promieniowe (query_ball_tree r=1.5×spacing), nie „4 sąsiadów"
+- Nazwa kanoniczna: **Neural-Mosaic** (nie NeuroMosaic/NeuroMosaik); benchmark.py: jedna kolumna Time (silnik CPU-only); RAM 16K ~10 GB (obserwowane, nie z psutil delta)
+- Nowy `src/tools/make_matrices.py` (composite'y README); usunięto symbol_color.jpg + 6 zoom GIF
+
+[2026-06-21] **Live demo (docs/, GitHub Pages main/docs) — różne źródła per kształt, czyste 8K** (commity aa787ea, 59a0bff)
+- DZI przez `make_dzi --max-level 13` (cap 8192 px); Format="jpg" w .dzi (zgodny z plikami — inaczej czarny ekran)
+- Było: spectre i hexagon oba z papugi (portrait3) → duplikat. Teraz: spectre=papuga, hexagon=skok (IMG_20220727); triangle=portrait2, photo=portrait
+- viewer ma 5 mozaik (README wcześniej błędnie mówił „tylko 2"); poprawione kłamliwe etykiety triangle/hexagon (mówiły 16K, są 8K)
+
 ---
 
 ## Aktywne TODO (długoterminowe)
