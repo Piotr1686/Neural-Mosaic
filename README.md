@@ -546,7 +546,7 @@ Each iteration kept the anti-repetition logic and the multi-shape tile geometry 
 - 16K rendering holds the full canvas in memory; a 16K spectre render peaks around ~10 GB RAM (square/hexagon are lighter). Output is not chunked yet.
 - The GUI is Windows-focused. CustomTkinter runs on Linux/macOS, but font handling and file-path assumptions target Windows.
 - Tile Tint uses pixel-wise lerp in RGB space. A LAB-space variant is on the roadmap; the current RGB version produces visible, predictable results.
-- The hosted Deep Zoom viewer carries only 2 mosaics due to GitHub Pages storage limits.
+- The hosted Deep Zoom viewer carries a handful of 8K mosaics (kept lightweight for GitHub Pages storage limits).
 - The `downloader_v2` CC0/PD filter trusts source metadata — rare false positives on user-uploaded content are reported upstream.
 - Repository size is ~100 MB because the font library (120 OFL/Apache fonts) is bundled for zero-friction Symbol Mosaic setup. Initial clone takes ~30–60 s.
 
