@@ -11,10 +11,16 @@ from src.engine_typo import TypoEngine
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_lib(*chars):
+#: A font that belongs to a Latin-family group (curated ASCII subset applies).
+_LATIN_FONT = "NotoSans-Regular.ttf"
+#: A font from an exotic group (trusted as-is; ASCII subset does NOT apply).
+_EXOTIC_FONT = "NotoSansEgyptianHieroglyphs-Regular.ttf"
+
+
+def _make_lib(*chars, font="test.ttf"):
     """Build a minimal raw_lib list as produced by indexer_typo."""
     return [
-        {"char": c, "norm_density": round(i * 0.1, 1), "font": "test.ttf", "density": i * 25}
+        {"char": c, "norm_density": round(i * 0.1, 1), "font": font, "density": i * 25}
         for i, c in enumerate(chars)
     ]
 
@@ -50,13 +56,13 @@ class TestAsciiFilter:
         assert "0" in chars
         assert "9" in chars
 
-    def test_unsafe_ascii_rejected(self):
-        """Characters not in the allowed set must be filtered out."""
-        engine = _load_engine(_make_lib("@", "#", "~", "^", "&", "*"))
+    def test_unsafe_ascii_rejected_for_latin_font(self):
+        """For Latin-family fonts, chars outside the curated set are filtered out."""
+        engine = _load_engine(_make_lib("@", "#", "~", "^", "&", "*", font=_LATIN_FONT))
         assert len(engine.library) == 0
 
-    def test_mixed_accepted_and_rejected(self):
-        engine = _load_engine(_make_lib("A", "@", "B", "#"))
+    def test_mixed_accepted_and_rejected_for_latin_font(self):
+        engine = _load_engine(_make_lib("A", "@", "B", "#", font=_LATIN_FONT))
         chars = [x["char"] for x in engine.library]
         assert "A" in chars
         assert "B" in chars
@@ -90,11 +96,29 @@ class TestCjkFilter:
         engine = _load_engine(_make_lib(ga))
         assert len(engine.library) == 1
 
-    def test_non_cjk_non_ascii_rejected(self):
-        """Greek letters are outside both allowed sets."""
+    def test_non_ascii_rejected_for_latin_font(self):
+        """For a Latin-family font, a non-ASCII glyph (Greek) is filtered out."""
         alpha = chr(0x03B1)  # α
-        engine = _load_engine(_make_lib(alpha))
+        engine = _load_engine(_make_lib(alpha, font=_LATIN_FONT))
         assert len(engine.library) == 0
+
+
+# ---------------------------------------------------------------------------
+# Exotic-script filtering (Option B: ancient/symbol/other groups are trusted)
+# ---------------------------------------------------------------------------
+
+class TestExoticFilter:
+    def test_hieroglyph_accepted_for_ancient_font(self):
+        """A glyph from an exotic-group font bypasses the ASCII subset filter."""
+        glyph = chr(0x13000)  # Egyptian Hieroglyph A001
+        engine = _load_engine(_make_lib(glyph, font=_EXOTIC_FONT))
+        assert len(engine.library) == 1
+        assert engine.library[0]["char"] == glyph
+
+    def test_unsafe_ascii_kept_for_exotic_font(self):
+        """Non-Latin fonts are trusted, so the indexer's glyph set is preserved."""
+        engine = _load_engine(_make_lib("@", "#", font=_EXOTIC_FONT))
+        assert len(engine.library) == 2
 
 
 # ---------------------------------------------------------------------------

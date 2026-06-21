@@ -14,7 +14,13 @@ import bisect
 import os
 import random
 
-from .font_groups import get_fonts_for_groups, GROUP_LABELS
+from .font_groups import get_fonts_for_groups, get_font_group, GROUP_LABELS
+
+# Font groups rendered with Latin/ASCII glyphs. For these we keep a curated
+# ASCII subset (high-legibility, smooth density ramp). Every other group is an
+# exotic script (CJK, ancient, symbols, other) and is trusted as-is, since the
+# indexer already drops tofu (.notdef) and blank glyphs.
+_LATIN_GROUPS = {"D_latin_clean", "E_decorative", "F_handwriting"}
 
 
 class TypoEngine:
@@ -27,7 +33,7 @@ class TypoEngine:
             with open(index_path, "rb") as f:
                 raw_lib = pickle.load(f)
 
-            # Step 1: existing ASCII + CJK character-level filter (keep as-is for density reasons)
+            # Step 1: curated ASCII subset for Latin-family fonts (see _LATIN_GROUPS).
             allowed_ascii = set(
                 "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
                 "0123456789.,:;i!lI|'\"-+=oO0?/"
@@ -45,19 +51,16 @@ class TypoEngine:
             self.library = []
             for item in raw_lib:
                 char = item["char"]
-                code = ord(char)
                 font_path = item["font"]
                 font_filename = os.path.basename(font_path)
 
-                # Character-level check (ASCII + CJK)
-                is_ascii_safe = char in allowed_ascii
-                is_cjk = (
-                    (0x4E00 <= code <= 0x9FFF)
-                    or (0x3040 <= code <= 0x309F)
-                    or (0x30A0 <= code <= 0x30FF)
-                    or (0xAC00 <= code <= 0xD7A3)
-                )
-                char_ok = is_ascii_safe or is_cjk
+                # Character-level check. Latin-family groups keep the curated
+                # ASCII subset; every other script trusts the indexer's output.
+                group = get_font_group(font_filename)
+                if group in _LATIN_GROUPS:
+                    char_ok = char in allowed_ascii
+                else:
+                    char_ok = True
 
                 # Font-level check (group filter)
                 font_ok = (allowed_font_files is None) or (font_filename in allowed_font_files)
