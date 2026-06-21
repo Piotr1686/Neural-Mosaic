@@ -1,7 +1,7 @@
 """
 src/config.py
 -------------
-Application-wide configuration for NeuroMosaic.
+Application-wide configuration for Neural-Mosaic.
 
 Loads environment variables from a .env file and exposes them as typed
 fields on a frozen dataclass so every module imports from one place.
@@ -16,7 +16,7 @@ load_dotenv()
 @dataclass
 class Config:
     """
-    Configuration v4.0 - NeuroMosaik Architecture.
+    Configuration v4.0 - Neural-Mosaic Architecture.
     Supports dynamic shapes and advanced rendering.
     """
     

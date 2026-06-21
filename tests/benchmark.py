@@ -1,7 +1,7 @@
 """
 tests/benchmark.py
 ------------------
-Performance benchmark for NeuroMosaic — generates values for the README table.
+Performance benchmark for Neural-Mosaic — generates values for the README table.
 
 Each operation is timed with time.perf_counter(); peak RAM is tracked via psutil.
 The script prints a "README-paste" block at the end — copy the values directly
@@ -229,7 +229,7 @@ def print_summary(idx_res: list, rnd_res: list, typ_res):
     SEP = "=" * W
 
     print(f"\n{SEP}")
-    print("  NEUROMOSAIC BENCHMARK RESULTS")
+    print("  NEURAL-MOSAIC BENCHMARK RESULTS")
     cuda_tag = f"  |  CUDA available: {torch.cuda.get_device_name(0)}" if _CUDA else "  |  CUDA: not available"
     print(f"  CPUs: {psutil.cpu_count()}{cuda_tag}")
     print(SEP)
@@ -253,27 +253,23 @@ def print_summary(idx_res: list, rnd_res: list, typ_res):
     else:
         print("  Peak VRAM : N/A")
 
-    # README-ready paste block
+    # README-ready paste block — single Time column (engine is CPU-only, no GPU path).
     print(f"\n{SEP}")
-    print("  README PASTE - replace values in the Performance table:")
+    print("  README PASTE - single-column table (engine runs on CPU only):")
     print(SEP)
 
-    note = "(engine runs on CPU - same for both columns)"
+    print(f"  | {'Operation':<35} | {'Time':>9} | {'RAM+':>8} |")
+    print(f"  | {'-'*35} | {'-'*9} | {'-'*8} |")
+    for r in idx_res + rnd_res + ([typ_res] if typ_res else []):
+        t   = _fmt(r["elapsed_s"])
+        ram = f"{r['ram_delta_mb']:.0f} MB"
+        print(f"  | {r['label']:<35} | {t:>9} | {ram:>8} |")
 
-    for r in idx_res:
-        t = _fmt(r["elapsed_s"])
-        print(f"  | {r['label']:<35} | {t:>7} | {t:>7} |")
-    for r in rnd_res:
-        t = _fmt(r["elapsed_s"])
-        print(f"  | {r['label']:<35} | {t:>7} | {t:>7} |")
-    if typ_res:
-        t = _fmt(typ_res["elapsed_s"])
-        print(f"  | {typ_res['label']:<35} | {t:>7} | {t:>7} |")
-
-    vram_str = f"{peak_vram_gb:.2f} GB" if _CUDA else "N/A"
-    print(f"  | {'Peak VRAM':<35} | {vram_str:>7} | {'N/A':>7} |  {note}")
-    print(f"  | {'Peak RAM':<35} | {peak_ram_gb:.2f} GB | {peak_ram_gb:.2f} GB |")
-    print(f"\n  Note: {note}")
+    print(f"\n  Peak RAM (whole run): {peak_ram_gb:.2f} GB")
+    if _CUDA:
+        print(f"  Peak VRAM: {peak_vram_gb:.2f} GB  (CPU engine - VRAM is overhead only)")
+    else:
+        print("  VRAM: not used (engine runs entirely on CPU)")
     print(f"{SEP}\n")
 
 
@@ -281,7 +277,7 @@ def print_summary(idx_res: list, rnd_res: list, typ_res):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="NeuroMosaic performance benchmark — generates README table values.",
+        description="Neural-Mosaic performance benchmark — generates README table values.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
@@ -304,7 +300,7 @@ def main():
         )
 
     print("=" * 64)
-    print("  NeuroMosaic Benchmark")
+    print("  Neural-Mosaic Benchmark")
     if args.quick:
         print("  Mode: --quick  (16K kite skipped)")
     print("=" * 64)
