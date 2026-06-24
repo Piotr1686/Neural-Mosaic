@@ -1,3 +1,64 @@
+## ═══ Sesja zarchiwizowana [2026-06-24 23:21] ═══
+
+# last_session.md
+
+**Sesja:** 2026-06-24 (checkpoint /save · sesja trwa)
+**Status:** ⟳ W toku
+**Punkt odniesienia (git):** 2875f99 @ main (origin zsynchronizowany)
+
+---
+
+## ▸ NASTĘPNY KROK (zacznij tutaj)
+
+**Brak twardego następnego kroku — obie otwarte kwestie z 2026-06-21 domknięte (live-demo zweryfikowane, wariant white_on_black dodany do README + pushed).** Do wyboru z backlogu poniżej; najbliższy sensowny kandydat: ewentualne zróżnicowanie źródeł live-demo `photo`(portrait.jpg) vs `triangle`(portrait2.jpg) — ta sama osoba, różne sceny. Rekomendacja: NISKI priorytet (kosmetyk; demo pokazuje zmienną „kształt kafla", nie galerię osób). Render typo 8K jest tani (~7 s).
+
+---
+
+## Co zrobiono w tej sesji (2026-06-24)
+
+- ✓ **Weryfikacja live-demo (end-to-end, na żywo)**: wszystkie 5 DZI mają `Format="jpg"`, pełna piramida 0–13, wymiary zgodne z etykietami; deploy GitHub Pages odpowiada; kafelki `13/0_0.jpg` to prawidłowe JPEG-i; obejrzane motywy: **hexagon=skok/niebo, spectre=papuga/safari** (właściwe kształty, różne źródła). Zero czarnego ekranu dla świeżego użytkownika (lokalny cache → Ctrl+F5).
+- ✓ **Wariant typo `white_on_black` do galerii README** (commit `2875f99`, pushed): 2 mastery 8K z `IMG_20220727` (skok), Latin monospace, black_on_white + white_on_black; reprodukowalny krok `build_mode_compare()` w `make_matrices.py` → kompozyt side-by-side `assets/examples/typo_mode_compare.jpg` (1562×644); nowa podsekcja README „Symbol Mosaic — two style modes".
+- ✓ **Push porządkowy**: wypchnięto też zaległy commit sesyjny `cc9f991` z 2026-06-21; origin/main zsynchronizowany.
+
+---
+
+## Co zrobiono w poprzedniej sesji (2026-06-21)
+
+- ✓ **Głęboki audyt README** — 4 tiery, ~20 znalezisk (błędy faktograficzne vs kod, sprzeczności, wizualia, marketing)
+- ✓ **Opcja B — realne pisma egzotyczne w TypoEngine** (commit `1fbad26`): `indexer_typo` pełne pokrycie ~44 bloków Unicode + `--full-scan`; `engine_typo` filtr świadomy grup (`_LATIN_GROUPS`); testy zaktualizowane; reindeks → **43 829 glifów**, wszystkie 7 grup żyją; 184 testy passed; walidacja wizualna (mozaika z hieroglifów)
+- ✓ **Rendery demo 16K**: spectre+grout (papuga) + tryptyk zbliżeń, macierz grup fontów, glyph-detail (CJK/hieroglify/odręczne), macierz rozmiaru; nowy `src/tools/make_matrices.py`
+- ✓ **Benchmark** (`tests/benchmark.py`): format jednokolumnowy (koniec atrapy GPU/CPU) + prawdziwe liczby (16K kite 21 min itd.)
+- ✓ **README przepisane** (commit `bb59a1f`): nazwa Neural-Mosaic, EN, TOC, diagram Mermaid, Tech Highlights, downloadery sprostowane (Picsum/LoremFlickr + Openverse/Met/Artic), wzór anti-rep, NUM_TILES, wymiary 16K, stopka autora; usunięto `symbol_color.jpg` + 6 zoom GIF (~47 MB)
+- ✓ **Live demo (docs/, GitHub Pages)**: spectre→papuga 8K (`aa787ea`), hexagon→skok 8K (`59a0bff`); różne źródła per kształt; sprostowane kłamliwe etykiety triangle/hexagon
+- ✓ Wszystkie 4 commity **wypchnięte na origin/main**; MEMORY.md zaktualizowane (3 wpisy 2026-06-21)
+
+## Co zostało (backlog sesji)
+
+- ✓ ~~Opcjonalnie: wariant `white_on_black` do galerii typo w README~~ — ZROBIONE 2026-06-24 (`2875f99`)
+- ⟳ Live demo: `photo`(portrait.jpg) i `triangle`(portrait2.jpg) to ta sama osoba — ewentualne dalsze zróżnicowanie (NISKI priorytet)
+- ⟳ `benchmark.py`: pomiar peak-RAM niewiarygodny (psutil delta ~0.46 GB vs realne ~10 GB) — ewentualny sampling-thread
+- ⟳ Niereferowane assety (`symbol_bw`, `symbol_detail`, `mosaic_portrait_spectre`, `mosaic_zoom`) — zostawione (używa ich `make_showcase`)
+- ⟳ Stary backlog: `feature/semantic-clip` TODO w MEMORY nieaktualne (CLIP odrzucony); zoom-GIF spectre; UX backlog z 2026-06-04
+
+## Aktywne pliki
+
+- `README.md`, `src/tools/make_matrices.py` (galeria typo + krok `build_mode_compare`)
+- `assets/examples/typo_mode_compare.jpg` (nowy asset side-by-side, tracked)
+- `src/cli.py` (render typo `--mode white_on_black --font-groups D_latin_clean`)
+- `docs/index.html`, `docs/tiles/spectre_parrot.*`, `docs/tiles/hexagon_jump_16K.*` (live demo — zweryfikowane)
+- Mastery w `output/github_readme/` (gitignored): `typo_mode_bow_8K.png`, `typo_mode_wob_8K.png` + 16K masters — do reprodukcji kompozytów/DZI
+
+## Otwarte pytania
+
+- Czy zróżnicować pozostałe źródła live-demo (triangle/photo = ta sama osoba)? (rekomendacja: niski priorytet)
+- ✓ ~~Czy dodać wariant `white_on_black` do galerii typo w README?~~ — TAK, zrobione 2026-06-24
+
+## Do MEMORY.md (przeniesiono)
+
+- „Opcja B — realne pisma egzotyczne w TypoEngine" (Rozwiązane problemy) z inwariantem: zakresy `indexer_typo` ↔ `_LATIN_GROUPS`; reindeks po zmianie; sprostowanie nieaktualnych color modes
+- „README przepisane + sprostowane fakty vs kod" (downloadery Picsum/LoremFlickr vs v2; TARGET_SHORT_SIDE ignorowane; wzór anti-rep; nazwa Neural-Mosaic)
+- „Live demo — różne źródła per kształt, 8K" (make_dzi --max-level 13, Format=jpg, 5 mozaik)
+
 ## ═══ Sesja zarchiwizowana [2026-06-21 23:35] ═══
 
 # last_session.md

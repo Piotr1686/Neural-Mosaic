@@ -1,51 +1,54 @@
 # last_session.md
 
-**Sesja:** 2026-06-21 · 20:45-23:35
+**Sesja:** 2026-06-24 · 22:10-23:21
 **Status:** ✓ Zakończona poprawnie
-**Punkt odniesienia (git):** 59a0bff @ main
+**Punkt odniesienia (git):** 68819bc @ main (origin zsynchronizowany)
 
 ---
 
 ## ▸ NASTĘPNY KROK (zacznij tutaj)
 
-**Po przebudowie GitHub Pages (~1-2 min) zweryfikować live demo na żywo (Ctrl+F5, twardy refresh): przycisk „4 — Hexagon" = skok na drodze (IMG_20220727) i „5 — Spectre" = papuga (portrait3) ładują się w 8K bez czarnego ekranu. Jeśli OK — opcjonalnie zróżnicować pozostałe: `photo_mosaic`=portrait.jpg i `triangle`=portrait2.jpg to wciąż ta sama osoba (różne sceny).**
+**Zwaliduj kurowany `requirements.txt` w CZYSTYM środowisku (definitywny dowód na must-fix #1):**
+1. `C:/Users/plazo/miniconda3/envs/mosaic/python.exe -m venv C:/Users/plazo/AppData/Local/Temp/nm_clean` (lub conda env tymczasowy z Python 3.10).
+2. Aktywuj i `pip install -r requirements.txt` — sprawdź, że instalacja przechodzi bez torch/transformers i bez błędów buildu poza Windows-only pakietami.
+3. `python -c "import src.gui"` → musi przejść bez `ModuleNotFoundError: matplotlib` (import top-level w `gui.py:29-30`).
+4. `python -m src.cli render input/portrait.jpg --engine typo --res 4K` → potwierdź, że `fonttools` jest obecny i indekser/engine działają.
 
-Kontekst: w tej sesji naprawiono duplikat źródeł w viewerze (spectre i hexagon były oba papugą). Pozostałe dwie mozaiki to różne zdjęcia tej samej osoby — do decyzji, czy to wystarczająco różne. Weryfikacja deployu to jedyny krok wymagający oka użytkownika (przeglądarka cache'uje kafelki).
+Kontekst: w tej sesji `requirements.txt` przepisano z surowego `pip freeze` na kurowaną listę (commit `68819bc`), ale poprawność zweryfikowano dotąd TYLKO analizą pokrycia importów (`grep` w `src/`), nie czystą instalacją. Czysty venv to ostateczny dowód, że obietnica „4 linie i działa" z README jest prawdziwa. Inwariant w [[project_requirements_curated]].
 
 ---
 
-## Co zrobiono w tej sesji
+## Co zrobiono w tej sesji (2026-06-24)
 
-- ✓ **Głęboki audyt README** — 4 tiery, ~20 znalezisk (błędy faktograficzne vs kod, sprzeczności, wizualia, marketing)
-- ✓ **Opcja B — realne pisma egzotyczne w TypoEngine** (commit `1fbad26`): `indexer_typo` pełne pokrycie ~44 bloków Unicode + `--full-scan`; `engine_typo` filtr świadomy grup (`_LATIN_GROUPS`); testy zaktualizowane; reindeks → **43 829 glifów**, wszystkie 7 grup żyją; 184 testy passed; walidacja wizualna (mozaika z hieroglifów)
-- ✓ **Rendery demo 16K**: spectre+grout (papuga) + tryptyk zbliżeń, macierz grup fontów, glyph-detail (CJK/hieroglify/odręczne), macierz rozmiaru; nowy `src/tools/make_matrices.py`
-- ✓ **Benchmark** (`tests/benchmark.py`): format jednokolumnowy (koniec atrapy GPU/CPU) + prawdziwe liczby (16K kite 21 min itd.)
-- ✓ **README przepisane** (commit `bb59a1f`): nazwa Neural-Mosaic, EN, TOC, diagram Mermaid, Tech Highlights, downloadery sprostowane (Picsum/LoremFlickr + Openverse/Met/Artic), wzór anti-rep, NUM_TILES, wymiary 16K, stopka autora; usunięto `symbol_color.jpg` + 6 zoom GIF (~47 MB)
-- ✓ **Live demo (docs/, GitHub Pages)**: spectre→papuga 8K (`aa787ea`), hexagon→skok 8K (`59a0bff`); różne źródła per kształt; sprostowane kłamliwe etykiety triangle/hexagon
-- ✓ Wszystkie 4 commity **wypchnięte na origin/main**; MEMORY.md zaktualizowane (3 wpisy 2026-06-21)
+- ✓ **Weryfikacja live-demo (end-to-end, na żywo)**: wszystkie 5 DZI `Format="jpg"`, piramida 0–13, wymiary zgodne z etykietami; GitHub Pages odpowiada; kafelki `13/0_0.jpg` to prawidłowe JPEG-i; motywy potwierdzone wizualnie (**hexagon=skok/niebo, spectre=papuga/safari**). Zero czarnego ekranu dla świeżego użytkownika.
+- ✓ **Wariant typo `white_on_black` do galerii README** (commit `2875f99`, pushed): 2 mastery 8K z `IMG_20220727` (Latin monospace, BoW+WoB); reprodukowalny krok `build_mode_compare()` w `make_matrices.py` → `assets/examples/typo_mode_compare.jpg` (1562×644); podsekcja README „Symbol Mosaic — two style modes".
+- ✓ **Debata adwersarialna nad README** (2 subagenci Krytyk vs Obrońca, 2 rundy z krzyżowym przesłuchaniem, konsensus) → pakiet poprawek (commit `68819bc`, pushed):
+  - **requirements.txt** przepisany z surowego `pip freeze` na kurowany: dodano brakujące `matplotlib` (gui.py nie wstawało!) + `fonttools`; torch/transformers → opcjonalny zakomentowany blok.
+  - sprostowanie **75/79-dim** (indeks zawsze 79-dim; `--edge-aware` przełącza tylko użycie cech, nie buduje indeksu) — 3 miejsca w README.
+  - ujednolicenie **„6 vs 7 grup fontów"**; rozmiar repo ~100→~250 MB; kolumna kodów CLI w tabeli grup.
+- ✓ Wszystkie 3 commity treści wypchnięte na origin; commit sesyjny `cc9f991` (zaległy z 06-21) też dopchnięty.
 
 ## Co zostało (backlog sesji)
 
-- ⟳ Live demo: `photo`(portrait.jpg) i `triangle`(portrait2.jpg) to ta sama osoba — ewentualne dalsze zróżnicowanie
-- ⟳ Opcjonalnie: wariant `white_on_black` do galerii typo w README
-- ⟳ `benchmark.py`: pomiar peak-RAM niewiarygodny (psutil delta ~0.46 GB vs realne ~10 GB) — ewentualny sampling-thread
-- ⟳ Niereferowane assety (`symbol_bw`, `symbol_detail`, `mosaic_portrait_spectre`, `mosaic_zoom`) — zostawione (używa ich `make_showcase`)
-- ⟳ Stary backlog: `feature/semantic-clip` TODO w MEMORY nieaktualne (CLIP odrzucony); zoom-GIF spectre; UX backlog z 2026-06-04
+- ⟳ **Walidacja requirements.txt w czystym venv** (patrz NASTĘPNY KROK) — najważniejsze
+- ⟳ Live demo: `photo`(portrait.jpg) vs `triangle`(portrait2.jpg) = ta sama osoba — ewentualne zróżnicowanie (NISKI priorytet)
+- ⟳ Świadomie odrzucone w debacie (over-engineering dla portfolio solo): krok conda/venv per-OS w README, dodatkowe badge'e, CoC, cross-platformowość/Docker/LFS, walidacja `--scale`, caveat 16:9 print-guide, alt-text w `<details>`, martwe assety, rozbicie węzła Mermaid
+- ⟳ `benchmark.py`: pomiar peak-RAM niewiarygodny (psutil delta vs realne ~10 GB) — ewentualny sampling-thread
+- ⟳ Drobne z rundy 1 Krytyka (do decyzji): typo realnie wspiera `--res 2K` (README mówi tylko 4K/8K/16K); workflow l.370 wymienia 2 z 6 skanowanych katalogów
 
 ## Aktywne pliki
 
-- `src/indexer_typo.py`, `src/engine_typo.py`, `tests/test_typo_engine.py` (Opcja B)
-- `README.md`, `tests/benchmark.py`, `src/config.py`, `src/tools/make_matrices.py` (README + benchmark)
-- `docs/index.html`, `docs/tiles/spectre_parrot.*`, `docs/tiles/hexagon_jump_16K.*` (live demo)
-- Mastery 16K w `output/github_readme/` (gitignored) — do reprodukcji DZI/macierzy
+- `requirements.txt` (kurowany — NIE pip freeze; [[project_requirements_curated]])
+- `README.md` (sprostowania faktów: 79-dim, 6/7 grup, rozmiar repo, kody CLI grup; podsekcja two style modes)
+- `src/tools/make_matrices.py` (krok `build_mode_compare`), `assets/examples/typo_mode_compare.jpg`
+- `docs/index.html`, `docs/tiles/spectre_parrot.*`, `docs/tiles/hexagon_jump_16K.*` (live demo — zweryfikowane)
+- Mastery w `output/github_readme/` (gitignored): `typo_mode_bow_8K.png`, `typo_mode_wob_8K.png`
 
 ## Otwarte pytania
 
-- Czy zróżnicować pozostałe źródła live-demo (triangle/photo = ta sama osoba)?
-- Czy dodać wariant `white_on_black` do galerii typo w README?
+- Czy zróżnicować pozostałe źródła live-demo (triangle/photo = ta sama osoba)? (rekomendacja: niski priorytet)
+- Czy udokumentować/zablokować `--res 2K` dla typo (silnik to wspiera, README nie)?
 
 ## Do MEMORY.md (przeniesiono)
 
-- „Opcja B — realne pisma egzotyczne w TypoEngine" (Rozwiązane problemy) z inwariantem: zakresy `indexer_typo` ↔ `_LATIN_GROUPS`; reindeks po zmianie; sprostowanie nieaktualnych color modes
-- „README przepisane + sprostowane fakty vs kod" (downloadery Picsum/LoremFlickr vs v2; TARGET_SHORT_SIDE ignorowane; wzór anti-rep; nazwa Neural-Mosaic)
-- „Live demo — różne źródła per kształt, 8K" (make_dzi --max-level 13, Format=jpg, 5 mozaik)
+- [[project_requirements_curated]] — requirements.txt jest KUROWANY (nie pip freeze); musi mieć matplotlib + fonttools; torch/transformers opcjonalne (uśpiony ai_core); cv2 nieimportowane (2026-06-24)

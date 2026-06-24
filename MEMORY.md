@@ -64,6 +64,12 @@
 - Było: spectre i hexagon oba z papugi (portrait3) → duplikat. Teraz: spectre=papuga, hexagon=skok (IMG_20220727); triangle=portrait2, photo=portrait
 - viewer ma 5 mozaik (README wcześniej błędnie mówił „tylko 2"); poprawione kłamliwe etykiety triangle/hexagon (mówiły 16K, są 8K)
 
+[2026-06-24] **requirements.txt łamał quick start + sprostowania README vs kod** (debata adwersarialna Krytyk vs Obrońca; commit 68819bc; na origin/main)
+- `requirements.txt` był surowym `pip freeze`: brakowało **matplotlib** (import top-level w `gui.py:29-30` → GUI w ogóle NIE wstawało po `pip install -r requirements.txt`) i **fonttools** (`indexer_typo`); jednocześnie wymuszał torch/transformers (kilka GB) wbrew deklaracji „PyTorch optional"
+- Fix: kurowana lista realnie importowanych zależności (zweryfikowane `grep -rhoE "(import|from) \w+" src/`); torch/torchvision/transformers → OPCJONALNY zakomentowany blok (uśpiony ai_core); cv2/opencv NIE jest importowane mimo wzmianki w CLAUDE.md/stacku
+- **INWARIANT:** NIE regenerować `requirements.txt` przez `pip freeze` — edytować ręcznie; matplotlib + fonttools muszą zostać
+- README sprostowania faktów: indeks Smart jest **ZAWSZE 79-dim** (`indexer_smart` bezwarunkowo zapisuje feature_dim=79, schema „5x5_edge"); `--edge-aware` przełącza tylko UŻYCIE 4 cech krawędziowych w matchingu, NIE buduje innego indeksu (usunięto błędne „requires an index built with --edge-aware" + radę o przebudowie przy toggle) — to też prostuje nieaktualne linie 12/20 wyżej (75-dim/„5x5"); ujednolicono „6 vs 7 grup fontów"; rozmiar repo ~100→~250 MB; dodano kolumnę kodów CLI (`A_cjk`…`G_uncategorized`) w tabeli grup fontów
+
 ---
 
 ## Aktywne TODO (długoterminowe)
