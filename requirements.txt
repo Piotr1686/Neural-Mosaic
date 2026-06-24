@@ -1,64 +1,40 @@
-aiofiles==25.1.0
-aiohappyeyeballs==2.6.1
-aiohttp==3.13.2
-aiosignal==1.4.0
-async-timeout==5.0.1
-attrs==25.4.0
-brotlicffi==1.2.0.0
-certifi==2025.11.12
-cffi==2.0.0
-charset-normalizer==3.4.4
-colorama==0.4.6
+# Neural-Mosaic — runtime dependencies (CPU-only; no GPU required)
+#
+# Both mosaic engines (Smart Photo + Symbol/Typo) run entirely on CPU.
+# Tested on Python 3.10 (conda env `mosaic`).
+#
+#   pip install -r requirements.txt
+#
+# This is a curated list of the packages the application actually imports.
+# (pip will resolve their transitive dependencies automatically.)
+
+# --- GUI ---
 customtkinter==5.2.2
-exceptiongroup==1.3.0
-filelock==3.20.0
-frozenlist==1.8.0
-fsspec==2025.12.0
-gmpy2==2.2.2
-huggingface-hub==0.36.0
-imagehash==4.3.1
-idna==3.11
-iniconfig==2.1.0
-Jinja2==3.1.6
-joblib==1.5.3
-MarkupSafe==2.1.5
-mkl_fft==1.3.11
-mkl_random==1.2.8
-mkl-service==2.4.0
-mpmath==1.3.0
-multidict==6.7.0
-networkx==3.4.2
-numpy==2.0.1
-opencv-python==4.12.0.88
-packaging==25.0
+matplotlib==3.10.9          # LAB Coverage Map plot embedded in the GUI
+
+# --- Imaging / mosaic core ---
 pillow==11.1.0
-pip==25.3
-pluggy==1.5.0
-propcache==0.4.1
-pycparser==2.23
-Pygments==2.19.2
-PySocks==1.7.1
-pytest==8.4.2
-pytest-asyncio==1.0.0
-python-dotenv==1.2.1
-PyYAML==6.0.3
-regex==2025.11.3
-requests==2.32.5
-safetensors==0.7.0
+numpy==2.0.1
+scipy==1.15.3               # cKDTree tile matching
 scikit-image==0.25.2
 scikit-learn==1.7.2
-scipy==1.15.3
-setuptools==80.9.0
-sympy==1.14.0
-threadpoolctl==3.6.0
-tokenizers==0.22.1
-tomli==2.2.1
-torch==2.5.1
-torchvision==0.20.1
+imagehash==4.3.1            # near-duplicate tile filtering
+
+# --- Typography engine ---
+fonttools==4.63.0           # glyph cmap inspection (no .notdef tofu boxes)
+
+# --- Tile downloaders (async) ---
+aiohttp==3.13.2
+aiofiles==25.1.0
+requests==2.32.5
+
+# --- Misc ---
 tqdm==4.67.1
-transformers==4.57.3
-typing_extensions==4.15.0
-urllib3==2.6.1
-wheel==0.45.1
-win_inet_pton==1.1.0
-yarl==1.22.0
+python-dotenv==1.2.1
+
+# --- Optional: dormant MiDaS depth module (src/ai_core.py) -------------------
+# Not used by the runtime mosaic engines. Install only if you enable the
+# legacy depth-estimation path (large download, ~GB):
+#   torch==2.5.1
+#   torchvision==0.20.1
+#   transformers==4.57.3

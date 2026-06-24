@@ -112,14 +112,14 @@ The **spectre** is the chiral aperiodic monotile ([Smith, Myers, Kaplan, Goodman
 </table>
 <p align="center"><em>Tile size 75 px — higher resolution means more tiles and finer detail. Square (mirrored) shape, blend 20%, tint 20%.</em></p>
 
-### Symbol Mosaic — the same photo, six font families
+### Symbol Mosaic — the same photo, seven font groups
 
 The typographic engine rebuilds an image from glyphs whose **ink density** matches the local brightness. Every font group produces a distinct aesthetic — from CJK and clean monospace to **Egyptian hieroglyphs**, mathematical symbols and emoji.
 
 <p align="center">
   <img src="assets/examples/typo_matrix_groups.jpg" width="92%" alt="Symbol mosaic — font group comparison" />
 </p>
-<p align="center"><em>Same source, six font groups · 16K · black-on-white.</em></p>
+<p align="center"><em>Same source, six of the seven font groups · 16K · black-on-white. (The seventh group, <em>Other / uncategorized</em>, is omitted here.)</em></p>
 
 <p align="center">
   <img src="assets/examples/typo_glyph_detail.jpg" width="92%" alt="Glyph close-up: CJK, hieroglyphs/cuneiform, handwriting" />
@@ -205,15 +205,15 @@ Reconstructs the target using typographic glyphs instead of photographs. Each ce
 
 Font scanning is one click in the GUI (or `python -m src.indexer_typo`). All bundled fonts live in `assets/fonts/` under the SIL Open Font License 1.1 or Apache License 2.0 (texts in `assets/fonts/licenses/`).
 
-| Group | Scripts / fonts |
-|---|---|
-| **CJK** | Noto Sans/Serif JP·SC·KR·TC, Sawarabi Mincho, M PLUS — Hanzi, Kana, Hangul |
-| **Ancient & Exotic** | Egyptian & Anatolian hieroglyphs, cuneiform, Linear A/B, Phoenician, runic, Ogham, … |
-| **Symbols & Geometric** | Noto Math, Music, Emoji, Symbols, Yarndings |
-| **Latin Clean** | Noto Sans, IBM Plex Mono, JetBrains Mono, Inconsolata, Space Mono |
-| **Decorative / Display** | Creepster, Monoton, Matemasie, Bitcount, Danfo, Splash |
-| **Handwriting / Script** | Dancing Script, Sacramento, Tangerine, Allura, Pinyon |
-| **Other** | Arabic, Bengali, Sinhala, Amiri, Tajawal |
+| Group | `--font-groups` code | Scripts / fonts |
+|---|---|---|
+| **CJK** | `A_cjk` | Noto Sans/Serif JP·SC·KR·TC, Sawarabi Mincho, M PLUS — Hanzi, Kana, Hangul |
+| **Ancient & Exotic** | `B_ancient` | Egyptian & Anatolian hieroglyphs, cuneiform, Linear A/B, Phoenician, runic, Ogham, … |
+| **Symbols & Geometric** | `C_symbols` | Noto Math, Music, Emoji, Symbols, Yarndings |
+| **Latin Clean** | `D_latin_clean` | Noto Sans, IBM Plex Mono, JetBrains Mono, Inconsolata, Space Mono |
+| **Decorative / Display** | `E_decorative` | Creepster, Monoton, Matemasie, Bitcount, Danfo, Splash |
+| **Handwriting / Script** | `F_handwriting` | Dancing Script, Sacramento, Tangerine, Allura, Pinyon |
+| **Other** | `G_uncategorized` | Arabic, Bengali, Sinhala, Amiri, Tajawal |
 
 ### Tile Library Browser
 
@@ -279,7 +279,7 @@ Compose literary or educational posters with the Symbol Mosaic engine: an author
 
 ### Smart Engine — colour matching
 
-Every tile is a **75-dimensional feature vector**: a 5×5 grid of cells, each described by its mean LAB (L\*, a\*, b\*) values. This captures both the dominant colour and the spatial colour gradient. At render time a `cKDTree` finds the nearest tiles for each sector of the target in milliseconds, even with 400,000+ tiles indexed. (An optional 79-dim *edge-aware* variant adds four edge-luminance features; it requires an index built with `--edge-aware` and is mutually exclusive with mirroring.)
+Every tile is a **79-dimensional feature vector**: a 5×5 grid of cells described by their mean LAB (L\*, a\*, b\*) values (75 dims) plus four edge-luminance features. This captures the dominant colour, the spatial colour gradient and local edge structure. At render time a `cKDTree` finds the nearest tiles for each sector of the target in milliseconds, even with 400,000+ tiles indexed. The index is **always** built at 79 dimensions; the `--edge-aware` flag only switches whether the four edge features are *used* during matching (mutually exclusive with mirroring) — it does not change how the index is built.
 
 ### Typo Engine — brightness matching
 
@@ -435,7 +435,7 @@ Batch output names are **timestamp-free** — `{stem}_{engine}_{res}_{shape|mode
 | `--tint FLOAT` | smart | `0.0` | Tile tint toward sector colour, 0.0–0.4 |
 | `--border` | smart | off | Add dark grout lines between tiles |
 | `--no-mirror` | smart | mirror on | Disable horizontal tile mirroring |
-| `--edge-aware` | smart | off | Require a 79-dim edge-feature index |
+| `--edge-aware` | smart | off | Use the 4 edge-luminance features when matching (index is always 79-dim; mutually exclusive with mirroring) |
 | `--mode {black_on_white,white_on_black}` | typo | `black_on_white` | Symbol render mode |
 | `--font-groups GROUP ...` | typo | all | Subset: `A_cjk` · `B_ancient` · `C_symbols` · `D_latin_clean` · `E_decorative` · `F_handwriting` · `G_uncategorized` |
 | `--variation INT` | typo | `20` | Glyph density window |
@@ -557,7 +557,7 @@ Each iteration kept the anti-repetition logic and the multi-shape tile geometry 
 - Tile Tint uses pixel-wise lerp in RGB space. A LAB-space variant is on the roadmap; the current RGB version produces visible, predictable results.
 - The hosted Deep Zoom viewer carries a handful of 8K mosaics (kept lightweight for GitHub Pages storage limits).
 - The `downloader_v2` CC0/PD filter trusts source metadata — rare false positives on user-uploaded content are reported upstream.
-- Repository size is ~100 MB because the font library (120 OFL/Apache fonts) is bundled for zero-friction Symbol Mosaic setup. Initial clone takes ~30–60 s.
+- The repository is ~250 MB (≈120 MB bundled font library + git history); the fonts are committed for zero-friction Symbol Mosaic setup. Initial clone takes a minute or two on a typical connection.
 
 ---
 
@@ -570,7 +570,7 @@ A: Wait ~1 hour. The `starter` tier works without a key; for `public` / `extende
 A: Close other applications and ensure several GB of free RAM (a 16K spectre can need ~10 GB). As an alternative, render at 8K.
 
 **Q: WARNING about an incompatible index**
-A: Click **"Update / Create Index"** in the GUI to rebuild `smart_index.pkl` (e.g. after switching the edge-aware feature on/off).
+A: Click **"Update / Create Index"** in the GUI to rebuild `smart_index.pkl` with the current feature schema (e.g. after upgrading from an older index version). Toggling `--edge-aware` does **not** require a rebuild — the index is always 79-dim.
 
 **Q: Symbol Mosaic shows empty boxes, or a group looks empty**
 A: Rebuild the font index after adding fonts or changing groups: **"Update Database (Scan Assets)"** or `python -m src.indexer_typo` (add `--full-scan` for the complete CJK + Hangul blocks).
