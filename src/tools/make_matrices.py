@@ -12,11 +12,14 @@ Inputs (in output/github_readme/, produced by src.cli):
     spectre_parrot_16K.jpg                 - spectre + black-border hero
     typo_grp_<key>_16K.png  (6 panels)     - font-group matrix panels
     typo_size_<scale>_16K.png  (3 panels)  - font-size matrix panels
+    typo_mode_bow_8K.png / typo_mode_wob_8K.png  - same photo + font group,
+                                             black_on_white vs white_on_black
 
 Outputs (in assets/examples/):
     spectre_full.jpg / spectre_zoom1.jpg / spectre_zoom2.jpg
     typo_matrix_groups.jpg / typo_ancient_detail.jpg
     typo_matrix_size.jpg
+    typo_mode_compare.jpg
 
 Usage:
     python -m src.tools.make_matrices            # build everything available
@@ -56,6 +59,11 @@ GLYPH_DETAIL = [
     ("cjk",     "CJK"),
     ("ancient", "Hieroglyphs / Cuneiform"),
     ("hand",    "Handwriting"),
+]
+# Style-mode comparison: identical photo + font group, only the mode differs.
+MODE_PANELS = [
+    ("typo_mode_bow_8K.png", "black_on_white"),
+    ("typo_mode_wob_8K.png", "white_on_black"),
 ]
 
 LABEL_H   = 46     # label bar height (px)
@@ -220,12 +228,32 @@ def build_size_matrix() -> bool:
     return True
 
 
+def build_mode_compare() -> bool:
+    """Side-by-side of the same photo + font group in both style modes."""
+    panels, missing = [], []
+    for name, label in MODE_PANELS:
+        p = MASTERS_DIR / name
+        if not p.exists():
+            missing.append(name)
+            continue
+        with Image.open(p) as img:
+            panels.append(_panel(img, label, PANEL_W))
+    if missing:
+        print(f"  [skip] mode compare - missing panels: {', '.join(missing)}")
+        return False
+    EXAMPLES_DIR.mkdir(parents=True, exist_ok=True)
+    _grid(panels, cols=2).save(EXAMPLES_DIR / "typo_mode_compare.jpg", quality=92)
+    print("  OK typo_mode_compare.jpg")
+    return True
+
+
 def list_status():
     print("Masters in", MASTERS_DIR)
     expected = (
         ["spectre_parrot_16K.jpg"]
         + [f"typo_grp_{k}_16K.png" for k, _ in GROUP_PANELS]
         + [f"typo_size_{k}_16K.png" for k, _ in SIZE_PANELS]
+        + [name for name, _ in MODE_PANELS]
     )
     for name in expected:
         p = MASTERS_DIR / name
@@ -249,6 +277,7 @@ def main():
     build_group_matrix()
     build_glyph_detail()
     build_size_matrix()
+    build_mode_compare()
     print("Done.")
 
 

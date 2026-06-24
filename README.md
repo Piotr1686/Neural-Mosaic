@@ -138,6 +138,15 @@ The typographic engine rebuilds an image from glyphs whose **ink density** match
 </p>
 <p align="center"><em>Glyphs resolve into recognisable characters as you zoom in — 16K output, black-on-white mode.</em></p>
 
+### Symbol Mosaic — two style modes
+
+The same render in both style modes. `black_on_white` reads as classic editorial; `white_on_black` suits dark modern interiors. Toggle it from the GUI or with `--mode` on the CLI.
+
+<p align="center">
+  <img src="assets/examples/typo_mode_compare.jpg" width="92%" alt="Symbol mosaic — black-on-white vs white-on-black" />
+</p>
+<p align="center"><em>Identical photo and font group (Latin monospace) — only the style mode differs. 8K.</em></p>
+
 ### GUI Demo
 
 <p align="center">
