@@ -3,19 +3,19 @@ name: CI
 on: [push, pull_request]
 
 jobs:
-  lint:
+  test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.10'
 
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install ruff
+          pip install ruff pytest
           pip install -r requirements.txt
 
       - name: Lint (syntax + undefined names)
@@ -23,3 +23,8 @@ jobs:
 
       - name: Import check
         run: python -c "import src.indexer_smart; import src.engine_smart; print('OK')"
+
+      # test_ai_core (dormant MiDaS) and test_processor (local GPU/CUDA) require
+      # torch + a GPU, neither of which exists on the headless runner — skip them.
+      - name: Run tests
+        run: pytest tests/ --ignore=tests/test_ai_core.py --ignore=tests/test_processor.py -q
