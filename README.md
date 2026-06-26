@@ -1,5 +1,7 @@
 # Neural-Mosaic
 
+**English** · [Polski](README.pl.md)
+
 > Turn any photograph into a high-resolution mosaic — assembled from thousands of real images or typographic glyphs. Desktop app, renders up to 16K, with manual on-demand preview.
 
 ![Python](https://img.shields.io/badge/Python-3.10+-blue?style=flat-square&logo=python&logoColor=white&color=3776AB)
