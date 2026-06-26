@@ -70,6 +70,13 @@
 - **INWARIANT:** NIE regenerować `requirements.txt` przez `pip freeze` — edytować ręcznie; matplotlib + fonttools muszą zostać
 - README sprostowania faktów: indeks Smart jest **ZAWSZE 79-dim** (`indexer_smart` bezwarunkowo zapisuje feature_dim=79, schema „5x5_edge"); `--edge-aware` przełącza tylko UŻYCIE 4 cech krawędziowych w matchingu, NIE buduje innego indeksu (usunięto błędne „requires an index built with --edge-aware" + radę o przebudowie przy toggle) — to też prostuje nieaktualne linie 12/20 wyżej (75-dim/„5x5"); ujednolicono „6 vs 7 grup fontów"; rozmiar repo ~100→~250 MB; dodano kolumnę kodów CLI (`A_cjk`…`G_uncategorized`) w tabeli grup fontów
 
+[2026-06-26] **Portfolio hardening — walidacja requirements, README EN/PL, CI zielony, GitHub About** (commity ab32e7e, db427b3, cf91769, c38c2d0; na origin/main)
+- `requirements.txt` ZWALIDOWANY w czystym venv (Python 3.10.19, 44 pakiety bez torch/transformers): `import src.gui` OK, render typo 4K + smart 2K przeszły → obietnica README „4 linie i działa" udowodniona empirycznie
+- README dwujęzyczny: pełny `README.pl.md` (25 sekcji, parytet z EN) + przełącznik `**English** · [Polski]` w linii 3 obu plików; kotwice TOC z polskimi diakrytykami
+- **CI z czerwonego na zielony**: `ci.yml` instaluje z `requirements.txt` (koniec driftu — padał `tqdm`); dodany `python -m pytest` → **152 testy** realnie w CI; pominięte `test_ai_core` (torch/MiDaS) + `test_processor` (lokalne GPU/CUDA); bump `checkout@v5`/`setup-python@v6`
+- **INWARIANT CI:** install z requirements.txt (nie ręczna lista), `python -m pytest` (nie gołe `pytest` — inaczej `ModuleNotFoundError: src`), ignore test_ai_core+test_processor
+- GitHub „About" (`gh repo edit`): description + homepage→live-demo + 10 topics; `opencv`→`scikit-image` (cv2 nieimportowane)
+
 ---
 
 ## Aktywne TODO (długoterminowe)
@@ -79,6 +86,16 @@
 - Cel: zamiana 3×3 LAB features w SmartEngine na CLIP embeddings (semantyczne dopasowanie)
 - Status: branch UTWORZONY, ale implementacja CLIP jeszcze nie zaczęta
 - Decyzja architektoniczna do podjęcia: rozszerzyć SmartEngine czy nowy SemanticEngine?
+
+[2026-06-26] **A1 — redukcja peak-RAM renderu 16K** (architektura ZATWIERDZONA, wdrożenie od następnej sesji)
+- Atrybucja peaku ~10 GB: dominuje **transient spike `cdist(chunk, cała_biblioteka)` float64** (`engine_smart.py:662-664`, ~1.8 GB ×2 z mirrorem ≈ 3.6 GB), NIE kanwa (RGBA ~531 MB). Maski spectre/kite rezydentne. `benchmark.py` nie widzi peaku (mierzy rss tylko przed/po → spike znika)
+- Zakres: **Wariant 0** (wątek samplujący rss co ~50 ms — wiarygodny peak, zalicza backlog benchmark.py) → **A-tani** (float32 squared-euclidean + adaptywny chunk_size w pętli `:658-668`; 3.6 GB→~0.25 GB, ranking top-k bez zmian, NIE rusza kontraktu `_do_render→PIL`; `/sonnet` OK) → **B** (leniwe maski spectre/kite: poly+bbox w sectors_data, rasteryzacja przy kompozycie `:729`; HIGH, test regresji pikselowej)
+- **ODŁOŻONE — Wariant C** (pasmowe renderowanie kanwy): łamie kontrakt `_do_render→PIL` + inwarianty `_neighbors_cache`, atakuje najmniejsze źródło; tylko gdy cel >16K
+
+[2026-06-26] **A2 — eksport DZI z aplikacji** (architektura ZATWIERDZONA, wdrożenie od następnej sesji)
+- `src/tools/make_dzi.py` JUŻ gotowy i poprawny (`Format="jpg"`) — to integracja, nie nowy silnik
+- Zakres: **Wariant B** (osobny przycisk „Export Deep Zoom…" w GUI, file picker→out dir, wzorzec wątku `gui.py:run_photo:991-1006`, działa na dowolnym obrazie) + **skip-if-exists** na kafelkach piramidy (= „excluded-tile support" z Roadmapu) + **podkomenda `dzi` w `src/cli.py`**
+- **ODŁOŻONE — Wariant C** („Publish to viewer", auto-update `docs/` + refaktor hardcoded `index.html` na manifest): ryzyko publicznego artefaktu GitHub Pages
 
 ---
 

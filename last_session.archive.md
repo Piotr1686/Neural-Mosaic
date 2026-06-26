@@ -1,3 +1,67 @@
+## ═══ Sesja zarchiwizowana [2026-06-26 22:30] ═══
+
+# last_session.md
+
+**Sesja:** 2026-06-26 · trwa (checkpoint 22:00)
+**Status:** ⟳ W toku (checkpoint /save)
+**Punkt odniesienia (git):** c38c2d0 @ main (origin zsynchronizowany)
+
+---
+
+## ▸ NASTĘPNY KROK (zacznij tutaj)
+
+**WDROŻENIE A1 = Wariant 0 + A-tani + B** (DECYZJA usera 2026-06-26: zgoda na A i B; implementacja od NASTĘPNEJ sesji). Architektura rozpisana — patrz [[project_a1_memory_arch]]:
+- **Wariant 0 (warunek wstępny):** wątek samplujący `rss` co ~50 ms wokół renderu → wiarygodny peak-RAM (zalicza też backlog B = benchmark.py). Zero ryzyka.
+- **Wariant A-tani:** w `engine_smart._do_render` pętla matchingu (`:658-668`) — `chunk_size` adaptacyjny (macierz ≤256 MB) + squared-euclidean w `float32` (GEMM `‖a‖²+‖b‖²−2a·b`) zamiast `cdist` float64. Spike 3.6 GB → ~0.25 GB. Numerycznie równoważne (ten sam ranking top-k). NIE rusza kontraktu `_do_render → PIL`. De-eskalacja `/sonnet` OK.
+- **Wariant B:** leniwe maski spectre/kite — trzymaj `padded_poly`+bbox w `sectors_data`, rasteryzuj przy kompozycie (`:729`) i w `_mean_fill_outside_mask`. Ścina rezydentne maski (~10 GB peak spectre). HIGH (dotyka feature-path; wymaga testu regresji pikselowej).
+- **Świadomie ODŁOŻONE:** Wariant C (pasmowe renderowanie kanwy) — wysokie ryzyko (łamie kontrakt PIL + inwarianty `_neighbors_cache`), atakuje najmniejsze źródło (kanwa 0.5 GB); tylko gdy cel >16K.
+
+**WDROŻENIE A2 = Wariant B + skip-if-exists + podkomenda CLI `dzi`** (DECYZJA usera 2026-06-26; implementacja od NASTĘPNEJ sesji, po A1 lub równolegle). Architektura: [[project_a2_dzi_export_arch]]. Skrót:
+- `make_dzi.make_dzi()` JUŻ gotowy i poprawny (`Format="jpg"`) — to integracja, nie nowy silnik.
+- **Wariant B:** osobny przycisk „Export Deep Zoom…" w GUI (file picker → out dir), wzorzec wątku jak `gui.py:run_photo` (`:991-1006`); działa na dowolnym istniejącym obrazie.
+- **Idempotencja:** skip-if-exists na kafelkach piramidy (= „excluded-tile support" z Roadmapu).
+- **Parytet CLI:** podkomenda `dzi` w `src/cli.py`.
+- **ODŁOŻONE — Wariant C** („Publish to viewer", auto-update `docs/`): ryzyko publicznego artefaktu + refaktor hardcoded `index.html` na manifest; przyszły osobny temat.
+
+---
+
+## Co zrobiono w tej sesji (2026-06-26)
+
+- ✓ **Walidacja `requirements.txt` w CZYSTYM venv (definitywny dowód)**: świeży venv z Python 3.10.19, `pip install -r requirements.txt` (44 pakiety, bez torch/transformers); `import src.gui` OK (bez `ModuleNotFoundError: matplotlib`); render `typo 4K` (33004 glify, `fonttools` obecny) i `smart 2K` (454857 kafelków, cKDTree) — oba przeszły. `torch=False, transformers=False` potwierdzone. Obietnica README „4 linie i działa" — udowodniona empirycznie. (SSL w gołym venv obszedłem `--trusted-host` — to lokalne certy, nie problem `requirements.txt`.)
+- ✓ **Push zaległego commitu sesyjnego** `f927696` (`68819bc..f927696`).
+- ✓ **README dwujęzyczny EN/PL** (commit `ab32e7e`, pushed): pełny `README.pl.md` (25 sekcji, parytet z EN), przełącznik `**English** · [Polski]` w linii 3 obu plików; kotwice TOC z polskimi diakrytykami; bloki kodu/badge/ścieżki/Mermaid bez zmian.
+- ✓ **CI z czerwonego na zielony + realne testy** (commity `db427b3`, `cf91769`, `c38c2d0`, pushed):
+  - install z `requirements.txt` zamiast ręcznej listy (koniec driftu — padał `tqdm`);
+  - dodany `python -m pytest` → **152 testy** realnie w CI (pominięte `test_ai_core`=uśpiony MiDaS i `test_processor`=lokalne GPU/CUDA);
+  - bump `checkout@v5`/`setup-python@v6` (koniec ostrzeżeń Node 20).
+  - 2 czerwone runy po drodze (drift zależności; `No module named 'src'` przez gołe `pytest` zamiast `python -m pytest`) — zdiagnozowane i naprawione; finalny run **success**. Inwariant: [[project_ci_pipeline]].
+- ✓ **GitHub „About" wypełnione** (`gh repo edit`): description, homepage→live-demo, 10 topics; korekta rzetelności `opencv`→`scikit-image` (cv2 nieimportowane — [[project_requirements_curated]]).
+
+## Co zostało (backlog sesji)
+
+- ⟳ **Wybór kierunku „co dalej"** (patrz NASTĘPNY KROK): A1 chunked-16K / A2 eksport DZI / B jakość — czeka na decyzję usera.
+- ⟳ `benchmark.py`: pomiar peak-RAM niewiarygodny (psutil delta vs realne ~10 GB) — sampling-thread (pozycja B).
+- ⟳ `test_processor`: twardo asertuje CUDA → zmienić na `skipif(not cuda)`, żeby był przenośny (wtedy może wrócić do CI). NISKI.
+- ⟳ Drobne README↔kod: typo realnie wspiera `--res 2K` (README mówi 4K/8K/16K); workflow wymienia 2 z 6 skanowanych katalogów.
+- ⟳ Live demo: zróżnicowanie źródeł (triangle/photo = ta sama osoba); więcej mozaik 8K w viewerze. NISKI.
+- ⟳ Świadomie odrzucone (over-engineering solo-portfolio): CoC, SECURITY.md, CITATION.cff, Docker/cross-platform, plugin system kształtów.
+
+## Aktywne pliki
+
+- `.github/workflows/ci.yml` (install z requirements.txt; `python -m pytest`; ignore test_ai_core+test_processor; akcje v5/v6 — [[project_ci_pipeline]])
+- `README.md` + `README.pl.md` (dwujęzyczne, przełącznik w linii 3 — parytet 25 sekcji)
+- `requirements.txt` (kurowany, ZWALIDOWANY w czystym venv — [[project_requirements_curated]])
+- GitHub About: description + homepage + 10 topics (ustawione przez `gh repo edit`)
+
+## Otwarte pytania
+
+- Czy zróżnicować pozostałe źródła live-demo (triangle/photo = ta sama osoba)? (rekomendacja: niski priorytet)
+- Czy udokumentować/zablokować `--res 2K` dla typo (silnik to wspiera, README nie)?
+
+## Do MEMORY.md (przeniesiono)
+
+- [[project_requirements_curated]] — requirements.txt jest KUROWANY (nie pip freeze); musi mieć matplotlib + fonttools; torch/transformers opcjonalne (uśpiony ai_core); cv2 nieimportowane (2026-06-24)
+
 ## ═══ Sesja zarchiwizowana [2026-06-24 23:21] ═══
 
 # last_session.md
@@ -262,72 +326,3 @@ Kontekst: jedyny pozostały defekt jakościowy znaleziony w code-review kształt
 - `project_spectre_only_no_hat.md` — einstein_hat usunięty (2026-06-12), zostaje spectre;
   nie proponować hat ponownie + notatki techniczne substytucji (wspólne recentrowanie!)
 - `project_tile_library_scale_bug.md` — zaktualizowany: bug NAPRAWIONY (paginacja 200/stronę)
-
-## ═══ Sesja zarchiwizowana [2026-06-12 23:05] ═══
-
-# last_session.md
-
-**Sesja:** 2026-06-04 · 22:00-22:55
-**Status:** ✓ Zakończona poprawnie
-**Punkt odniesienia (git):** 56782a1 @ main
-
----
-
-## ▸ NASTĘPNY KROK (zacznij tutaj)
-
-**Task G — dodaj paginację/limit w `src/gui.py::_lib_load_grid` (Tile Library).**
-
-Konkretnie:
-1. Przejrzyj `_lib_load_grid` i sąsiednie helpery `_lib_*` (skąd bierze listę plików, jak
-   buduje siatkę `_GRID_COLS=5`, gdzie trzyma `_lib_images`/`_lib_cell_frames`).
-2. `_lib_load_grid` ładuje WSZYSTKIE kafle naraz — przy ~455k plików Refresh zawiesi/OOM GUI
-   (notatka `project_tile_library_scale_bug`).
-3. Dodaj limit/lazy-load: paginacja po N (np. 200) z przyciskiem „Load more", albo
-   wirtualizacja siatki. Zachowaj istniejący cache miniatur (`_THUMB_DIR`, `_thumbs`).
-
-Kontekst: Task F (pasek postępu) ukończony, zweryfikowany i **zacommitowany** (56782a1). Task G
-to jedyny znany niezałatany bug i naturalny następny cel; reszta backlogu to pomysły UX do decyzji.
-
----
-
-## Co zrobiono w tej sesji
-
-- ✓ **Task F — pasek postępu % renderu** zaimplementowany i **zacommitowany** (`56782a1`):
-  - silniki: `progress_cb(done, total)` (opcjonalny, default `None`) w `_do_render` obu silników,
-    przekazywany przez `create_mosaic`/`render_sized` (smart) i `process`/`render_sized` (typo);
-    `render_preview` celowo bez niego
-  - smart: callback per chunk matchingu (`total=len(sectors_data)`); typo: co 50 wierszy + finalne 100%
-  - GUI: `CTkProgressBar` `progress_render_p/_t` w panelu podglądu (row=4), domyślnie ukryty;
-    `run_photo`/`run_typo` pokazują pasek + blokują RENDER, callback przez `self.after`,
-    `finally` → `_finish_render_p/_t`
-- ✓ Decyzja usera: pasek w panelu podglądu per zakładka (nie w sidebarze)
-- ✓ Testy: **169 passed**; kompilacja gui/engine_smart/engine_typo OK; user zweryfikował wizualnie
-- ✓ **Nowa preferencja usera:** nie czekać na prośbę o commit — proaktywnie proponować commit jako
-  task po zweryfikowanej pracy (notatka `feedback_propose_commit`)
-- ✓ Dodano notatki do MEMORY: `project_render_progress_cb.md`, `feedback_propose_commit.md`
-
-## Co zostało (backlog sesji)
-
-- ⟳ **Task G** — bug Tile Library: brak paginacji/limitu w `_lib_load_grid` (patrz NASTĘPNY KROK)
-- ⟳ Opcjonalny toggle „Auto-preview (¼)" jako nakładka na manual (Opcja A)
-- ⟳ Pomysły z review (otwarcie folderu wyniku, podgląd pełnoekranowy, zapamiętywanie ustawień,
-  statusbar, codename w tytule) — do decyzji
-
-## Aktywne pliki
-
-- `src/gui.py` / `src/engine_smart.py` / `src/engine_typo.py` — **zacommitowane** (56782a1); working tree czysty
-- `src/gui.py::_lib_load_grid` — cel Taska G (jeszcze nietknięty)
-- MEMORY.md + `project_render_progress_cb.md` + `feedback_propose_commit.md` — zaktualizowane
-
-## Otwarte pytania
-
-- Task G: paginacja „Load more" czy pełna wirtualizacja siatki?
-- Czy dokładać toggle „Auto-preview (¼)"?
-- Które pomysły z review wdrażać i w jakiej kolejności?
-
-## Do MEMORY.md (przeniesiono)
-
-- `project_render_progress_cb.md` — kontrakt `progress_cb(done, total)` w `_do_render` obu silników
-  (Task F); `render_preview` bez niego; default None → CLI/testy nietknięte
-- `feedback_propose_commit.md` — proaktywnie proponować commit jako task po zweryfikowanej pracy,
-  nie czekać na prośbę usera (2026-06-04)
