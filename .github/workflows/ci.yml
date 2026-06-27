@@ -24,7 +24,8 @@ jobs:
       - name: Import check
         run: python -c "import src.indexer_smart; import src.engine_smart; print('OK')"
 
-      # test_ai_core (dormant MiDaS) and test_processor (local GPU/CUDA) require
-      # torch + a GPU, neither of which exists on the headless runner — skip them.
+      # test_ai_core (dormant MiDaS) eagerly loads a heavy model and is skipped.
+      # test_processor self-skips when torch/CUDA are absent (importorskip +
+      # skipif), so it is safe to collect on the headless runner.
       - name: Run tests
-        run: python -m pytest tests/ --ignore=tests/test_ai_core.py --ignore=tests/test_processor.py -q
+        run: python -m pytest tests/ --ignore=tests/test_ai_core.py -q

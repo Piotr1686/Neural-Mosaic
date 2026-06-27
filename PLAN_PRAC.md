@@ -19,7 +19,7 @@
 
 - ✓ **README ↔ kod** (DONE 2026-06-27): dodano `--res 2K` dla typo (EN+PL, res_map ma 2K:2500); workflow/struktura → wszystkie 6 katalogów przez `library_*` + legacy `tiles/` z odnośnikiem do `src/library_dirs.py`. **Decyzja: dokumentować, NIE blokować 2K.**
 - ✓ **Test `dzi` w `test_cli.py`** (DONE 2026-06-27): +12 testów (parser, walidacja, E2E pełne w CI — make_dzi nie wymaga indeksu; idempotencja skip-if-exists + regeneracja `--no-skip`).
-- ☐ **test_processor**: twarda asercja CUDA → `skipif(not cuda)`, by wrócił do CI. NISKI.
+- ✓ **test_processor** (DONE 2026-06-27): `importorskip("torch")` + `skipif(not cuda)`; zdjęty `--ignore` w ci.yml. CI bez torcha → moduł skip (udowodnione); dev → 4 testy zielone. Inwariant CI: [[project_ci_pipeline]].
 - ☐ **Demo polish** (na koniec, opcjonalne): zróżnicować źródła live-demo (triangle/photo = ta sama osoba); więcej mozaik 8K. NISKI, czysto kosmetyczne.
 
 ## Świadomie odłożone (over-engineering dla solo-portfolio)
