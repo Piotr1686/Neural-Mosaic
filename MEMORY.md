@@ -97,6 +97,14 @@
 - Zakres: **Wariant B** (osobny przycisk „Export Deep Zoom…" w GUI, file picker→out dir, wzorzec wątku `gui.py:run_photo:991-1006`, działa na dowolnym obrazie) + **skip-if-exists** na kafelkach piramidy (= „excluded-tile support" z Roadmapu) + **podkomenda `dzi` w `src/cli.py`**
 - **ODŁOŻONE — Wariant C** („Publish to viewer", auto-update `docs/` + refaktor hardcoded `index.html` na manifest): ryzyko publicznego artefaktu GitHub Pages
 
+[2026-06-27] **A1 + A2 WDROŻONE** (commity `5867a76`/`4f178a3`/`81a424a`/`b33b5c2`, na origin/main; CI run 28286897637 success; 173 testy lokalnie)
+- **A1-0:** `PeakRAMSampler` (daemon thread 50 ms, `tests/benchmark.py`) — wiarygodny peak-RAM zamiast rss przed/po; pod indexing/render/typo + globalny peak runu
+- **A1-A-tani:** `_euclid_f32(chunk, feats, feat_sq)` w `engine_smart.py` (GEMM `‖a‖²+‖b‖²−2a·b` in-place, float32) ZASTĄPIŁ `cdist` (supersedeuje notkę „cdist euclidean, chunk_size=500" z sekcji Architektura). Adaptywny `chunk_size` (macierz ≤256 MB, dzielone przez 2 z mirrorem). Per-chunk 1.8 GB→0.25 GB. **INWARIANT:** musi zwracać PRAWDZIWY euklides (`sqrt`), bo `score = dist + freq_penalty` jest addytywne — squared zepsułby balans. Parytet vs cdist: max err 4.6e-6, top-k i zwycięzca identyczne
+- **A1-B:** `_LazyMask(poly, bw, bh, aa)` w `engine_smart.py` — maski kite/spectre jako wielokąt, `render()` odroczony do kompozytu (`:763`). **INWARIANT:** `render()` bit-w-bit (kite aa=1 native; spectre aa=4 supersample+LANCZOS) — pilnują golden sha256 + `TestLazyMask`. Maski grid zostają współdzielonymi PIL
+- **A2:** `make_dzi(..., skip_existing=True)` + `--no-skip`; CLI podkomenda `dzi <input> <out_dir>`; przycisk GUI „Export Deep Zoom…" (`export_dzi`, wątek tła wzorem run_photo). +12 testów dzi (E2E w CI — make_dzi bez indeksu)
+- **CI:** `test_processor` wrócił (importorskip("torch") + skipif(not cuda)); zdjęty `--ignore` (zostaje tylko `test_ai_core`)
+- Plan i protokół: `PLAN_PRAC.md`. Pozostało (NISKI): empiryczny pomiar RAM na realnym 16K → liczby do tabeli Performance w README
+
 ---
 
 ## Odrzucone podejścia

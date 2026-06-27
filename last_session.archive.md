@@ -1,3 +1,39 @@
+## ═══ Sesja zarchiwizowana [2026-06-27 12:15] ═══
+
+# last_session.md
+
+**Sesja:** 2026-06-27 · checkpoint (sesja trwa)
+**Status:** ⟳ W toku — A1+A2 wdrożone, housekeeping przed nami
+**Punkt odniesienia (git):** 81a424a @ main (UWAGA: branch ahead of origin — niewypchnięte commity sesyjne + 4 nowe)
+
+---
+
+## ▸ NASTĘPNY KROK (zacznij tutaj)
+
+**A1+A2 WDROŻONE I ZACOMMITOWANE (4/4 kroki, golden sha256 + 157 testów zielonych).** Pozostało housekeeping z PLAN_PRAC.md:
+
+1. **README ↔ kod (1 commit)**: dodać `--res 2K` dla typo do tabeli (silnik wspiera, zwalidowane); workflow wymienia 2 z 6 katalogów → uzupełnić. Decyzja: dokumentować, NIE blokować 2K.
+2. **Test `dzi` w `test_cli.py`** (luka pokrycia z kroku A2 — świadomie pominięta na prośbę usera; parser + idempotencja skip-if-exists).
+3. **`test_processor`**: twarda asercja CUDA → `skipif(not cuda)`, by wrócił do CI. NISKI.
+4. Opcjonalnie: empiryczny pomiar zysku RAM nowym `PeakRAMSampler` na realnym 16K.
+5. **Push** niewypchniętych commitów (branch ahead of origin).
+
+Pełna architektura/inwarianty: [[project_a1_memory_arch]], [[project_a2_dzi_export_arch]], plan: `PLAN_PRAC.md`.
+
+---
+
+## Co zrobiono w tej sesji (2026-06-27)
+
+- ✓ **PLAN_PRAC.md** — zapisany plan A1+A2 wg ryzyka (0→A-tani→A2→B), protokół „commit + pytanie po kroku".
+- ✓ **A1-Wariant 0** (commit `5867a76`): `PeakRAMSampler` (daemon thread 50 ms) w `tests/benchmark.py`; podpięty pod indexing/render/typo + globalny peak runu. Smoke-test: łapie transient spike 200 MB, który stary pomiar gubił.
+- ✓ **A1-A-tani** (commit `4f178a3`): `_euclid_f32` (GEMM float32 in-place) zastąpił `cdist`; adaptacyjny `chunk_size` ≤256 MB. Per-chunk 1.8 GB → 0.25 GB (3.6 → 0.5 GB z mirrorem). Parytet vs cdist: max err 4.6e-6, top-k i zwycięzca po freq_penalty identyczne.
+- ✓ **A2 eksport DZI** (commit `b33b5c2`): `make_dzi` skip_existing + `--no-skip`; CLI podkomenda `dzi`; przycisk GUI „Export Deep Zoom…" (wątek tła wzorem run_photo). E2E: skip-if-exists potwierdzony.
+- ✓ **A1-B leniwe maski** (commit `81a424a`): `_LazyMask` (wielokąt zamiast rezydentnego L-obrazu, rasteryzacja odroczona do kompozytu). Golden sha256 (kite+spectre × border) BIT-W-BIT identyczne przed/po. +5 testów regresji.
+- ✓ **MEMORY zaktualizowane**: [[project_a1_memory_arch]] i [[project_a2_dzi_export_arch]] oznaczone WDROŻONE 2026-06-27 z inwariantami.
+- ✓ **157 testów zielonych** (152 + 5 nowych regresji).
+
+(Sesja kontynuowana po checkpoincie: README EN+PL, testy dzi, test_processor→CI, push 8 commitów — szczegóły w finalnym last_session.md sesji.)
+
 ## ═══ Sesja zarchiwizowana [2026-06-26 22:30] ═══
 
 # last_session.md
@@ -244,85 +280,3 @@ zadaniem (galeria spectre i DZI już istnieją z 2026-06-12); naturalne uzupełn
 - `project_grid_edge_wedges.md` — pętle grid od -1 wypełniają kliny krawędziowe; Pillow
   przyjmuje ujemny dest, NIE clampować ujemnych px,py (przywróciłoby kliny) (2026-06-13)
 
-## ═══ Sesja zarchiwizowana [2026-06-13 16:30] ═══
-
-# last_session.md
-
-**Sesja:** 2026-06-12 · 20:45-23:05
-**Status:** ✓ Zakończona poprawnie
-**Punkt odniesienia (git):** 094c8f4 @ main
-
----
-
-## ▸ NASTĘPNY KROK (zacznij tutaj)
-
-**Wyeliminować czarne kliny przy górnej/lewej krawędzi siatek w `src/engine_smart.py`
-(gałąź STANDARD GRID, pętla „Scanning grid...").**
-
-Konkretnie: pętle `for r in range(rows)` / `for c in range(cols)` zaczynają od 0, więc
-kształty z offsetem nieparzystych wierszy (hexagon, hexagon_romb, romb, brick_wall) i
-trójkąty nie mają wiersza/kolumny „-1" — przy górnej i lewej krawędzi zostają czarne
-kliny (zmierzono na syntetyku: romb ~8.6%, hexagon ~4.8% ciemnych px; większość to
-kliny krawędziowe + szwy AA). Zmienić na `range(-1, rows)` / `range(-1, cols)` i
-sprawdzić, że warunki `safe`/`px > target_w` poprawnie klipują ujemne pozycje
-(meta px,py mogą być ujemne — Pillow 11.1 akceptuje ujemny dest w alpha_composite,
-zweryfikowane w tej sesji). Weryfikacja: harness „dark%" z tej sesji (bright tiles,
-target 801×603) — wartości powinny spaść do ~poziomu szwów AA.
-
-Kontekst: jedyny pozostały defekt jakościowy znaleziony w code-review kształtów
-(2026-06-12); wszystkie pozostałe punkty review już naprawione (commit dd4e5d6).
-
----
-
-## Co zrobiono w tej sesji
-
-- ✓ **Einstein hat** — pełna implementacja (substytucja H/T/P/F z arXiv:2303.10798,
-  port hatviz): `src/hat_tiling.py`, integracja engine/GUI/CLI, 12 testów, showcase,
-  pyramida DZI (commity e34d55c, 9b66704, 30d01ba, 127d323)
-- ✓ **Bug pokrycia hat przy 8K+** znaleziony na renderze usera i naprawiony: margines
-  przycinania proporcjonalny do przekątnej węzła + poziom zapasowy substytucji (9b66704)
-- ✓ **Tile Library OOM naprawiony** (eaaffa7): paginacja `_LIB_PAGE_SIZE=200` +
-  `_LIB_SCAN_CAP=2000` + przycisk Load More; zweryfikowane na żywym GUI z 455 448 plikami
-  (pierwsza strona ~27 s, responsywne)
-- ✓ **Spectre** — chiralny monotile (arXiv:2305.17743, port spectre.js Kaplana):
-  `src/spectre_tiling.py` (9 metakafli, mystic Γ, dokładne bboxy bottom-up, wspólne
-  recentrowanie ramki), integracja + 13 testów + showcase + DZI (3d55a6d, 127d323)
-- ✓ **Decyzja usera: einstein_hat USUNIĘTY** (fe9db96) — kształty łudząco podobne,
-  spectre mocniejszy matematycznie (zero odbić); prymitywy afiniczne przeniesione
-  do spectre_tiling.py; viewer Pages: spectre = przycisk 5
-- ✓ **Code-review pozostałych kształtów** + wszystkie poprawki (dd4e5d6): kite
-  deterministyczny (seed RNG → naprawa cache sąsiadów i potencjalnego IndexError),
-  mask-mean fill cech w kite, ValueError zamiast None z `_do_render`, licznik
-  nieudanych kafelków, hexagon_romb bez pustych masek, float-stepy dla hexagon/romb
-  (z weryfikacją zero-regresji względem HEAD dla wszystkich 7 kształtów siatkowych)
-- ✓ Testy końcowe: **182 passed**; wszystko wypchnięte na origin/main
-- ✓ `.gitignore` (konsolidacja backupów) zacommitowany (094c8f4)
-
-## Co zostało (backlog sesji)
-
-- ⟳ Czarne kliny przy krawędziach siatek (patrz NASTĘPNY KROK)
-- ⟳ `padding=1.02` częściowo clippowany do płótna maski — świadomie zostawione
-  (naprawa = powiększenie płótna masek we wszystkich kształtach, zysk znikomy)
-- ⟳ Zoom-GIF dla spectre do README (`make_zoom_gif.py`) — sekcja „Zoom animations"
-  ma 6 kształtów, spectre by ją uzupełnił
-- ⟳ Stary backlog UX z 2026-06-04 (auto-preview toggle, otwarcie folderu wyniku itd.)
-
-## Aktywne pliki
-
-- `src/spectre_tiling.py` — NOWY, samodzielny (prymitywy afiniczne w środku)
-- `src/engine_smart.py` — gałąź spectre + poprawki review (kite/grid/matching)
-- `src/gui.py` — paginacja Tile Library + spectre w liście kształtów
-- `src/cli.py`, `src/tools/make_showcase.py`, `tests/test_spectre_tiling.py`
-- `docs/index.html` + `docs/tiles/showcase_spectre_*` — viewer Pages (5 mozaik)
-- `README.md` — sekcja spectre + galeria (papuga 8K)
-
-## Otwarte pytania
-
-- Czy rendery usera w `output/einstein hat/` zostawić (powstały przed usunięciem kształtu)?
-- Kolejność backlogu: kliny krawędziowe → zoom-GIF spectre → UX?
-
-## Do MEMORY.md (przeniesiono)
-
-- `project_spectre_only_no_hat.md` — einstein_hat usunięty (2026-06-12), zostaje spectre;
-  nie proponować hat ponownie + notatki techniczne substytucji (wspólne recentrowanie!)
-- `project_tile_library_scale_bug.md` — zaktualizowany: bug NAPRAWIONY (paginacja 200/stronę)

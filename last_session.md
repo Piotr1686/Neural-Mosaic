@@ -1,54 +1,53 @@
 # last_session.md
 
-**Sesja:** 2026-06-26 · 21:00-22:30
+**Sesja:** 2026-06-27 · 10:30-12:20
 **Status:** ✓ Zakończona poprawnie
-**Punkt odniesienia (git):** c38c2d0 @ main (origin zsynchronizowany)
+**Punkt odniesienia (git):** 4f01318 @ main (origin zsynchronizowany — wszystko wypchnięte, CI zielony)
 
 ---
 
 ## ▸ NASTĘPNY KROK (zacznij tutaj)
 
-**Zacznij wdrożenie A1 od Wariantu 0 (warunek wstępny dla A+B):** dodaj wiarygodny pomiar peak-RAM przez wątek samplujący `psutil.Process().memory_info().rss` co ~50 ms wokół renderu w `tests/benchmark.py` (zastępując obecny niewiarygodny `_rss_mb() - ram0` z linii 108/133, który mierzy tylko przed/po i gubi transient spike). To daje liczbę bazową „przed" dla Wariantu A-tani i równocześnie zalicza backlog „benchmark.py peak-RAM".
+**Brak twardego następnego kroku — plan A1+A2 i cały housekleeping domknięte i wypchnięte (CI run `28286897637` = success).** Do wyboru z backlogu poniżej; rekomendowany kandydat: **empiryczny pomiar zysku RAM na realnym renderze 16K** nowym `PeakRAMSampler` (`tests/benchmark.py`) — uruchom `python -m tests.benchmark` (pełny, ~30 min) lub punktowo `_do_render` spectre/kite 16K z `data/smart_index.pkl`, by udokumentować realny peak „przed/po" A-tani+B i wstawić liczby do tabeli Performance w README. To jedyne, co zostało z A1, a obecne liczby w README (~10 GB) są sprzed optymalizacji.
 
-Kontekst: A1 i A2 mają zatwierdzoną architekturę (decyzja usera 2026-06-26), implementacja miała ruszyć od TEJ następnej sesji. Wariant 0 jest warunkiem wstępnym — bez wiarygodnego pomiaru nie udowodnimy efektu A-tani (cdist float64 3.6 GB → float32 ~0.25 GB). Pełna architektura: [[project_a1_memory_arch]], [[project_a2_dzi_export_arch]].
+Kontekst: A1 (0+A-tani+B) i A2 (DZI) wdrożone i zweryfikowane (golden sha256, 173 testy), ale zysk RAM udowodniony jest tylko analitycznie/syntetycznie — brakuje pomiaru na produkcyjnym 16K. Pełna architektura: [[project_a1_memory_arch]], plan: `PLAN_PRAC.md`.
 
 ---
 
-## Co zrobiono w tej sesji (2026-06-26)
+## Co zrobiono w tej sesji (2026-06-27)
 
-- ✓ **Walidacja `requirements.txt` w CZYSTYM venv (definitywny dowód)**: świeży venv Python 3.10.19, `pip install -r requirements.txt` (44 pakiety, bez torch/transformers); `import src.gui` OK (bez `ModuleNotFoundError: matplotlib`); render `typo 4K` (33004 glify, `fonttools`) i `smart 2K` (454857 kafelków, cKDTree) przeszły; `torch=False, transformers=False`. Obietnica README „4 linie i działa" udowodniona empirycznie. (SSL w gołym venv → `--trusted-host`; lokalne certy, nie problem requirements.)
-- ✓ **Push zaległego commitu sesyjnego** `f927696`.
-- ✓ **README dwujęzyczny EN/PL** (commit `ab32e7e`): pełny `README.pl.md` (25 sekcji, parytet z EN), przełącznik `**English** · [Polski]` w linii 3 obu plików; kotwice TOC z polskimi diakrytykami.
-- ✓ **CI z czerwonego na zielony + realne testy** (`db427b3`, `cf91769`, `c38c2d0`): install z `requirements.txt` (koniec driftu — padał `tqdm`); `python -m pytest` → **152 testy** w CI (pominięte test_ai_core/test_processor = torch/GPU); bump `checkout@v5`/`setup-python@v6`. Inwariant: [[project_ci_pipeline]].
-- ✓ **GitHub „About"** (`gh repo edit`): description, homepage→live-demo, 10 topics; korekta `opencv`→`scikit-image` (cv2 nieimportowane).
-- ✓ **/architect A1** (peak-RAM 16K) — atrybucja peaku (spike cdist float64 ~3.6 GB, nie kanwa); zatwierdzony zakres **0 + A-tani + B**, C odłożony. → [[project_a1_memory_arch]]
-- ✓ **/architect A2** (eksport DZI) — `make_dzi.py` już gotowy; zatwierdzony **Wariant B (osobny przycisk) + skip-if-exists + podkomenda CLI `dzi`**, C (publikacja do viewera) odłożony. → [[project_a2_dzi_export_arch]]
+- ✓ **PLAN_PRAC.md** — plan A1+A2 wg ryzyka (0→A-tani→A2→B + housekeeping), protokół „commit + pytanie po kroku".
+- ✓ **A1-Wariant 0** (`5867a76`): `PeakRAMSampler` (daemon thread 50 ms) w `tests/benchmark.py`; pod indexing/render/typo + globalny peak runu. Smoke-test: łapie spike 200 MB gubiony przez stary pomiar.
+- ✓ **A1-A-tani** (`4f178a3`): `_euclid_f32` (GEMM float32 in-place) zamiast `cdist`; adaptacyjny `chunk_size` ≤256 MB. Per-chunk 1.8 GB→0.25 GB (3.6→0.5 z mirrorem). Parytet vs cdist: max err 4.6e-6, top-k i zwycięzca po freq_penalty identyczne.
+- ✓ **A2 eksport DZI** (`b33b5c2`): `make_dzi` skip_existing + `--no-skip`; CLI podkomenda `dzi`; przycisk GUI „Export Deep Zoom…" (wątek tła wzorem run_photo). E2E skip-if-exists potwierdzony.
+- ✓ **A1-B leniwe maski** (`81a424a`): `_LazyMask` (wielokąt zamiast rezydentnego L-obrazu, rasteryzacja odroczona do kompozytu). Golden sha256 (kite+spectre × border) BIT-W-BIT identyczne; +5 testów regresji.
+- ✓ **README EN+PL** (`85edada`): `--res 2K` dla typo (res_map ma 2K:2500); workflow/struktura → `library_*` + legacy `tiles/` z odnośnikiem do `src/library_dirs.py`.
+- ✓ **Testy `dzi`** (`b300410`): +12 testów (parser, walidacja, pełne E2E w CI — make_dzi bez indeksu; idempotencja + `--no-skip`).
+- ✓ **test_processor wrócił do CI** (`4f01318`): `importorskip("torch")` + `skipif(not cuda)`; zdjęty `--ignore` w ci.yml. CI bez torcha → moduł skip (udowodnione symulacją), dev → 4 zielone.
+- ✓ **Push 8 commitów** (`c38c2d0..4f01318`) → origin/main; **CI run `28286897637` = success**.
+- ✓ **MEMORY**: [[project_a1_memory_arch]] + [[project_a2_dzi_export_arch]] → WDROŻONE 2026-06-27; [[project_ci_pipeline]] → ignore tylko test_ai_core, wzorzec importorskip+skipif.
+- ✓ **173 testy zielone** lokalnie (z GPU); 169 + test_processor self-skip w CI.
 
 ## Co zostało (backlog sesji)
 
-- ⟳ **Wdrożenie A1** = Wariant 0 → A-tani (`engine_smart._do_render:658-668`; de-eskalacja `/sonnet` OK) → B (leniwe maski spectre/kite `:729`, `:303`; HIGH, test regresji pikselowej). C ODŁOŻONY.
-- ⟳ **Wdrożenie A2** = Wariant B (przycisk „Export Deep Zoom…", wzorzec `gui.py:run_photo:991-1006`) + skip-if-exists + `dzi` w `src/cli.py`. C ODŁOŻONY.
-- ⟳ `test_processor`: twardo asertuje CUDA → `skipif(not cuda)`, by wrócił do CI. NISKI.
-- ⟳ Drobne README↔kod: typo wspiera `--res 2K` (README mówi 4K/8K/16K); workflow wymienia 2 z 6 katalogów.
+- ⟳ **Empiryczny pomiar RAM 16K** (patrz NASTĘPNY KROK) — jedyne otwarte z A1; zaktualizować liczby Performance w README. NISKI.
 - ⟳ Live demo: zróżnicowanie źródeł (triangle/photo = ta sama osoba); więcej mozaik 8K. NISKI.
-- ⟳ Świadomie odrzucone (over-engineering solo-portfolio): CoC, SECURITY.md, CITATION.cff, Docker/cross-platform, plugin system kształtów, Wariant C w A1 i A2.
+- ⟳ Świadomie ODŁOŻONE: Wariant C w A1 (pasmowa kanwa) i A2 (publish-to-viewer); CoC/SECURITY.md/CITATION.cff/Docker/plugin system kształtów.
 
 ## Aktywne pliki
 
-- `tests/benchmark.py` (NASTĘPNY KROK: sampling-thread peak-RAM; obecny pomiar `:108`/`:133` niewiarygodny)
-- `src/engine_smart.py` (A1: pętla matchingu `:658-668` float32; maski spectre/kite `:303`,`:729`)
-- `src/gui.py` (A2: przycisk Export DZI, wzorzec `:991-1006`), `src/cli.py` (A2: podkomenda `dzi`), `src/tools/make_dzi.py` (gotowy, reuse)
-- `.github/workflows/ci.yml`, `README.md` + `README.pl.md`, `requirements.txt` (zwalidowany) — wszystko pushed
+- `PLAN_PRAC.md` (plan 4/4 + housekeeping — wszystko ✓ poza pomiarem RAM)
+- `tests/benchmark.py` (`PeakRAMSampler` — gotowy do pomiaru 16K), `src/engine_smart.py` (`_euclid_f32`, `_LazyMask`)
+- `src/cli.py` / `src/gui.py` / `src/tools/make_dzi.py` (eksport DZI), `tests/test_cli.py` (+12 dzi), `tests/test_smart_engine.py` (+5 regresji)
+- `tests/test_processor.py` + `.github/workflows/ci.yml` (test_processor w CI), `README.md` + `README.pl.md`
 
 ## Otwarte pytania
 
-- Czy A2 wdrażać po A1, czy równolegle? (architektury niezależne — można równolegle)
-- Czy udokumentować/zablokować `--res 2K` dla typo (silnik wspiera, README nie)?
-- Czy zróżnicować pozostałe źródła live-demo? (rekomendacja: niski priorytet)
+- Czy uruchomić pełny `python -m tests.benchmark` (~30 min) dla liczb 16K, czy punktowy pomiar tylko spectre/kite 16K?
+- Czy po pomiarze zaktualizować sekcję „Memory" w README (obecne ~10 GB jest sprzed A-tani+B)?
 
-## Do MEMORY.md (przeniesiono w tej sesji)
+## Do MEMORY.md (przeniesiono/zaktualizowano w tej sesji)
 
-- [[project_ci_pipeline]] — inwarianty CI (install z requirements.txt, `python -m pytest`, ignore test_ai_core+test_processor); 152 testy (2026-06-26)
-- [[project_a1_memory_arch]] — A1 peak-RAM: zatwierdzone 0+A-tani+B; peak = spike cdist float64, nie kanwa; C odłożony (2026-06-26)
-- [[project_a2_dzi_export_arch]] — A2 eksport DZI: Wariant B + skip-if-exists + CLI `dzi`; make_dzi.py gotowy; C odłożony (2026-06-26)
-- [[project_requirements_curated]] — zaktualizowany: ZWALIDOWANY w czystym venv (2026-06-26)
+- [[project_a1_memory_arch]] — WDROŻONE 2026-06-27: PeakRAMSampler + _euclid_f32 (inwariant: prawdziwy euklides) + _LazyMask (inwariant: render bit-w-bit)
+- [[project_a2_dzi_export_arch]] — WDROŻONE 2026-06-27: make_dzi skip_existing + CLI `dzi` + przycisk GUI
+- [[project_ci_pipeline]] — ignore TYLKO test_ai_core; test_processor wrócił przez importorskip+skipif; 173 testy lokalnie
