@@ -41,7 +41,16 @@ def _level_size(orig_w: int, orig_h: int, max_level: int, level: int) -> tuple[i
     return w, h
 
 
-def make_dzi(input_path: Path, out_dir: Path, max_level_cap: int | None = None) -> None:
+def make_dzi(
+    input_path: Path,
+    out_dir: Path,
+    max_level_cap: int | None = None,
+    skip_existing: bool = True,
+) -> None:
+    """Build a DZI pyramid. With ``skip_existing`` (default) any tile already on
+    disk with non-zero size is left untouched — re-running on an interrupted or
+    partial export only fills the gaps (same idempotency philosophy as the batch
+    CLI). Pass ``skip_existing=False`` to force a full regeneration."""
     print(f"Loading {input_path.name} ...")
     img = Image.open(input_path).convert("RGB")
     orig_w, orig_h = img.size
@@ -68,6 +77,7 @@ def make_dzi(input_path: Path, out_dir: Path, max_level_cap: int | None = None) 
     # Build pyramid level by level (top-down: level 0 = 1x1)
     # We iterate from max_level down to 0
     level_img = img
+    written = skipped = 0
     for level in range(max_level, -1, -1):
         lw, lh = _level_size(orig_w, orig_h, max_level, level)
 
@@ -82,15 +92,23 @@ def make_dzi(input_path: Path, out_dir: Path, max_level_cap: int | None = None) 
 
         for row in range(rows):
             for col in range(cols):
+                tile_path = level_dir / f"{col}_{row}.jpg"
+                if skip_existing and tile_path.exists() and tile_path.stat().st_size > 0:
+                    skipped += 1
+                    continue
                 x0 = max(0, col * TILE_SIZE - OVERLAP)
                 y0 = max(0, row * TILE_SIZE - OVERLAP)
                 x1 = min(lw, (col + 1) * TILE_SIZE + OVERLAP)
                 y1 = min(lh, (row + 1) * TILE_SIZE + OVERLAP)
                 tile = level_img.crop((x0, y0, x1, y1))
-                tile.save(level_dir / f"{col}_{row}.jpg", "JPEG", quality=JPEG_QUALITY)
+                tile.save(tile_path, "JPEG", quality=JPEG_QUALITY)
+                written += 1
 
         if level % 3 == 0 or level == max_level:
             print(f"  Level {level:2d}  {lw}x{lh}  ({cols}x{rows} tiles)")
+
+    if skipped:
+        print(f"  Tiles written: {written}  (skipped {skipped} already on disk)")
 
     dzi_path.write_text(
         DZI_TEMPLATE.format(
@@ -119,6 +137,11 @@ def main() -> None:
         metavar="N",
         help="Cap pyramid at level N (2^N px on longest side). Use 13 for ~8K.",
     )
+    parser.add_argument(
+        "--no-skip",
+        action="store_true",
+        help="Regenerate every tile even if it already exists (default: skip existing).",
+    )
     args = parser.parse_args()
 
     input_path = Path(args.input)
@@ -129,7 +152,7 @@ def main() -> None:
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    make_dzi(input_path, out_dir, max_level_cap=args.max_level)
+    make_dzi(input_path, out_dir, max_level_cap=args.max_level, skip_existing=not args.no_skip)
 
 
 if __name__ == "__main__":

@@ -487,7 +487,19 @@ class App(ctk.CTk):
             font=ctk.CTkFont(size=14, weight="bold"),
             command=self.run_photo,
         )
-        self.btn_run_p.grid(row=1, column=0, columnspan=2, sticky="ew", padx=20, pady=(10, 15))
+        self.btn_run_p.grid(row=1, column=0, columnspan=2, sticky="ew", padx=20, pady=(10, 5))
+
+        # Deep Zoom export — independent of the render above; works on any
+        # existing image, builds a DZI pyramid via src/tools/make_dzi.
+        self.btn_dzi_p = ctk.CTkButton(
+            outer,
+            text="Export Deep Zoom (DZI)...",
+            fg_color="#1f538d",
+            hover_color="#2a6ab0",
+            height=36,
+            command=self.export_dzi,
+        )
+        self.btn_dzi_p.grid(row=2, column=0, columnspan=2, sticky="ew", padx=20, pady=(0, 15))
 
     def _setup_typo_tab(self):
         outer = self.tab_typo
@@ -1008,6 +1020,36 @@ class App(ctk.CTk):
     def _finish_render_p(self):
         self.progress_render_p.grid_remove()
         self.btn_run_p.configure(state="normal")
+
+    def export_dzi(self):
+        in_path = filedialog.askopenfilename(
+            title="Select mosaic image to export as Deep Zoom",
+            initialdir=getattr(self, "output_dir", None) or None,
+            filetypes=[("Images", "*.jpg *.jpeg *.png"), ("All files", "*.*")],
+        )
+        if not in_path:
+            return
+        out_dir = filedialog.askdirectory(title="Select output folder for the DZI pyramid")
+        if not out_dir:
+            return
+
+        in_path = Path(in_path)
+        out_dir = Path(out_dir)
+        self.btn_dzi_p.configure(state="disabled")
+        self.log(f"Exporting Deep Zoom: {in_path.name} -> {out_dir}  (skip-if-exists)")
+
+        def _run():
+            try:
+                from .tools.make_dzi import make_dzi
+                make_dzi(in_path, out_dir, skip_existing=True)
+                self.log(f"DONE! Deep Zoom exported to {out_dir}")
+            except Exception as e:
+                self.log(f"Error: {e}")
+                import traceback
+                traceback.print_exc()
+            finally:
+                self.after(0, lambda: self.btn_dzi_p.configure(state="normal"))
+        threading.Thread(target=_run, daemon=True).start()
 
     def run_typo(self):
         if not getattr(self, 'path_t', None):

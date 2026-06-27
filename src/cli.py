@@ -139,6 +139,7 @@ def build_parser() -> argparse.ArgumentParser:
             "  python -m src.cli batch ./input ./output --engine smart --res 4K\n"
             "  python -m src.cli batch ./input ./output --engine smart --res 8K"
             " --pattern '*.png'\n"
+            "  python -m src.cli dzi output/mosaic.jpg output/mosaic_dzi\n"
         ),
     )
 
@@ -174,6 +175,27 @@ def build_parser() -> argparse.ArgumentParser:
     _add_engine_args(bp)
     _add_smart_args(bp)
     _add_typo_args(bp)
+
+    # ── dzi ───────────────────────────────────────────────────────────────
+    dp = sub.add_parser(
+        "dzi",
+        help="Build a Deep Zoom (DZI) pyramid from an existing mosaic image",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    dp.add_argument("input", metavar="INPUT", help="Source mosaic image (.jpg / .png)")
+    dp.add_argument(
+        "out_dir", metavar="OUT_DIR",
+        help="Output directory for <stem>.dzi + <stem>_files/ (created if missing)",
+    )
+    dp.add_argument(
+        "--max-level", type=int, default=None, metavar="N", dest="max_level",
+        help="Cap pyramid at level N (2^N px on longest side). Use 13 for ~8K.",
+    )
+    dp.add_argument(
+        "--no-skip", action="store_true", dest="no_skip",
+        help="Regenerate every tile even if it already exists (default: skip existing).",
+    )
+    dp.add_argument("--verbose", action="store_true", help="Enable debug-level logging")
 
     return parser
 
@@ -236,6 +258,19 @@ def _validate_batch(args: argparse.Namespace, parser: argparse.ArgumentParser) -
     args.output_dir = output_dir
 
     _validate_engine_args(args, parser)
+
+
+def _validate_dzi(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    input_path = Path(args.input)
+    if not input_path.exists():
+        parser.error(f"Input file not found: {input_path}")
+    if not input_path.is_file():
+        parser.error(f"Input path is not a file: {input_path}")
+    args.input = input_path
+
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    args.out_dir = out_dir
 
 
 # ---------------------------------------------------------------------------
@@ -382,6 +417,26 @@ def _run_batch(args: argparse.Namespace, log: logging.Logger) -> None:
 
 
 # ---------------------------------------------------------------------------
+# dzi subcommand
+# ---------------------------------------------------------------------------
+
+def _run_dzi(args: argparse.Namespace, log: logging.Logger) -> None:
+    from .tools.make_dzi import make_dzi
+
+    log.info("=== Neural-Mosaic CLI  dzi ===")
+    log.info("  Input    : %s", args.input)
+    log.info("  Out dir  : %s", args.out_dir)
+    log.info("  MaxLevel : %s | SkipExisting: %s", args.max_level, not args.no_skip)
+
+    make_dzi(
+        args.input, args.out_dir,
+        max_level_cap=args.max_level,
+        skip_existing=not args.no_skip,
+    )
+    log.info("Done. DZI written to: %s", args.out_dir)
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
@@ -401,6 +456,9 @@ def main() -> None:
     elif args.command == "batch":
         _validate_batch(args, parser)
         _run_batch(args, log)
+    elif args.command == "dzi":
+        _validate_dzi(args, parser)
+        _run_dzi(args, log)
 
 
 if __name__ == "__main__":
