@@ -1,47 +1,43 @@
 # last_session.md
 
-**Sesja:** 2026-06-27 · 20:30-21:40
+**Sesja:** 2026-06-27 · 22:00-22:10
 **Status:** ✓ Zakończona poprawnie
-**Punkt odniesienia (git):** c9f6101 @ main (UWAGA: branch ahead of origin o 1 commit — `c9f6101` plan portfolio niewypchnięty; README `e6766b5` już na origin)
+**Punkt odniesienia (git):** fae2ef5 @ main (origin ZSYNCHRONIZOWANY — push wykonany na starcie sesji, branch == origin/main)
 
 ---
 
 ## ▸ NASTĘPNY KROK (zacznij tutaj)
 
-**Krok 1 z `PLAN_PORTFOLIO.md` — Live zoomable gallery jako HERO README.** Wygeneruj 1–2 prawdziwe mozaiki **16K** → DZI (gotowy `make_dzi` / przycisk GUI „Export Deep Zoom"), wrzuć do hostowanego viewera OpenSeadragon na GitHub Pages (dziś tylko „a handful of 8K", README l. 560), i dodaj na samej górze README (EN+PL) wielki link „🔍 Open the live zoomable gallery". Reuse `assets/examples/mosaic_zoom.gif`.
+**Weryfikacja dostarczonych mozaik 16K + osadzenie w viewerze GitHub Pages (Krok 1 — live zoomable gallery hero).** User generuje sam 2 mozaiki 16K (foto + typo) wg ustalonych parametrów i przynosi do weryfikacji. Zadanie: sprawdzić jakość/rozpoznawalność makro + gęstość zoomu, zmierzyć realny rozmiar DZI (zastąpić szacunek 150–300 MB/szt. faktem), wyeksportować przez `make_dzi` / przycisk GUI „Export Deep Zoom", osadzić w `docs/` (OpenSeadragon na Pages) i dodać na górze README EN+PL wielki link „🔍 Open the live zoomable gallery".
 
-Kontekst: po domknięciu A1+A2 faza skupia się na PREZENTACJI/WIDOCZNOŚCI, nie kodzie ([[project_portfolio_phase]]). Krok 1 ma najwyższy ROI — infrastruktura DZI+Pages już istnieje i jest najbardziej niedoeksploatowana; daje efekt „wow" bez instalacji u odbiorcy. Krok 2 (GitHub social preview) łączy się naturalnie z tą samą pracą wizualną.
+Kontekst: faza portfolio = prezentacja, nie kod ([[project_portfolio_phase]]). Ustalono parametry „pod wow" (poniżej). Dopiero po pomiarze realnego DZI decyzja czy dokładamy 3. mozaikę (spectre/monotile).
 
 ---
 
 ## Co zrobiono w tej sesji
 
-- ✓ **Pomiar empiryczny peak-RAM 16K** — pełny `python -m tests.benchmark` (i5-12500H/16 wątków, CPU-only, indeks 454857). Peak RAM całego runu **3.90 GB** (vs ~10 GB analitycznie); per-op RAM+: 4K 1344 MB, 8K 1619 MB, 16K/kite 3212 MB, typo 255 MB. Bonus: render 3–5× szybszy (16K 21→5.9 min) — GEMM float32 wyparł cdist. Log: `logs/benchmark_16k_20260627.log`.
-- ✓ **README EN+PL zaktualizowane** (`e6766b5`, wypchnięte) — tabela Performance (nowe czasy), nota Memory (~4 GB + „z ~10 GB"), Known Limitations, FAQ. Zweryfikowano brak zbłąkanego „~10 GB" (zostały tylko celowe „przed/po").
-- ✓ **Push origin** — `4f01318..e6766b5`; objął też zaległy commit sesyjny `6c0ee46`. Origin był zsynchronizowany do tego momentu.
-- ✓ **MEMORY zaktualizowane** — [[project_a1_memory_arch]] (pomiar 16K potwierdzony) + nowy wpis [[project_portfolio_phase]].
-- ✓ **Prompt dla DriftScope** — gotowy do skopiowania prompt na dwujęzyczne README (EN źródłowe + PL), wzorzec przełącznika języka + zasady (badge CI tylko gdy workflow; polskie kotwice z diakrytykami). Tylko dostarczony userowi, nic w repo.
-- ✓ **`PLAN_PORTFOLIO.md`** (`c9f6101`) — plan fazy portfolio, 6 zadań po ROI; decyzja: adwersarialni agenci ODRZUCENI dla appki desktop CPU-only.
+- ✓ **Push origin** — wypchnięto 2 zaległe commity `e6766b5..fae2ef5` (plan portfolio `c9f6101` + zapis sesji `fae2ef5`); branch == origin/main, CI zielony.
+- ✓ **Ustalono budżet galerii** — Pages repo ~1 GB miękki limit; 16K DZI ~150–300 MB/szt. (mozaiki słabo kompresują JPEG przez gęste krawędzie). Plan: start od **2 mozaik**, zmierz, ew. dołóż spectre (~sufit 0.9 GB).
+- ✓ **Ustalono parametry „pod wow"** (z realnych pokręteł GUI) — Foto: 16K, tile_scale 0.5, shape kite/hexagon_romb, blend 0%, tint 0%, border off. Typo: 16K, white_on_black, variation 5, 2–3 grupy fontów, scale 0.5–0.75. Mechanizm: iluzja dwóch skal.
+- ✓ **MEMORY zaktualizowane** — [[project_portfolio_phase]] dostał blok „Ustalenia Krok 1 — galeria" z budżetem i parametrami; status = user generuje, przyniesie do weryfikacji.
 
 ## Co zostało (backlog sesji)
 
-- ⟳ **PLAN_PORTFOLIO.md kroki 2–6:** GitHub social preview (1280×640) · sekcja Performance Engineering · post „aperiodic monotile mosaic" · zero-friction install (PyInstaller) · adwersarialny audyt twierdzeń README przed publikacją.
-- ⟳ Świadomie ODŁOŻONE: Wariant C (A1 pasmowa kanwa / A2 publish-to-viewer), kolejne ML/CLIP, Docker/plugin system. test_dzi (follow-up z A2).
+- ⟳ **Krok 1 (w toku):** weryfikacja mozaik → eksport DZI → osadzenie w `docs/` viewer → link hero w README EN+PL.
+- ⟳ **PLAN_PORTFOLIO.md kroki 2–6:** GitHub social preview (1280×640) · sekcja Performance Engineering · post „aperiodic monotile mosaic" · zero-friction install (PyInstaller) · adwersarialny audyt twierdzeń README.
+- ⟳ Świadomie ODŁOŻONE: Wariant C (A1/A2), ML/CLIP, Docker/plugin. test_dzi (follow-up z A2).
 
 ## Aktywne pliki
 
-- `PLAN_PORTFOLIO.md` (nowy plan — krok 1 do startu), `PLAN_PRAC.md` (A1+A2 — wszystko ✓)
-- `README.md` + `README.pl.md` (Performance/Memory zaktualizowane)
-- `tests/benchmark.py` (`PeakRAMSampler` — użyty do pomiaru), `logs/benchmark_16k_20260627.log`
-- Do kroku 1: `src/tools/make_dzi.py`, `src/gui.py` (przycisk DZI), `docs/` (GitHub Pages viewer), `assets/examples/` (16K + zoom assety)
+- `PLAN_PORTFOLIO.md` (plan fazy), `README.md` + `README.pl.md` (dojdzie link hero)
+- Do Kroku 1: `src/tools/make_dzi.py`, `src/gui.py` (przycisk „Export Deep Zoom"), `docs/` (OpenSeadragon viewer), `assets/examples/` (16K + `mosaic_zoom.gif`)
 
 ## Otwarte pytania
 
-- Krok 1: ile mozaik 16K do galerii i jakie źródła? (limit storage GitHub Pages — README l. 560 wspomina o „lightweight").
+- Ile finalnie mozaik w galerii (2 vs +spectre) — rozstrzygnie pomiar realnego DZI.
 - Social preview: kompozycja w CC czy layout na Claude.ai (web)?
-- `c9f6101` (plan) niewypchnięty — wypchnąć na starcie kolejnej sesji czy zostawić.
+- Dobór konkretnych obrazów-celów (wysoki kontrast, rozpoznawalny temat) — po stronie usera.
 
 ## Do MEMORY.md (przeniesiono/zaktualizowano w tej sesji)
 
-- [[project_a1_memory_arch]] — dodano blok „POMIAR EMPIRYCZNY 16K POTWIERDZONY 2026-06-27" (peak 3.9 GB vs ~10 GB, README `e6766b5`); domyka jedyną otwartą pozycję A1.
-- [[project_portfolio_phase]] — NOWY: faza portfolio, wow = prezentacja nie kod, adwersarialni agenci odrzuceni, lewary ROI, link do `PLAN_PORTFOLIO.md`.
+- [[project_portfolio_phase]] — dodano blok „Ustalenia Krok 1 — galeria (2026-06-27)": budżet Pages, parametry wow foto/typo, status „user generuje → weryfikacja w kolejnej sesji".

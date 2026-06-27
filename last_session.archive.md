@@ -1,3 +1,53 @@
+## ═══ Sesja zarchiwizowana [2026-06-27 22:10] ═══
+
+# last_session.md
+
+**Sesja:** 2026-06-27 · 20:30-21:40
+**Status:** ✓ Zakończona poprawnie
+**Punkt odniesienia (git):** c9f6101 @ main (UWAGA: branch ahead of origin o 1 commit — `c9f6101` plan portfolio niewypchnięty; README `e6766b5` już na origin)
+
+---
+
+## ▸ NASTĘPNY KROK (zacznij tutaj)
+
+**Krok 1 z `PLAN_PORTFOLIO.md` — Live zoomable gallery jako HERO README.** Wygeneruj 1–2 prawdziwe mozaiki **16K** → DZI (gotowy `make_dzi` / przycisk GUI „Export Deep Zoom"), wrzuć do hostowanego viewera OpenSeadragon na GitHub Pages (dziś tylko „a handful of 8K", README l. 560), i dodaj na samej górze README (EN+PL) wielki link „🔍 Open the live zoomable gallery". Reuse `assets/examples/mosaic_zoom.gif`.
+
+Kontekst: po domknięciu A1+A2 faza skupia się na PREZENTACJI/WIDOCZNOŚCI, nie kodzie ([[project_portfolio_phase]]). Krok 1 ma najwyższy ROI — infrastruktura DZI+Pages już istnieje i jest najbardziej niedoeksploatowana; daje efekt „wow" bez instalacji u odbiorcy. Krok 2 (GitHub social preview) łączy się naturalnie z tą samą pracą wizualną.
+
+---
+
+## Co zrobiono w tej sesji
+
+- ✓ **Pomiar empiryczny peak-RAM 16K** — pełny `python -m tests.benchmark` (i5-12500H/16 wątków, CPU-only, indeks 454857). Peak RAM całego runu **3.90 GB** (vs ~10 GB analitycznie); per-op RAM+: 4K 1344 MB, 8K 1619 MB, 16K/kite 3212 MB, typo 255 MB. Bonus: render 3–5× szybszy (16K 21→5.9 min) — GEMM float32 wyparł cdist. Log: `logs/benchmark_16k_20260627.log`.
+- ✓ **README EN+PL zaktualizowane** (`e6766b5`, wypchnięte) — tabela Performance (nowe czasy), nota Memory (~4 GB + „z ~10 GB"), Known Limitations, FAQ. Zweryfikowano brak zbłąkanego „~10 GB" (zostały tylko celowe „przed/po").
+- ✓ **Push origin** — `4f01318..e6766b5`; objął też zaległy commit sesyjny `6c0ee46`. Origin był zsynchronizowany do tego momentu.
+- ✓ **MEMORY zaktualizowane** — [[project_a1_memory_arch]] (pomiar 16K potwierdzony) + nowy wpis [[project_portfolio_phase]].
+- ✓ **Prompt dla DriftScope** — gotowy do skopiowania prompt na dwujęzyczne README (EN źródłowe + PL), wzorzec przełącznika języka + zasady (badge CI tylko gdy workflow; polskie kotwice z diakrytykami). Tylko dostarczony userowi, nic w repo.
+- ✓ **`PLAN_PORTFOLIO.md`** (`c9f6101`) — plan fazy portfolio, 6 zadań po ROI; decyzja: adwersarialni agenci ODRZUCENI dla appki desktop CPU-only.
+
+## Co zostało (backlog sesji)
+
+- ⟳ **PLAN_PORTFOLIO.md kroki 2–6:** GitHub social preview (1280×640) · sekcja Performance Engineering · post „aperiodic monotile mosaic" · zero-friction install (PyInstaller) · adwersarialny audyt twierdzeń README przed publikacją.
+- ⟳ Świadomie ODŁOŻONE: Wariant C (A1 pasmowa kanwa / A2 publish-to-viewer), kolejne ML/CLIP, Docker/plugin system. test_dzi (follow-up z A2).
+
+## Aktywne pliki
+
+- `PLAN_PORTFOLIO.md` (nowy plan — krok 1 do startu), `PLAN_PRAC.md` (A1+A2 — wszystko ✓)
+- `README.md` + `README.pl.md` (Performance/Memory zaktualizowane)
+- `tests/benchmark.py` (`PeakRAMSampler` — użyty do pomiaru), `logs/benchmark_16k_20260627.log`
+- Do kroku 1: `src/tools/make_dzi.py`, `src/gui.py` (przycisk DZI), `docs/` (GitHub Pages viewer), `assets/examples/` (16K + zoom assety)
+
+## Otwarte pytania
+
+- Krok 1: ile mozaik 16K do galerii i jakie źródła? (limit storage GitHub Pages — README l. 560 wspomina o „lightweight").
+- Social preview: kompozycja w CC czy layout na Claude.ai (web)?
+- `c9f6101` (plan) niewypchnięty — wypchnąć na starcie kolejnej sesji czy zostawić.
+
+## Do MEMORY.md (przeniesiono/zaktualizowano w tej sesji)
+
+- [[project_a1_memory_arch]] — dodano blok „POMIAR EMPIRYCZNY 16K POTWIERDZONY 2026-06-27" (peak 3.9 GB vs ~10 GB, README `e6766b5`); domyka jedyną otwartą pozycję A1.
+- [[project_portfolio_phase]] — NOWY: faza portfolio, wow = prezentacja nie kod, adwersarialni agenci odrzuceni, lewary ROI, link do `PLAN_PORTFOLIO.md`.
+
 ## ═══ Sesja zarchiwizowana [2026-06-27 21:40] ═══
 
 # last_session.md
@@ -215,59 +265,3 @@ Pełna architektura/inwarianty: [[project_a1_memory_arch]], [[project_a2_dzi_exp
 - „README przepisane + sprostowane fakty vs kod" (downloadery Picsum/LoremFlickr vs v2; TARGET_SHORT_SIDE ignorowane; wzór anti-rep; nazwa Neural-Mosaic)
 - „Live demo — różne źródła per kształt, 8K" (make_dzi --max-level 13, Format=jpg, 5 mozaik)
 
-## ═══ Sesja zarchiwizowana [2026-06-21 23:35] ═══
-
-# last_session.md
-
-**Sesja:** 2026-06-14 · 11:00-12:18
-**Status:** ✓ Zakończona poprawnie
-**Punkt odniesienia (git):** 7bc6c07 @ main
-
----
-
-## ▸ NASTĘPNY KROK (zacznij tutaj)
-
-**Przebudować `data/typo_index.pkl` (`python -m src.indexer_typo` lub przycisk „Update Database (Scan Assets)" w GUI), by aktywować fix tofu `.notdef` z tej sesji — potem wyrenderować testową mozaikę typo i potwierdzić brak kwadracików tofu.**
-
-Kontekst: `indexer_typo` pomija teraz codepointy spoza cmap fontu (fontTools), ale istniejący pickle wciąż zawiera stare tofu — fix z Fali 2 **nie zadziała bez reindeksacji**. To jedyny krok wymagający akcji użytkownika, by zmiany z tej sesji były w pełni widoczne w runtime.
-
----
-
-## Co zrobiono w tej sesji
-
-- ✓ **Polski README** — utworzono prywatną wersję `D:\Programming_Projects\zz_INNE\README_PL.md` (poza repo, niewersjonowana)
-- ✓ **Code-review całości repo** (`/code-review high`, 4 etapy: silniki, GUI, CLI/config/indeksery, pipeline/tools) — 39 findingów po weryfikacji
-- ✓ **Fala 1** (`27ba89d`): crash `_nkey`+border_mode, cross-thread Tk (self.after), daemon=True na wątkach, sanity_check LAB `[:, :75]`, `src/fast_downloader.py` (alias)
-- ✓ **Fala 2** (`7c62ccf`): podgląd smart syncuje mirror/edge, podgląd typo po grupach (cache), tofu `.notdef` via fontTools cmap, `used_counts` int64
-- ✓ **Fala 3** (`d9aaf4d`): downloadery (cap 401, guard pustych list, HTTP 206 przy resume, atomowy zapis), indexer_smart skanuje data/tiles, batch skip niepuste, getattr-guard ścieżek
-- ✓ **Fala 4** (`7bc6c07`): `src/library_dirs.py` single source of truth, helper `_mean_fill_outside_mask`, usunięty martwy `tile_size`+`render_sized`
-- ✓ **182 testy passed** po każdej fali; wszystkie 4 commity **wypchnięte na origin/main**
-- ✓ MEMORY.md zaktualizowane (Rozwiązane problemy + Odrzucone podejścia)
-
-## Co zostało (backlog sesji)
-
-- ⟳ **Reindeksacja typo** dla aktywacji fixu tofu (patrz NASTĘPNY KROK)
-- ⟳ **Refaktory świadomie odłożone** (Fala 4, opisane w MEMORY.md „Odrzucone podejścia"):
-  dedup handlerów preview, unifikacja 4 downloaderów, centralizacja res_map, range() indexer_typo, CACHE_PATH
-- ⟳ Zoom-GIF dla spectre do README (standing backlog z 2026-06-13)
-- ⟳ Stary backlog UX z 2026-06-04 (auto-preview toggle, otwarcie folderu wyniku, statusbar, codename)
-
-## Aktywne pliki
-
-- `src/engine_smart.py`, `src/engine_typo.py`, `src/gui.py`, `src/indexer_smart.py`, `src/indexer_typo.py` — fixy review
-- `src/library_dirs.py` (NOWY), `src/fast_downloader.py` (NOWY)
-- `src/downloader.py`, `src/downloader_v2.py`, `src/get_mega_pack.py`, `src/get_special_datasets.py`, `src/cli.py`, `src/config.py`, `src/optimizer.py`, `src/clean_duplicates.py`, `src/tools/sanity_check.py`
-- MEMORY.md — zaktualizowane
-
-## Otwarte pytania
-
-- Czy zrobić którykolwiek z odłożonych refaktorów (Fala 4 backlog), czy zostawić jako dług?
-- Czy `optimizer` rozszerzony na pełny zestaw bibliotek (skaluje w miejscu) jest OK przy następnym uruchomieniu?
-
-## Do MEMORY.md (przeniesiono)
-
-- „Code-review całości repo — 4 fale napraw" (sekcja Rozwiązane problemy) z kluczowymi inwariantami:
-  `_nkey` musi zawierać border_mode; widgety Tk tylko przez self.after; tofu wymaga reindeksacji; LIBRARY_DIRS w `src/library_dirs.py`
-- „Refaktory świadomie odłożone po code-review" (sekcja Odrzucone podejścia)
-
-# last_session.archive.md
