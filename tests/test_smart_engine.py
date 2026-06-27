@@ -1,9 +1,9 @@
 """Tests for src/engine_smart.py — _smart_crop and _get_shape_mask."""
 import numpy as np
 import pytest
-from PIL import Image
+from PIL import Image, ImageDraw
 
-from src.engine_smart import SmartEngine
+from src.engine_smart import SmartEngine, _LazyMask, _euclid_f32
 
 
 @pytest.fixture
@@ -274,3 +274,67 @@ class TestNeighborsMapCache:
 
         assert len(calls) == 1
         assert results["a"] is results["b"]
+
+
+# ---------------------------------------------------------------------------
+# _LazyMask — pixel-regression guard for the deferred kite/spectre masks.
+# render() must reproduce the original inline rasterisation byte-for-byte.
+# ---------------------------------------------------------------------------
+
+class TestLazyMask:
+    KITE_POLY = [(2.0, 0.0), (18.0, 6.0), (12.0, 22.0), (0.0, 14.0)]
+    SPEC_POLY = [(1.0, 0.0), (20.0, 3.0), (24.0, 18.0), (10.0, 25.0), (0.0, 12.0)]
+
+    def test_render_size_and_mode(self):
+        m = _LazyMask(self.KITE_POLY, 20, 24, aa=1).render()
+        assert m.size == (20, 24)
+        assert m.mode == "L"
+
+    def test_kite_matches_native_rasterisation(self):
+        """aa=1: identical to a plain ImageDraw.polygon at native resolution."""
+        bw, bh = 20, 24
+        ref = Image.new("L", (bw, bh), 0)
+        ImageDraw.Draw(ref).polygon(self.KITE_POLY, fill=255)
+
+        got = _LazyMask(self.KITE_POLY, bw, bh, aa=1).render()
+        assert np.array_equal(np.array(ref), np.array(got))
+
+    def test_spectre_matches_supersampled_rasterisation(self):
+        """aa=4: identical to supersample + LANCZOS downscale (anti-aliased edge)."""
+        bw, bh, aa = 25, 26, 4
+        ref = Image.new("L", (bw * aa, bh * aa), 0)
+        ImageDraw.Draw(ref).polygon(
+            [(x * aa, y * aa) for (x, y) in self.SPEC_POLY], fill=255)
+        ref = ref.resize((bw, bh), Image.Resampling.LANCZOS)
+
+        got = _LazyMask(self.SPEC_POLY, bw, bh, aa=aa).render()
+        assert np.array_equal(np.array(ref), np.array(got))
+
+    def test_render_is_repeatable(self):
+        lazy = _LazyMask(self.SPEC_POLY, 25, 26, aa=4)
+        assert np.array_equal(np.array(lazy.render()), np.array(lazy.render()))
+
+
+# ---------------------------------------------------------------------------
+# _euclid_f32 — float32 GEMM distances must match scipy.cdist (rankings + value).
+# ---------------------------------------------------------------------------
+
+class TestEuclidF32:
+    def test_matches_cdist_and_topk(self):
+        from scipy.spatial.distance import cdist
+
+        rng = np.random.default_rng(0)
+        feats = rng.random((2000, 75)).astype(np.float32)
+        chunk = rng.random((128, 75)).astype(np.float32)
+        fsq = np.einsum("ij,ij->i", feats, feats)
+
+        ref = cdist(chunk, feats, "euclidean")
+        got = _euclid_f32(chunk, feats, fsq)
+
+        assert got.dtype == np.float32
+        assert np.abs(got - ref).max() < 1e-3
+
+        top_k = 50
+        tk_ref = np.sort(np.argpartition(ref, top_k - 1, axis=1)[:, :top_k], axis=1)
+        tk_got = np.sort(np.argpartition(got, top_k - 1, axis=1)[:, :top_k], axis=1)
+        assert np.array_equal(tk_ref, tk_got)

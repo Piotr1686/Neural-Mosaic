@@ -51,6 +51,41 @@ def _euclid_f32(chunk, feats, feat_sq):
     return d
 
 
+class _LazyMask:
+    """Deferred polygon mask for kite/spectre sectors.
+
+    Each non-grid sector used to keep a fully rasterised "L" mask resident in
+    sectors_data from build time until the composite pass — at 16K that is the
+    dominant *resident* RAM cost (grid masks are shared references, so cheap).
+    Storing the polygon instead and re-rasterising on demand cuts that to a
+    handful of float pairs per sector.
+
+    ``render()`` reproduces the original rasterisation byte-for-byte: kites draw
+    at native resolution (``aa == 1``); spectres supersample by ``aa`` then
+    downsample with LANCZOS (anti-aliased edge), exactly as the build pass did.
+    The same render() output feeds both the feature computation and the final
+    putalpha, so matching and pixels are unchanged.
+    """
+
+    __slots__ = ("poly", "bw", "bh", "aa")
+
+    def __init__(self, poly, bw, bh, aa=1):
+        self.poly = poly      # polygon in mask-local (unscaled) coordinates
+        self.bw = bw
+        self.bh = bh
+        self.aa = aa
+
+    def render(self):
+        if self.aa == 1:
+            m = Image.new("L", (self.bw, self.bh), 0)
+            ImageDraw.Draw(m).polygon(self.poly, fill=255)
+            return m
+        m = Image.new("L", (self.bw * self.aa, self.bh * self.aa), 0)
+        scaled = [(x * self.aa, y * self.aa) for (x, y) in self.poly]
+        ImageDraw.Draw(m).polygon(scaled, fill=255)
+        return m.resize((self.bw, self.bh), Image.Resampling.LANCZOS)
+
+
 class SmartEngine:
     def __init__(self, index_path="data/smart_index.pkl"):
         print(f"Loading Smart Index: {index_path}...")
@@ -451,18 +486,19 @@ class SmartEngine:
                         tmp.paste(s_img, (sb[0] - safe_box[0], sb[1] - safe_box[1]))
                         s_img = tmp
 
-                    mask_kite = Image.new("L", (bw, bh), 0)
-                    draw_k = ImageDraw.Draw(mask_kite)
                     shifted_poly = [(p[0] - min_x, p[1] - min_y) for p in padded_poly]
-                    draw_k.polygon(shifted_poly, fill=255)
+                    lazy_mask = _LazyMask(shifted_poly, bw, bh, aa=1)
+                    mask_kite = lazy_mask.render()
 
                     # Replace outside-mask pixels with the kite's mean colour
                     # so the bounding box does not leak neighbouring content
                     # into the LAB match (same treatment as the spectre mode).
                     feat_img = self._mean_fill_outside_mask(s_img, mask_kite)
 
+                    # Store the lazy descriptor, not the rasterised mask: it is
+                    # re-rendered identically at composite time (see putalpha).
                     sectors_data.append({
-                        "meta": (i_hat, int(min_x), int(min_y), mask_kite, bw, bh, len(hat_kites) > 1),
+                        "meta": (i_hat, int(min_x), int(min_y), lazy_mask, bw, bh, len(hat_kites) > 1),
                         "feature": self._compute_sector_feature(feat_img, edge_aware)
                     })
 
@@ -505,13 +541,12 @@ class SmartEngine:
                     tmp.paste(s_img, (0, 0))
                     s_img = tmp
 
-                # Anti-aliased polygon mask (supersampled, like _get_shape_mask).
-                mask_spec = Image.new("L", (bw * scale_aa, bh * scale_aa), 0)
-                draw_s = ImageDraw.Draw(mask_spec)
-                shifted_poly = [((p[0] - min_x) * scale_aa, (p[1] - min_y) * scale_aa)
-                                for p in padded_poly]
-                draw_s.polygon(shifted_poly, fill=255)
-                mask_spec = mask_spec.resize((bw, bh), Image.Resampling.LANCZOS)
+                # Anti-aliased polygon mask (supersampled, like _get_shape_mask):
+                # store the unscaled polygon; _LazyMask.render() supersamples by
+                # scale_aa and downsamples with LANCZOS — identical to the build pass.
+                shifted_poly = [(p[0] - min_x, p[1] - min_y) for p in padded_poly]
+                lazy_mask = _LazyMask(shifted_poly, bw, bh, aa=scale_aa)
+                mask_spec = lazy_mask.render()
 
                 # The spectre is non-convex, so its bounding box contains a
                 # lot of neighbouring content; replace outside-mask pixels
@@ -519,8 +554,10 @@ class SmartEngine:
                 # LAB match.
                 feat_img = self._mean_fill_outside_mask(s_img, mask_spec)
 
+                # Store the lazy descriptor, not the rasterised mask (re-rendered
+                # identically at composite time — see putalpha).
                 sectors_data.append({
-                    "meta": (i_spec, int(min_x), int(min_y), mask_spec, bw, bh, False),
+                    "meta": (i_spec, int(min_x), int(min_y), lazy_mask, bw, bh, False),
                     "feature": self._compute_sector_feature(feat_img, edge_aware)
                 })
 
@@ -760,7 +797,10 @@ class SmartEngine:
                                 tile_arr = np.clip(tile_arr, 0, 255).astype(np.uint8)
                                 img = Image.fromarray(tile_arr).convert("RGBA")
 
-                        img.putalpha(mask)
+                        # Grid masks are shared PIL images; kite/spectre store a
+                        # _LazyMask re-rasterised here (identical to build time).
+                        tile_mask = mask.render() if isinstance(mask, _LazyMask) else mask
+                        img.putalpha(tile_mask)
                         final_mosaic.alpha_composite(img, (px, py))
                 except Exception:
                     # One bad tile must not abort the render, but silent

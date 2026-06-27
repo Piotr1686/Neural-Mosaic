@@ -11,7 +11,7 @@
 | 1 | **A1-Wariant 0** — wątek samplujący peak-RAM (~50 ms) wokół renderu; zastępuje niewiarygodny `rss_after − rss_before` | `tests/benchmark.py` (`:108`, `:133`, `:167`, `:205`) | zero | Opus/Sonnet | ✓ DONE (2026-06-27) |
 | 2 | **A1-A-tani** — w pętli matchingu cdist float64 → squared-euclid float32 (GEMM); chunk adaptacyjny ≤256 MB. 3.6 GB → ~0.25 GB, ranking top-k bez zmian | `src/engine_smart.py` (`:658-668`) | niskie | `/sonnet` | ✓ DONE (2026-06-27) |
 | 3 | **A2 całość** — przycisk „Export Deep Zoom…" (wzorzec `run_photo`) + skip-if-exists + podkomenda CLI `dzi`; reuse gotowego `make_dzi.py` | `src/gui.py` (`:991-1006`), `src/cli.py`, `src/tools/make_dzi.py` | niskie | Opus | ✓ DONE (2026-06-27) |
-| 4 | **A1-B** — leniwe maski spectre/kite (`padded_poly`+bbox, rasteryzacja przy kompozycie); wymaga testu regresji pikselowej w CI | `src/engine_smart.py` (`:303`, `:729`) | **wysokie** | HIGH | ☐ |
+| 4 | **A1-B** — leniwe maski spectre/kite (`padded_poly`+bbox, rasteryzacja przy kompozycie); wymaga testu regresji pikselowej w CI | `src/engine_smart.py` (`:303`, `:729`) | **wysokie** | HIGH | ✓ DONE (2026-06-27) |
 
 **Uzasadnienie kolejności:** A2 (krok 3) wskakuje przed ryzykownym A1-B (krok 4) — więcej wartości portfolio przy mniejszym ryzyku. A1-Wariant 0 (krok 1) jest warunkiem wstępnym: bez wiarygodnego pomiaru nie udowodnimy efektu A-tani.
 
