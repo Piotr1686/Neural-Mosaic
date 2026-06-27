@@ -19,6 +19,7 @@ os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
 import random
 import sys
 import tempfile
+import threading
 import time
 from pathlib import Path
 
@@ -64,6 +65,67 @@ def _reset_vram():
         torch.cuda.reset_peak_memory_stats()
 
 
+class PeakRAMSampler:
+    """Track the true peak RSS of an operation via a background sampling thread.
+
+    The per-operation RAM figure used to be measured as ``rss_after - rss_before``,
+    which silently misses short-lived spikes — e.g. the float64 ``cdist`` allocation
+    in SmartEngine that balloons (~3.6 GB @16K) and is freed before the render
+    returns. This sampler polls RSS every ``interval`` seconds on a daemon thread
+    and records the maximum, giving a trustworthy peak.
+
+    Usage (manual):
+        sampler = PeakRAMSampler().start()
+        ...work...
+        peak_mb = sampler.stop()
+
+    Usage (context manager):
+        with PeakRAMSampler() as sampler:
+            ...work...
+        peak_mb = sampler.peak_mb
+    """
+
+    def __init__(self, interval: float = 0.05):
+        self.interval = interval
+        self._peak = 0.0
+        self._stop = threading.Event()
+        self._thread = None
+
+    def start(self) -> "PeakRAMSampler":
+        self._peak = _rss_mb()
+        self._stop.clear()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+        return self
+
+    def _run(self):
+        while not self._stop.is_set():
+            rss = _rss_mb()
+            if rss > self._peak:
+                self._peak = rss
+            self._stop.wait(self.interval)
+
+    def stop(self) -> float:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=1.0)
+            self._thread = None
+        # One final reading in case the peak landed between samples.
+        self._peak = max(self._peak, _rss_mb())
+        return self._peak
+
+    @property
+    def peak_mb(self) -> float:
+        return self._peak
+
+    def __enter__(self) -> "PeakRAMSampler":
+        return self.start()
+
+    def __exit__(self, *exc):
+        self.stop()
+        return False
+
+
 def _fmt(s: float) -> str:
     return f"{s/60:.1f} min" if s >= 60 else f"{s:.1f} s"
 
@@ -106,6 +168,7 @@ def bench_indexing(all_paths: list) -> list:
         sample = random.sample(all_paths, n)
         print(f"  Indexing {n:,} tiles ...", flush=True)
         ram0 = _rss_mb()
+        sampler = PeakRAMSampler().start()
         t0   = time.perf_counter()
         ok   = 0
 
@@ -130,7 +193,7 @@ def bench_indexing(all_paths: list) -> list:
                 pass
 
         elapsed = time.perf_counter() - t0
-        ram_delta = max(0.0, _rss_mb() - ram0)
+        ram_delta = max(0.0, sampler.stop() - ram0)
         results.append({
             "label": f"Index {n:,} tiles",
             "elapsed_s": elapsed,
@@ -166,6 +229,7 @@ def bench_render(test_img: Path, configs: list) -> list:
             })
             ram0 = _rss_mb()
             _reset_vram()
+            sampler = PeakRAMSampler().start()
             t0 = time.perf_counter()
             engine.create_mosaic(
                 target_path=str(test_img),
@@ -175,7 +239,7 @@ def bench_render(test_img: Path, configs: list) -> list:
                 tile_scale=cfg.get("scale", 1.0),
             )
             elapsed    = time.perf_counter() - t0
-            ram_delta  = max(0.0, _rss_mb() - ram0)
+            ram_delta  = max(0.0, sampler.stop() - ram0)
             vram       = _vram_mb()
             results.append({
                 "label": label,
@@ -203,6 +267,7 @@ def bench_typo(test_img: Path):
     with tempfile.TemporaryDirectory() as tmpdir:
         out  = Path(tmpdir) / "bench_typo.png"
         ram0 = _rss_mb()
+        sampler = PeakRAMSampler().start()
         t0   = time.perf_counter()
         engine.process(
             input_path=str(test_img),
@@ -212,7 +277,7 @@ def bench_typo(test_img: Path):
             scale=1.0,
         )
         elapsed   = time.perf_counter() - t0
-        ram_delta = max(0.0, _rss_mb() - ram0)
+        ram_delta = max(0.0, sampler.stop() - ram0)
 
     print(f"  OK Symbol mosaic 8K - B&W: {_fmt(elapsed)}")
     return {
@@ -224,7 +289,7 @@ def bench_typo(test_img: Path):
 
 # ── reporting ─────────────────────────────────────────────────────────────────
 
-def print_summary(idx_res: list, rnd_res: list, typ_res):
+def print_summary(idx_res: list, rnd_res: list, typ_res, peak_ram_mb: float = None):
     W   = 64
     SEP = "=" * W
 
@@ -244,7 +309,7 @@ def print_summary(idx_res: list, rnd_res: list, typ_res):
     if typ_res:
         print(f"  {typ_res['label']:<36}  {_fmt(typ_res['elapsed_s']):>9}  {typ_res['ram_delta_mb']:>6.0f} MB")
 
-    peak_ram_gb = _rss_mb() / 1024
+    peak_ram_gb = (peak_ram_mb if peak_ram_mb is not None else _rss_mb()) / 1024
     peak_vram_gb = _vram_mb() / 1024
 
     print(f"\n  Peak RAM  : {peak_ram_gb:.2f} GB")
@@ -305,6 +370,7 @@ def main():
         print("  Mode: --quick  (16K kite skipped)")
     print("=" * 64)
 
+    run_sampler = PeakRAMSampler().start()
     with tempfile.TemporaryDirectory() as tmpdir:
         test_img = Path(tmpdir) / "test_source.jpg"
         _make_test_image(test_img, size=(1024, 768))
@@ -326,7 +392,8 @@ def main():
             print("\n[3] SYMBOL MOSAIC BENCHMARK (TypoEngine)")
             typ_res = bench_typo(test_img)
 
-        print_summary(idx_res, rnd_res, typ_res)
+        run_peak_mb = run_sampler.stop()
+        print_summary(idx_res, rnd_res, typ_res, peak_ram_mb=run_peak_mb)
 
 
 if __name__ == "__main__":
