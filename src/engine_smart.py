@@ -22,7 +22,6 @@ import threading
 from collections import defaultdict
 from PIL import Image, ImageOps, ImageDraw
 from tqdm import tqdm
-from scipy.spatial.distance import cdist
 from scipy.spatial import cKDTree
 import skimage.color
 
@@ -30,6 +29,26 @@ from .spectre_tiling import generate_spectre_tiling
 
 # Must match EDGE_WEIGHT in indexer_smart.py.
 EDGE_WEIGHT = 2.0
+
+
+def _euclid_f32(chunk, feats, feat_sq):
+    """Euclidean distances (float32) via the GEMM identity
+    ||a||^2 + ||b||^2 - 2 a.b, computed in place to keep a single matrix resident.
+
+    Drop-in for ``scipy.cdist(chunk, feats, 'euclidean')`` but without the float64
+    promotion: ``chunk`` and ``feats`` must be float32, ``feat_sq`` the precomputed
+    row-wise squared norm of ``feats``. For a 16K render vs ~455k tiles the per-chunk
+    matrix drops from ~1.8 GB (cdist float64) to ~0.25 GB. Rankings are identical
+    (sqrt is monotonic); the returned values are true euclidean distances, so the
+    freq_penalty score downstream stays numerically equivalent (within float32).
+    """
+    d = chunk @ feats.T                                   # (rows, n_lib) float32
+    d *= -2.0
+    d += feat_sq[np.newaxis, :]
+    d += np.einsum("ij,ij->i", chunk, chunk)[:, np.newaxis]
+    np.maximum(d, 0.0, out=d)                             # guard tiny negatives
+    np.sqrt(d, out=d)
+    return d
 
 
 class SmartEngine:
@@ -642,26 +661,41 @@ class SmartEngine:
         sector_assignments = -1 * np.ones(len(sectors_data), dtype=np.int32)
         failed_tiles = 0
 
-        chunk_size = 500
-
-        features_norm = tile_features
+        features_norm = tile_features.astype(np.float32, copy=False)
         features_flip = None
         if allow_mirror:
             # tile_features is guaranteed 75-dim here: _resolve_matching_modes
             # disables allow_mirror whenever edge_aware (79-dim) is active.
-            reshaped = tile_features.reshape(-1, 5, 5, 3)
+            reshaped = features_norm.reshape(-1, 5, 5, 3)
             flipped = reshaped[:, :, ::-1, :]
             features_flip = flipped.reshape(-1, 75)
+
+        # Precompute library squared norms once for the GEMM distance (see
+        # _euclid_f32). The flip is a column permutation, so its per-tile norm is
+        # identical — but recomputing is O(N) and keeps the call site obvious.
+        norms_norm = np.einsum("ij,ij->i", features_norm, features_norm)
+        norms_flip = (np.einsum("ij,ij->i", features_flip, features_flip)
+                      if allow_mirror else None)
+        tgt32 = tgt_features.astype(np.float32, copy=False)
+
+        # Adaptive chunk size: cap the float32 distance matrix (or matrices, when
+        # mirroring keeps norm+flip resident together) at ~256 MB. The old fixed
+        # chunk_size=500 produced a ~1.8 GB float64 matrix (x2 with mirror) — the
+        # dominant peak-RAM spike at 16K.
+        n_lib = max(features_norm.shape[0], 1)
+        n_matrices = 2 if allow_mirror else 1
+        rows_budget = (256 * 1024 * 1024) // (n_lib * 4 * n_matrices)
+        chunk_size = int(np.clip(rows_budget, 64, 500))
 
         top_k = min(len(self.paths), 200)
 
         for i in tqdm(range(0, len(sectors_data), chunk_size)):
             end = min(i + chunk_size, len(sectors_data))
-            chunk_tgt = tgt_features[i:end]
+            chunk_tgt = tgt32[i:end]
 
-            dists_norm = cdist(chunk_tgt, features_norm, 'euclidean')
+            dists_norm = _euclid_f32(chunk_tgt, features_norm, norms_norm)
             if allow_mirror:
-                dists_flip = cdist(chunk_tgt, features_flip, 'euclidean')
+                dists_flip = _euclid_f32(chunk_tgt, features_flip, norms_flip)
 
             top_k_norm = np.argpartition(dists_norm, top_k - 1, axis=1)[:, :top_k]
             if allow_mirror:
