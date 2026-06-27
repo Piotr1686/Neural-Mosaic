@@ -200,7 +200,7 @@ Odtwarza obraz docelowy przy użyciu glifów typograficznych zamiast zdjęć. Ka
 
 | Kontrolka | Opcje |
 |---|---|
-| Rozdzielczość wyjściowa | 4K · 8K · **16K** |
+| Rozdzielczość wyjściowa | 2K · 4K · 8K · **16K** |
 | Mnożnik rozmiaru symbolu | 0.5 · 0.75 · 1.0 · 1.75 · 2.0 |
 | Tryb stylu | `black_on_white` · `white_on_black` |
 | Grupy fontów | CJK · Starożytne · Symbole · Latin · Dekoracyjne · Odręczne · Inne |
@@ -369,7 +369,7 @@ cp .env.example .env
 
 ### Smart Photo Mosaic
 
-1. **Sidebar → „Update / Create Index"** — skanuje `data/library_public/tiles/` (oraz `data/library_private/tiles/`, jeśli istnieje) i buduje `data/smart_index.pkl`. Uruchom raz po dodaniu zdjęć; kolejne wczytania trwają sekundy.
+1. **Sidebar → „Update / Create Index"** — skanuje wszystkie skonfigurowane katalogi biblioteki kafelków (`data/library_*/tiles/` oraz legacy `data/tiles/`, zdefiniowane w `src/library_dirs.py`) i buduje `data/smart_index.pkl`. Uruchom raz po dodaniu zdjęć; kolejne wczytania trwają sekundy.
 2. **Sidebar → „Load Smart Index"** — wczytuje wcześniej zbudowany indeks do pamięci.
 3. **Zakładka: Smart Photo Mosaic** — wybierz obraz wejściowy, rozdzielczość, kształt kafelka i opcje. Kliknij **Generate Preview**, aby zobaczyć podgląd 512 px.
 4. **Sidebar → „Set Output Folder"** + opcjonalnie **Project Name**.
@@ -471,8 +471,8 @@ Neural-Mosaic/
 │   ├── fonts/              # Dołączone fonty .ttf / .otf (+ licenses/)
 │   └── examples/           # Obrazy do galerii
 ├── data/
-│   ├── library_public/tiles/
-│   ├── library_private/tiles/
+│   ├── library_*/tiles/    # Biblioteki kafelków: starter, public, public_2, extended, private (zob. src/library_dirs.py)
+│   ├── tiles/              # Legacy: katalog docelowy downloadera
 │   └── .thumbs/            # Cache miniatur (runtime, poza repo)
 ├── tests/
 ├── .env.example

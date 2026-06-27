@@ -200,7 +200,7 @@ Reconstructs the target using typographic glyphs instead of photographs. Each ce
 
 | Control | Options |
 |---|---|
-| Output resolution | 4K · 8K · **16K** |
+| Output resolution | 2K · 4K · 8K · **16K** |
 | Symbol size multiplier | 0.5 · 0.75 · 1.0 · 1.75 · 2.0 |
 | Style mode | `black_on_white` · `white_on_black` |
 | Font groups | CJK · Ancient · Symbols · Latin · Decorative · Handwriting · Other |
@@ -369,7 +369,7 @@ cp .env.example .env
 
 ### Smart Photo Mosaic
 
-1. **Sidebar → "Update / Create Index"** — scans `data/library_public/tiles/` (and `data/library_private/tiles/` if present) and builds `data/smart_index.pkl`. Run once after adding photos; later loads take seconds.
+1. **Sidebar → "Update / Create Index"** — scans every configured tile-library directory (`data/library_*/tiles/` and the legacy `data/tiles/`, defined in `src/library_dirs.py`) and builds `data/smart_index.pkl`. Run once after adding photos; later loads take seconds.
 2. **Sidebar → "Load Smart Index"** — loads the pre-built index into memory.
 3. **Tab: Smart Photo Mosaic** — select the input image, choose resolution, tile shape and options. Click **Generate Preview** to see a 512 px proof.
 4. **Sidebar → "Set Output Folder"** + optionally a **Project Name**.
@@ -471,8 +471,8 @@ Neural-Mosaic/
 │   ├── fonts/              # Bundled .ttf / .otf fonts (+ licenses/)
 │   └── examples/           # Gallery images
 ├── data/
-│   ├── library_public/tiles/
-│   ├── library_private/tiles/
+│   ├── library_*/tiles/    # Tile libraries: starter, public, public_2, extended, private (see src/library_dirs.py)
+│   ├── tiles/              # Legacy downloader target
 │   └── .thumbs/            # Thumbnail cache (runtime, not in repo)
 ├── tests/
 ├── .env.example
