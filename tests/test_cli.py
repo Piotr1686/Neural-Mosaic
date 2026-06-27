@@ -9,11 +9,13 @@ import os
 os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
 
 import argparse
+import logging
 import sys
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from PIL import Image
 
 from src import cli
 
@@ -141,6 +143,32 @@ class TestBuildParser:
     def test_engine_is_required(self):
         with pytest.raises(SystemExit):
             _parse("render", "x.jpg")
+
+    def test_dzi_subcommand_recognised(self):
+        args, _ = _parse("dzi", "mosaic.jpg", "out_dir")
+        assert args.command == "dzi"
+        assert args.input == "mosaic.jpg"
+        assert args.out_dir == "out_dir"
+
+    def test_dzi_max_level_default_none(self):
+        args, _ = _parse("dzi", "mosaic.jpg", "out_dir")
+        assert args.max_level is None
+
+    def test_dzi_max_level_custom(self):
+        args, _ = _parse("dzi", "mosaic.jpg", "out_dir", "--max-level", "13")
+        assert args.max_level == 13
+
+    def test_dzi_no_skip_default_false(self):
+        args, _ = _parse("dzi", "mosaic.jpg", "out_dir")
+        assert args.no_skip is False
+
+    def test_dzi_no_skip_flag(self):
+        args, _ = _parse("dzi", "mosaic.jpg", "out_dir", "--no-skip")
+        assert args.no_skip is True
+
+    def test_dzi_out_dir_is_required(self):
+        with pytest.raises(SystemExit):
+            _parse("dzi", "mosaic.jpg")
 
 
 # ---------------------------------------------------------------------------
@@ -319,6 +347,83 @@ class TestBatchOutputNaming:
         args = self._make_args(engine="smart", shape="square", res="2K")
         out = cli._batch_output_path(tmp_path, "photo", args)
         assert out.parent == tmp_path
+
+
+# ---------------------------------------------------------------------------
+# _validate_dzi
+# ---------------------------------------------------------------------------
+
+class TestValidateDzi:
+    def test_missing_input_raises(self, tmp_path):
+        parser = cli.build_parser()
+        args = parser.parse_args(["dzi", str(tmp_path / "ghost.jpg"), str(tmp_path / "out")])
+        with pytest.raises(SystemExit):
+            cli._validate_dzi(args, parser)
+
+    def test_input_is_directory_raises(self, tmp_path):
+        parser = cli.build_parser()
+        args = parser.parse_args(["dzi", str(tmp_path), str(tmp_path / "out")])
+        with pytest.raises(SystemExit):
+            cli._validate_dzi(args, parser)
+
+    def test_out_dir_created_if_missing(self, tmp_path):
+        img = tmp_path / "m.jpg"
+        img.write_bytes(b"fake")
+        out_dir = tmp_path / "freshly_made"
+        parser = cli.build_parser()
+        args = parser.parse_args(["dzi", str(img), str(out_dir)])
+        cli._validate_dzi(args, parser)
+        assert out_dir.exists() and out_dir.is_dir()
+        assert args.input == img and args.out_dir == out_dir
+
+
+# ---------------------------------------------------------------------------
+# dzi end-to-end — make_dzi needs only an image (no index), so this runs in CI
+# ---------------------------------------------------------------------------
+
+class TestDziEndToEnd:
+    def _run(self, img, out_dir, *extra):
+        parser = cli.build_parser()
+        args = parser.parse_args(["dzi", str(img), str(out_dir), *extra])
+        cli._validate_dzi(args, parser)
+        cli._run_dzi(args, logging.getLogger("test_dzi"))
+
+    def test_builds_pyramid(self, tmp_path):
+        img = tmp_path / "mosaic.png"
+        Image.new("RGB", (600, 400), (123, 50, 200)).save(img)
+        out_dir = tmp_path / "dzi_out"
+
+        self._run(img, out_dir)
+
+        assert (out_dir / "mosaic.dzi").exists()
+        tiles = list((out_dir / "mosaic_files").rglob("*.jpg"))
+        assert tiles, "no pyramid tiles produced"
+
+    def test_skip_if_exists_preserves_tiles(self, tmp_path):
+        """Default skip_existing must not rewrite tiles already on disk."""
+        img = tmp_path / "mosaic.png"
+        Image.new("RGB", (600, 400), (10, 200, 90)).save(img)
+        out_dir = tmp_path / "dzi_out"
+
+        self._run(img, out_dir)
+        victim = next((out_dir / "mosaic_files").rglob("*.jpg"))
+        victim.write_bytes(b"SENTINEL")
+
+        self._run(img, out_dir)  # second run, default skip
+        assert victim.read_bytes() == b"SENTINEL"
+
+    def test_no_skip_regenerates_tiles(self, tmp_path):
+        """--no-skip must overwrite an existing tile with a fresh render."""
+        img = tmp_path / "mosaic.png"
+        Image.new("RGB", (600, 400), (10, 200, 90)).save(img)
+        out_dir = tmp_path / "dzi_out"
+
+        self._run(img, out_dir)
+        victim = next((out_dir / "mosaic_files").rglob("*.jpg"))
+        victim.write_bytes(b"SENTINEL")
+
+        self._run(img, out_dir, "--no-skip")
+        assert victim.read_bytes() != b"SENTINEL"
 
 
 # ---------------------------------------------------------------------------
