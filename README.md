@@ -500,17 +500,17 @@ Benchmarked on: **i5-12500H · 32 GB DDR4** (the engines run on CPU; no GPU is u
 <!-- BENCHMARK:START -->
 | Operation | Time |
 |---|---|
-| Index 10,000 tiles | 31 s |
-| Index 50,000 tiles | 1.6 min |
-| Render 4K · square tiles | 38 s |
-| Render 8K · hexagon tiles | 2.8 min |
-| Render 16K · kite tiles | 21 min |
-| Symbol mosaic 8K · black-on-white | 21 s |
+| Index 10,000 tiles | 19 s |
+| Index 50,000 tiles | 1.5 min |
+| Render 4K · square tiles | 7.8 s |
+| Render 8K · hexagon tiles | 35 s |
+| Render 16K · kite tiles | 5.9 min |
+| Symbol mosaic 8K · black-on-white | 24 s |
 <!-- BENCHMARK:END -->
 
 > A single "Time" column is intentional — both engines run on CPU, so there is no separate GPU path. 16K with a non-convex shape (kite/spectre) is the heavy extreme; rectangular shapes and lower resolutions are far faster.
 >
-> **Memory:** peak RAM scales with output resolution. 4K/8K renders stay around ~1 GB; a 16K render holds the full canvas in memory and peaks at roughly ~10 GB (non-convex shapes are the heaviest).
+> **Memory:** peak RAM scales with output resolution. 4K/8K renders stay around ~1.5 GB; a 16K render holds the full canvas in memory and peaks at roughly ~4 GB (non-convex shapes are the heaviest). Earlier builds peaked near ~10 GB at 16K; the float32 matching path and lazy tile masks roughly halved that.
 
 ---
 
@@ -554,7 +554,7 @@ Each iteration kept the anti-repetition logic and the multi-shape tile geometry 
 
 ## Known Limitations
 
-- 16K rendering holds the full canvas in memory; a 16K spectre render peaks around ~10 GB RAM (square/hexagon are lighter). Output is not chunked yet.
+- 16K rendering holds the full canvas in memory; a 16K non-convex render (kite/spectre) peaks around ~4 GB RAM (square/hexagon are lighter). Output is not chunked yet.
 - The GUI is Windows-focused. CustomTkinter runs on Linux/macOS, but font handling and file-path assumptions target Windows.
 - Tile Tint uses pixel-wise lerp in RGB space. A LAB-space variant is on the roadmap; the current RGB version produces visible, predictable results.
 - The hosted Deep Zoom viewer carries a handful of 8K mosaics (kept lightweight for GitHub Pages storage limits).
@@ -569,7 +569,7 @@ Each iteration kept the anti-repetition logic and the multi-shape tile geometry 
 A: Wait ~1 hour. The `starter` tier works without a key; for `public` / `extended` register an Openverse key (see `.env.example`). The `fast_downloader` (Picsum/LoremFlickr) needs no key.
 
 **Q: 16K render fails or crashes**
-A: Close other applications and ensure several GB of free RAM (a 16K spectre can need ~10 GB). As an alternative, render at 8K.
+A: Close other applications and ensure several GB of free RAM (a 16K non-convex render peaks around ~4 GB). As an alternative, render at 8K.
 
 **Q: WARNING about an incompatible index**
 A: Click **"Update / Create Index"** in the GUI to rebuild `smart_index.pkl` with the current feature schema (e.g. after upgrading from an older index version). Toggling `--edge-aware` does **not** require a rebuild — the index is always 79-dim.

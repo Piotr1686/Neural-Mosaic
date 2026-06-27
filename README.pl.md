@@ -500,17 +500,17 @@ Zmierzone na: **i5-12500H · 32 GB DDR4** (silniki działają na CPU; GPU nie je
 <!-- BENCHMARK:START -->
 | Operacja | Czas |
 |---|---|
-| Indeks 10 000 kafelków | 31 s |
-| Indeks 50 000 kafelków | 1,6 min |
-| Render 4K · kafelki kwadratowe | 38 s |
-| Render 8K · kafelki heksagonalne | 2,8 min |
-| Render 16K · kafelki kite | 21 min |
-| Symbol mosaic 8K · czarne na białym | 21 s |
+| Indeks 10 000 kafelków | 19 s |
+| Indeks 50 000 kafelków | 1,5 min |
+| Render 4K · kafelki kwadratowe | 7,8 s |
+| Render 8K · kafelki heksagonalne | 35 s |
+| Render 16K · kafelki kite | 5,9 min |
+| Symbol mosaic 8K · czarne na białym | 24 s |
 <!-- BENCHMARK:END -->
 
 > Pojedyncza kolumna „Czas" jest celowa — oba silniki działają na CPU, więc nie ma osobnej ścieżki GPU. 16K z kształtem niewypukłym (kite/spectre) to ciężki skrajny przypadek; kształty prostokątne i niższe rozdzielczości są znacznie szybsze.
 >
-> **Pamięć:** szczytowe zużycie RAM skaluje się z rozdzielczością wyjściową. Rendery 4K/8K trzymają się ~1 GB; render 16K trzyma całe płótno w pamięci i osiąga szczyt rzędu ~10 GB (kształty niewypukłe są najcięższe).
+> **Pamięć:** szczytowe zużycie RAM skaluje się z rozdzielczością wyjściową. Rendery 4K/8K trzymają się ~1,5 GB; render 16K trzyma całe płótno w pamięci i osiąga szczyt rzędu ~4 GB (kształty niewypukłe są najcięższe). Wcześniejsze wersje sięgały ~10 GB przy 16K; ścieżka dopasowania w float32 i leniwe maski kafelków zmniejszyły to mniej więcej o połowę.
 
 ---
 
@@ -554,7 +554,7 @@ Każda iteracja zachowała logikę antypowtórzeniową i wielokształtną geomet
 
 ## Znane ograniczenia
 
-- Render 16K trzyma całe płótno w pamięci; render 16K spectre osiąga szczyt rzędu ~10 GB RAM (square/hexagon są lżejsze). Wyjście nie jest jeszcze dzielone na fragmenty.
+- Render 16K trzyma całe płótno w pamięci; render 16K niewypukły (kite/spectre) osiąga szczyt rzędu ~4 GB RAM (square/hexagon są lżejsze). Wyjście nie jest jeszcze dzielone na fragmenty.
 - GUI jest zorientowane na Windows. CustomTkinter działa na Linux/macOS, ale obsługa fontów i założenia co do ścieżek plików są pod Windows.
 - Tile Tint używa interpolacji liniowej per-piksel w przestrzeni RGB. Wariant w przestrzeni LAB jest w planach rozwoju; obecna wersja RGB daje widoczne, przewidywalne rezultaty.
 - Hostowana przeglądarka Deep Zoom zawiera kilka mozaik 8K (utrzymane lekko z powodu limitów storage GitHub Pages).
@@ -569,7 +569,7 @@ Każda iteracja zachowała logikę antypowtórzeniową i wielokształtną geomet
 O: Odczekaj ~1 godzinę. Poziom `starter` działa bez klucza; dla `public` / `extended` zarejestruj klucz Openverse (zobacz `.env.example`). `fast_downloader` (Picsum/LoremFlickr) nie potrzebuje klucza.
 
 **P: Render 16K zawodzi lub się wykrzacza**
-O: Zamknij inne aplikacje i upewnij się, że masz kilka GB wolnego RAM (16K spectre może potrzebować ~10 GB). Alternatywnie renderuj w 8K.
+O: Zamknij inne aplikacje i upewnij się, że masz kilka GB wolnego RAM (16K niewypukły osiąga szczyt rzędu ~4 GB). Alternatywnie renderuj w 8K.
 
 **P: OSTRZEŻENIE o niekompatybilnym indeksie**
 O: Kliknij **„Update / Create Index"** w GUI, aby przebudować `smart_index.pkl` z aktualnym schematem cech (np. po aktualizacji ze starszej wersji indeksu). Przełączanie `--edge-aware` **nie** wymaga przebudowy — indeks jest zawsze 79-wymiarowy.
