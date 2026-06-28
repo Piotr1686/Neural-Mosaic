@@ -517,6 +517,25 @@ Zmierzone na: **i5-12500H · 32 GB DDR4** (silniki działają na CPU; GPU nie je
 >
 > **Pamięć:** szczytowe zużycie RAM skaluje się z rozdzielczością wyjściową. Rendery 4K/8K trzymają się ~1,5 GB; render 16K trzyma całe płótno w pamięci i osiąga szczyt rzędu ~4 GB (kształty niewypukłe są najcięższe). Wcześniejsze wersje sięgały ~10 GB przy 16K; ścieżka dopasowania w float32 i leniwe maski kafelków zmniejszyły to mniej więcej o połowę.
 
+### Inżynieria wydajności — zejście z ~10 GB do ~4 GB przy 16K
+
+Ścieżka 16K początkowo osiągała szczyt ~10 GB RAM i zajmowała ~21 minut na render. Profilowanie sprowadziło to do **3,9 GB i 5,9 minuty — bez zmiany ani jednego piksela wyjścia.** To zwięzłe studium przypadku w duchu *zmierz → przypisz → napraw pod inwariantem*:
+
+**1 · Uczyń szczyt mierzalnym.** Benchmark próbkował RSS tylko przed i po renderze, więc prawdziwy skok — chwilowy, znikający w milisekundach — nigdy się nie pojawiał. Wątek samplujący co 50 ms (`PeakRAMSampler`, `tests/benchmark.py`) rejestruje teraz rzeczywisty szczyt całego przebiegu.
+
+**2 · Przypisz skok.** To nie było płótno (bufor RGBA 16K to tylko ~0,5 GB i jest rezydentny, nie chwilowy). Winowajcą było dopasowanie kafelków: `cdist` ze SciPy liczył w **float64** po całej bibliotece 454 857 kafelków przy każdym chunku — macierz odległości `cel × biblioteka`, która podwojona dla kafelków lustrzanych chwilowo alokowała ~3,6 GB i ciągnęła sumę ku ~10 GB.
+
+**3 · Zastąp pod inwariantem numerycznym.** `_euclid_f32` (`src/engine_smart.py`) liczy identyczną odległość euklidesową przez tożsamość GEMM `‖a‖² + ‖b‖² − 2·a·b` w **float32**, z adaptacyjnym rozmiarem chunku ograniczającym każdą macierz do ~256 MB. *Inwariant:* musi zwracać **prawdziwą** odległość euklidesową (końcowy `sqrt`) — wynik to `odległość + kara_częstotliwości`, addytywna mieszanka, którą kwadraty odległości po cichu by rozregulowały. Parytet vs `cdist` zweryfikowany w testach: maks. błąd `4,6e-6`, identyczne top-k, identyczny zwycięzca per kafelek.
+
+**4 · Odrocz alokację pod inwariantem bit-w-bit.** Kształty niewypukłe (kite/spectre) materializowały wcześniej maskę PIL per sektor z góry. `_LazyMask` przechowuje wielokąt i rasteryzuje dopiero przy kompozycie. *Inwariant:* render musi być **bit-w-bit identyczny** (kite natywnie `aa=1`, spectre supersampling `aa=4` + LANCZOS) — pilnowane przez złote testy SHA-256 w CI.
+
+| 16K · kite | Przed | Po |
+|---|---|---|
+| Szczyt RAM (cały przebieg) | ~10 GB | **3,9 GB** |
+| Czas renderu | ~21 min | **5,9 min** |
+
+Przyspieszenie przyszło za darmo: float32 GEMM wyparł float64 `cdist`, więc dopasowanie stało się i lżejsze, i szybsze. Świadomym nie-celem był render płótna we fragmentach — atakuje *najmniejszy* składnik (płótno), łamiąc kontrakt `_do_render → PIL`, na którym opierają się podgląd i GUI, więc opłaca się dopiero powyżej 16K.
+
 ---
 
 ## Przewodnik rozmiarów wydruku
@@ -552,7 +571,7 @@ Każda iteracja zachowała logikę antypowtórzeniową i wielokształtną geomet
 - [x] Przeglądarka biblioteki kafelków — siatka miniatur, mapa pokrycia LAB, wybór i eksport wykluczeń kafelków
 - [x] Tryb CLI do przetwarzania wsadowego — zobacz [Użycie CLI](#użycie-cli)
 - [x] Wsparcie prawdziwych (nie-ASCII) pism we wszystkich siedmiu grupach fontów — hieroglify, klinopis, matematyka, emoji, arabski/bengalski/syngaleski
-- [ ] Eksport do deep-zoom (DZI) ze wsparciem wykluczonych kafelków
+- [x] Eksport do deep-zoom (DZI) — podkomenda CLI `dzi` + przycisk GUI „Export Deep Zoom", napędza [galerię na żywo](https://piotr1686.github.io/Neural-Mosaic/)
 - [ ] System wtyczek dla własnych kształtów kafelków
 
 ---
@@ -562,9 +581,9 @@ Każda iteracja zachowała logikę antypowtórzeniową i wielokształtną geomet
 - Render 16K trzyma całe płótno w pamięci; render 16K niewypukły (kite/spectre) osiąga szczyt rzędu ~4 GB RAM (square/hexagon są lżejsze). Wyjście nie jest jeszcze dzielone na fragmenty.
 - GUI jest zorientowane na Windows. CustomTkinter działa na Linux/macOS, ale obsługa fontów i założenia co do ścieżek plików są pod Windows.
 - Tile Tint używa interpolacji liniowej per-piksel w przestrzeni RGB. Wariant w przestrzeni LAB jest w planach rozwoju; obecna wersja RGB daje widoczne, przewidywalne rezultaty.
-- Hostowana przeglądarka Deep Zoom zawiera kilka mozaik 8K (utrzymane lekko z powodu limitów storage GitHub Pages).
+- Hostowana przeglądarka Deep Zoom zawiera trzy pełne mozaiki 16K (foto · symbol · spectre) plus dwa kształty 8K; pełne piramidy to łącznie ~165 MB, z zapasem w budżecie GitHub Pages.
 - Filtr CC0/PD w `downloader_v2` ufa metadanym źródła — rzadkie fałszywe trafienia na treściach wgrywanych przez użytkowników są zgłaszane do źródeł.
-- Repozytorium ma ~250 MB (≈120 MB dołączonej biblioteki fontów + historia gita); fonty są commitowane dla bezproblemowej konfiguracji Symbol Mosaic. Pierwszy klon zajmuje minutę lub dwie przy typowym łączu.
+- Repozytorium jest duże (~220 MB hostowanych kafelków Deep Zoom 16K dla galerii na żywo + ≈120 MB dołączonej biblioteki fontów + historia gita); świeży klon pobiera rzędu ~400 MB. Kafelki i fonty są commitowane dla bezproblemowej konfiguracji (galeria na żywo + Symbol Mosaic), więc pierwszy klon zajmuje kilka minut przy typowym łączu.
 
 ---
 

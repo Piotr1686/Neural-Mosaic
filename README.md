@@ -517,6 +517,25 @@ Benchmarked on: **i5-12500H · 32 GB DDR4** (the engines run on CPU; no GPU is u
 >
 > **Memory:** peak RAM scales with output resolution. 4K/8K renders stay around ~1.5 GB; a 16K render holds the full canvas in memory and peaks at roughly ~4 GB (non-convex shapes are the heaviest). Earlier builds peaked near ~10 GB at 16K; the float32 matching path and lazy tile masks roughly halved that.
 
+### Performance engineering — taking 16K from ~10 GB to ~4 GB
+
+The 16K path originally peaked near ~10 GB of RAM and took ~21 minutes per render. Profiling brought it to **3.9 GB and 5.9 minutes — without changing a single output pixel.** It's a compact case study in *measure → attribute → fix under an invariant*:
+
+**1 · Make the peak measurable.** The benchmark sampled RSS only before and after each render, so the real spike — transient, gone in milliseconds — never showed up. A 50 ms background sampler thread (`PeakRAMSampler`, `tests/benchmark.py`) now captures the true peak of the whole run.
+
+**2 · Attribute the spike.** It wasn't the canvas (the 16K RGBA buffer is only ~0.5 GB, and it's resident, not a spike). The culprit was tile matching: SciPy's `cdist` ran in **float64** over the entire 454,857-tile library on every chunk — a `target × library` distance matrix that, doubled for mirrored tiles, transiently allocated ~3.6 GB and dragged the total toward ~10 GB.
+
+**3 · Replace it under a numerical invariant.** `_euclid_f32` (`src/engine_smart.py`) computes the identical Euclidean distance via the GEMM identity `‖a‖² + ‖b‖² − 2·a·b` in **float32**, with an adaptive chunk size that caps each matrix at ~256 MB. *Invariant:* it must return the **true** Euclidean distance (final `sqrt`) — the score is `distance + frequency_penalty`, an additive blend that squared distances would silently unbalance. Parity vs `cdist` is verified in tests: max error `4.6e-6`, identical top-k, identical winner per tile.
+
+**4 · Defer allocation under a bit-exact invariant.** Non-convex shapes (kite/spectre) used to materialise a PIL mask per sector up front. `_LazyMask` stores the polygon and rasterises only at composite time. *Invariant:* the render must be **bit-for-bit identical** (kite at native `aa=1`, spectre supersampled `aa=4` + LANCZOS) — locked down by golden SHA-256 tests in CI.
+
+| 16K · kite | Before | After |
+|---|---|---|
+| Peak RAM (full run) | ~10 GB | **3.9 GB** |
+| Render time | ~21 min | **5.9 min** |
+
+The speedup came for free: float32 GEMM replaced float64 `cdist`, so matching got both leaner *and* faster. The deliberate non-goal was chunked-canvas rendering — it attacks the *smallest* contributor (the canvas) while breaking the `_do_render → PIL` contract the preview and GUI depend on, so it only pays off beyond 16K.
+
 ---
 
 ## Print Size Guide
@@ -552,7 +571,7 @@ Each iteration kept the anti-repetition logic and the multi-shape tile geometry 
 - [x] Tile library browser — thumbnail grid, LAB coverage map, tile selection & exclusion export
 - [x] CLI mode for batch processing — see [CLI Usage](#cli-usage)
 - [x] Real (non-ASCII) script support across all seven font groups — hieroglyphs, cuneiform, math, emoji, Arabic/Bengali/Sinhala
-- [ ] Export to deep-zoom (DZI) with excluded-tile support
+- [x] Export to deep-zoom (DZI) — `dzi` CLI subcommand + GUI "Export Deep Zoom" button, powering the [live gallery](https://piotr1686.github.io/Neural-Mosaic/)
 - [ ] Plugin system for custom tile shapes
 
 ---
@@ -562,9 +581,9 @@ Each iteration kept the anti-repetition logic and the multi-shape tile geometry 
 - 16K rendering holds the full canvas in memory; a 16K non-convex render (kite/spectre) peaks around ~4 GB RAM (square/hexagon are lighter). Output is not chunked yet.
 - The GUI is Windows-focused. CustomTkinter runs on Linux/macOS, but font handling and file-path assumptions target Windows.
 - Tile Tint uses pixel-wise lerp in RGB space. A LAB-space variant is on the roadmap; the current RGB version produces visible, predictable results.
-- The hosted Deep Zoom viewer carries a handful of 8K mosaics (kept lightweight for GitHub Pages storage limits).
+- The hosted Deep Zoom viewer carries three full 16K mosaics (photo · symbol · spectre) plus two 8K shapes; full pyramids total ~165 MB, well within the GitHub Pages budget.
 - The `downloader_v2` CC0/PD filter trusts source metadata — rare false positives on user-uploaded content are reported upstream.
-- The repository is ~250 MB (≈120 MB bundled font library + git history); the fonts are committed for zero-friction Symbol Mosaic setup. Initial clone takes a minute or two on a typical connection.
+- The repository is large (~220 MB of hosted 16K Deep Zoom tiles for the live gallery + ≈120 MB bundled font library + git history); a fresh clone downloads on the order of ~400 MB. The tiles and fonts are committed for zero-friction setup (live gallery + Symbol Mosaic), so the initial clone takes a few minutes on a typical connection.
 
 ---
 
