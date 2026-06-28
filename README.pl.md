@@ -20,6 +20,11 @@
   <em>Pojedyncze zdjęcie, odtworzone z tysięcy innych — tutaj na chiralnym, aperiodycznym monokafelku <strong>spectre</strong> z czarną fugą.</em>
 </p>
 
+<p align="center">
+  <a href="https://piotr1686.github.io/Neural-Mosaic/"><strong>🔍 Otwórz galerię z zoomem na żywo →</strong></a><br/>
+  <sub>przybliżaj od całego portretu aż do pojedynczego kafelka · prawdziwe mozaiki 16K · prosto w przeglądarce</sub>
+</p>
+
 ---
 
 ## Spis treści
@@ -53,7 +58,7 @@
 
 ## Demo na żywo
 
-**[Otwórz interaktywną przeglądarkę](https://piotr1686.github.io/Neural-Mosaic/)** — przybliżaj mozaiki 8K bezpośrednio w przeglądarce (OpenSeadragon · klawiatura: `1`/`2` przełączanie · `H` reset · `F` pełny ekran).
+**[Otwórz interaktywną przeglądarkę](https://piotr1686.github.io/Neural-Mosaic/)** — przybliżaj prawdziwe mozaiki 16K bezpośrednio w przeglądarce (OpenSeadragon · klawiatura: `1`–`5` przełączanie · `H` reset · `F` pełny ekran). Trzy mozaiki 16K (foto · symbol · spectre) plus dwa kształty 8K.
 
 ---
 

@@ -104,11 +104,11 @@
 <header>
   <h1>Neural-Mosaic</h1>
   <div class="switcher">
-    <button id="btn1" class="active" onclick="switchTo(0)">1 — Photo Mosaic</button>
-    <button id="btn2" onclick="switchTo(1)">2 — Symbol Mosaic</button>
-    <button id="btn3" onclick="switchTo(2)">3 — Triangle</button>
-    <button id="btn4" onclick="switchTo(3)">4 — Hexagon</button>
-    <button id="btn5" onclick="switchTo(4)">5 — Spectre</button>
+    <button id="btn1" class="active" onclick="switchTo(0)">1 — Photo 16K</button>
+    <button id="btn2" onclick="switchTo(1)">2 — Symbol 16K</button>
+    <button id="btn3" onclick="switchTo(2)">3 — Spectre 16K</button>
+    <button id="btn4" onclick="switchTo(3)">4 — Triangle</button>
+    <button id="btn5" onclick="switchTo(4)">5 — Hexagon</button>
   </div>
   <div class="shortcuts">
     <kbd>1</kbd>–<kbd>5</kbd> Switch &nbsp;
@@ -119,17 +119,21 @@
 </header>
 
 <div id="viewer"></div>
-<div id="label">Photo Mosaic — 454 857 tiles · scroll to zoom</div>
+<div id="label">Photo Mosaic — 16K · 15360×8647 (133 MP) · scroll to zoom</div>
 
 <script>
   const mosaics = [
     {
       tileSources: "tiles/photo_mosaic.dzi",
-      label: "Photo Mosaic — 454 857 tiles · scroll to zoom"
+      label: "Photo Mosaic — 16K · 15360×8647 (133 MP) · scroll to zoom"
     },
     {
       tileSources: "tiles/symbol_mosaic.dzi",
-      label: "Symbol Mosaic — white glyphs on black · scroll to zoom"
+      label: "Symbol Mosaic — 16K · 16000×9008 (144 MP) · white glyphs on black · scroll to zoom"
+    },
+    {
+      tileSources: "tiles/spectre_mosaic.dzi",
+      label: "Spectre Mosaic — 16K · chiral aperiodic monotile (arXiv:2305.17743) · 15360×8647 · scroll to zoom"
     },
     {
       tileSources: "tiles/showcase_triangle_20260502_101900.dzi",
@@ -138,10 +142,6 @@
     {
       tileSources: "tiles/hexagon_jump_16K.dzi",
       label: "Hexagon Mosaic — 8K (8192 × 6144) · scroll to zoom"
-    },
-    {
-      tileSources: "tiles/spectre_parrot.dzi",
-      label: "Spectre Mosaic — parrot · chiral aperiodic monotile (arXiv:2305.17743) · 8K · scroll to zoom"
     }
   ];
 

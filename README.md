@@ -20,6 +20,11 @@
   <em>A single photograph, rebuilt from thousands of others — here on the chiral aperiodic <strong>spectre</strong> monotile with black grout.</em>
 </p>
 
+<p align="center">
+  <a href="https://piotr1686.github.io/Neural-Mosaic/"><strong>🔍 Open the live zoomable gallery →</strong></a><br/>
+  <sub>zoom from the whole portrait down to a single tile · real 16K mosaics · right in your browser</sub>
+</p>
+
 ---
 
 ## Table of Contents
@@ -53,7 +58,7 @@
 
 ## Live Demo
 
-**[Open the Interactive Viewer](https://piotr1686.github.io/Neural-Mosaic/)** — zoom into 8K mosaics right in your browser (OpenSeadragon · keyboard: `1`/`2` switch · `H` reset · `F` fullscreen).
+**[Open the Interactive Viewer](https://piotr1686.github.io/Neural-Mosaic/)** — zoom into real 16K mosaics right in your browser (OpenSeadragon · keyboard: `1`–`5` switch · `H` reset · `F` fullscreen). Three 16K showcases (photo · symbol · spectre) plus two 8K shapes.
 
 ---
 
