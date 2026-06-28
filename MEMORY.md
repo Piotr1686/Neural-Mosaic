@@ -105,6 +105,15 @@
 - **CI:** `test_processor` wrócił (importorskip("torch") + skipif(not cuda)); zdjęty `--ignore` (zostaje tylko `test_ai_core`)
 - Plan i protokół: `PLAN_PRAC.md`. Pozostało (NISKI): empiryczny pomiar RAM na realnym 16K → liczby do tabeli Performance w README
 
+[2026-06-28] **Galeria — podmiana triangle+hexagon na prawdziwe 16K (CZEKA NA USERA)**
+- Audyt rozdzielczości galerii (`docs/index.html` + `docs/tiles/*.dzi`): tylko **photo/symbol/spectre = 16K**; **triangle (8192×4612) i hexagon (8192×6144) = 8K**. Etykiety w galerii są uczciwe („8K"), ale plik hexagona myląco nazwany `hexagon_jump_16K.dzi` (realnie 8K)
+- **Plan uzgodniony:** USER sam wygeneruje 16K triangle+hexagon → wtedy napisze, a ja: usunę stare `showcase_triangle_*` + `hexagon_jump_16K*`, wstawię nowe DZI do `docs/tiles/`, zaktualizuję `tileSources` **i** etykiety (8K→16K, nowe wymiary/MP) w `docs/index.html`
+- **Pułapki:** `Format="jpg"` w XML (nie `"jpeg"` → czarny ekran OpenSeadragon, [[project_dzi_format_bug]]); sprawdzić budżet GitHub Pages (obecnie piramidy ~165 MB)
+
+[2026-06-28] **README hero = magnifier papugi 4×4** (commit `26c5d0a`, na origin/main)
+- Pierwszy obraz w `README.md`+`README.pl.md` podmieniony: `spectre_full.jpg` → `assets/examples/spectre_hero_magnifier.jpg` (1600×900, wariant „e"). Powód: stare hero nie pokazywało kafelków nawet po powiększeniu
+- Styl jak social_preview: pełna mozaika + żółty box na lewej krawędzi dzioba (przejście kolor→białe tło) + linie + inset ~4×4 kafelki + „every tile is a separate photograph". Generator: scratchpad `gen_parrot_magnifier.py` (źródło: `output/github_readme/spectre_parrot_16K.jpg`, tile pitch ~140 px w 16K). `spectre_full.jpg` ZOSTAJE w tabeli progressive-zoom (linia 103)
+
 ---
 
 ## Odrzucone podejścia

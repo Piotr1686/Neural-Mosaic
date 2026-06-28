@@ -1,3 +1,54 @@
+## ═══ Sesja zarchiwizowana [2026-06-28 22:28] ═══
+
+# last_session.md
+
+**Sesja:** 2026-06-28 · 10:30-13:04
+**Status:** ✓ Zakończona poprawnie
+**Punkt odniesienia (git):** ebc790b @ main (origin ZSYNCHRONIZOWANY — wszystkie 4 commity wypchnięte, branch == origin/main)
+
+---
+
+## ▸ NASTĘPNY KROK (zacznij tutaj)
+
+**Krok 6 z `PLAN_PORTFOLIO.md` — adwersarialny audyt twierdzeń README (przed publikacją).** Jeden przebieg (`/code-audit` lub subagent `Explore`): „znajdź każdą liczbę / feature / flagę / ścieżkę w README.md **i** README.pl.md, której nie potwierdza kod". Cel: wyłapać przechwalstwo, martwe linki, nieaktualne flagi, rozjazd EN↔PL. Po audycie: lista znalezisk → poprawki w obu README jednym commitem `docs(readme): fix unverified claims`.
+
+Kontekst: Kroki 1–4 portfolio domknięte i wypchnięte; przed pochwaleniem się projektem (LinkedIn/HN) warto, by każde twierdzenie w README było pokryte kodem. Niski wysiłek, higiena. Krok 5 (PyInstaller `.exe`) świadomie odłożony jako większy, osobny projekt o średnim ROI ([[project_portfolio_phase]]).
+
+---
+
+## Co zrobiono w tej sesji
+
+- ✓ **Krok 1 — galeria live 16K** (`ad5d6c8`): zweryfikowano 3 mozaiki 16K (foto/spectre/typo); zmierzono realny DZI (foto 35.5 + spectre 49.5 + typo 79.7 = **~165 MB/3**, obalony szacunek 150–300 MB/szt.); podmieniono stare sloty 8K w `docs/tiles` na 16K (slug `spectre_parrot`→`spectre_mosaic`); przebudowano `docs/index.html` (3×16K + 2×8K, uczciwe etykiety MP); link hero w README EN+PL.
+- ✓ **Krok 2 — social preview** (`6d5a8ea`): wygenerowano 5 konceptów → wybrany magnifier b (~30 tiles, kolorowy obszar kapelusza); `assets/examples/social_preview.png` 256-color PNG **0.55 MB** (<1 MB); user wgrał w repo Settings.
+- ✓ **Krok 3 — Performance Engineering** (`170636c`): case study A1 w README EN+PL (PeakRAMSampler → atrybucja float64 cdist → `_euclid_f32` + `_LazyMask` pod inwariantami → 16K ~10→3.9 GB, ~21→5.9 min); odświeżono 3 nieaktualne noty (roadmap DZI [x], viewer 3×16K, rozmiar repo).
+- ✓ **Krok 4 — post o monokafelku** (`ebc790b`): `docs/posts/aperiodic-monotile-mosaic{,.pl}.md` EN+PL + assety z `generate_spectre_tiling()` (grid kolorowany wg orientacji, GIF 36-klatkowy reveal, sylwetka 14-boku); linki z sekcji Spectre obu README.
+- ✓ **Wszystkie 4 commity wypchnięte**; branch == origin/main.
+
+## Co zostało (backlog sesji)
+
+- ⟳ **Krok 6 (NASTĘPNY KROK):** adwersarialny audyt twierdzeń README.
+- ⟳ **Krok 5:** zero-friction install (PyInstaller `.exe`, model-free) — wysiłek wysoki, ROI średni; odłożony jako osobny projekt.
+- ⟳ **TODO odłożony:** pasek postępu dla przycisku „Export Deep Zoom" + dołożyć `test_dzi` ([[project_dzi_gui_polish_todo]]) — przy przebiegu czyszczącym GUI.
+- ⟳ Świadomie ODŁOŻONE: Wariant C (A1/A2), ML/CLIP, Docker/plugin.
+
+## Aktywne pliki
+
+- `README.md` + `README.pl.md` (cel audytu Kroku 6)
+- `docs/index.html`, `docs/tiles/{photo,symbol,spectre}_mosaic*` (galeria 16K)
+- `docs/posts/aperiodic-monotile-mosaic{,.pl}.md` + `docs/posts/img/*` (post monotile)
+- `assets/examples/social_preview.png` (social preview, wgrany w Settings)
+- Generatory (scratchpad, nie w repo): `gen_social.py`, `gen_magnifier.py`, `gen_final.py`, `gen_monotile.py`
+
+## Otwarte pytania
+
+- Krok 4: czy przepuścić prozę posta przez Claude.ai (web) pod konkretną platformę (HN/dev.to/LinkedIn) — plan zakładał narrację na web; draft w CC gotowy do publikacji jak jest.
+- Krok 5 vs odłożenie: czy w ogóle robimy `.exe`, czy zostaje przy „clone + run".
+
+## Do MEMORY.md (przeniesiono/zaktualizowano w tej sesji)
+
+- [[project_portfolio_phase]] — dodano postęp: Kroki 1–4 WDROŻONE (commity ad5d6c8 / 6d5a8ea / 170636c / ebc790b), realny pomiar DZI 165 MB/3, parametry faktycznie użyte, status kroków 5–6.
+- [[project_dzi_gui_polish_todo]] — NOWY: odłożony pasek postępu „Export Deep Zoom" + brakujący `test_dzi`.
+
 ## ═══ Sesja zarchiwizowana [2026-06-28 13:04] ═══
 
 # last_session.md
@@ -185,70 +236,3 @@ Pełna architektura/inwarianty: [[project_a1_memory_arch]], [[project_a2_dzi_exp
 - ✓ **157 testów zielonych** (152 + 5 nowych regresji).
 
 (Sesja kontynuowana po checkpoincie: README EN+PL, testy dzi, test_processor→CI, push 8 commitów — szczegóły w finalnym last_session.md sesji.)
-
-## ═══ Sesja zarchiwizowana [2026-06-26 22:30] ═══
-
-# last_session.md
-
-**Sesja:** 2026-06-26 · trwa (checkpoint 22:00)
-**Status:** ⟳ W toku (checkpoint /save)
-**Punkt odniesienia (git):** c38c2d0 @ main (origin zsynchronizowany)
-
----
-
-## ▸ NASTĘPNY KROK (zacznij tutaj)
-
-**WDROŻENIE A1 = Wariant 0 + A-tani + B** (DECYZJA usera 2026-06-26: zgoda na A i B; implementacja od NASTĘPNEJ sesji). Architektura rozpisana — patrz [[project_a1_memory_arch]]:
-- **Wariant 0 (warunek wstępny):** wątek samplujący `rss` co ~50 ms wokół renderu → wiarygodny peak-RAM (zalicza też backlog B = benchmark.py). Zero ryzyka.
-- **Wariant A-tani:** w `engine_smart._do_render` pętla matchingu (`:658-668`) — `chunk_size` adaptacyjny (macierz ≤256 MB) + squared-euclidean w `float32` (GEMM `‖a‖²+‖b‖²−2a·b`) zamiast `cdist` float64. Spike 3.6 GB → ~0.25 GB. Numerycznie równoważne (ten sam ranking top-k). NIE rusza kontraktu `_do_render → PIL`. De-eskalacja `/sonnet` OK.
-- **Wariant B:** leniwe maski spectre/kite — trzymaj `padded_poly`+bbox w `sectors_data`, rasteryzuj przy kompozycie (`:729`) i w `_mean_fill_outside_mask`. Ścina rezydentne maski (~10 GB peak spectre). HIGH (dotyka feature-path; wymaga testu regresji pikselowej).
-- **Świadomie ODŁOŻONE:** Wariant C (pasmowe renderowanie kanwy) — wysokie ryzyko (łamie kontrakt PIL + inwarianty `_neighbors_cache`), atakuje najmniejsze źródło (kanwa 0.5 GB); tylko gdy cel >16K.
-
-**WDROŻENIE A2 = Wariant B + skip-if-exists + podkomenda CLI `dzi`** (DECYZJA usera 2026-06-26; implementacja od NASTĘPNEJ sesji, po A1 lub równolegle). Architektura: [[project_a2_dzi_export_arch]]. Skrót:
-- `make_dzi.make_dzi()` JUŻ gotowy i poprawny (`Format="jpg"`) — to integracja, nie nowy silnik.
-- **Wariant B:** osobny przycisk „Export Deep Zoom…" w GUI (file picker → out dir), wzorzec wątku jak `gui.py:run_photo` (`:991-1006`); działa na dowolnym istniejącym obrazie.
-- **Idempotencja:** skip-if-exists na kafelkach piramidy (= „excluded-tile support" z Roadmapu).
-- **Parytet CLI:** podkomenda `dzi` w `src/cli.py`.
-- **ODŁOŻONE — Wariant C** („Publish to viewer", auto-update `docs/`): ryzyko publicznego artefaktu + refaktor hardcoded `index.html` na manifest; przyszły osobny temat.
-
----
-
-## Co zrobiono w tej sesji (2026-06-26)
-
-- ✓ **Walidacja `requirements.txt` w CZYSTYM venv (definitywny dowód)**: świeży venv z Python 3.10.19, `pip install -r requirements.txt` (44 pakiety, bez torch/transformers); `import src.gui` OK (bez `ModuleNotFoundError: matplotlib`); render `typo 4K` (33004 glify, `fonttools` obecny) i `smart 2K` (454857 kafelków, cKDTree) — oba przeszły. `torch=False, transformers=False` potwierdzone. Obietnica README „4 linie i działa" — udowodniona empirycznie. (SSL w gołym venv obszedłem `--trusted-host` — to lokalne certy, nie problem `requirements.txt`.)
-- ✓ **Push zaległego commitu sesyjnego** `f927696` (`68819bc..f927696`).
-- ✓ **README dwujęzyczny EN/PL** (commit `ab32e7e`, pushed): pełny `README.pl.md` (25 sekcji, parytet z EN), przełącznik `**English** · [Polski]` w linii 3 obu plików; kotwice TOC z polskimi diakrytykami; bloki kodu/badge/ścieżki/Mermaid bez zmian.
-- ✓ **CI z czerwonego na zielony + realne testy** (commity `db427b3`, `cf91769`, `c38c2d0`, pushed):
-  - install z `requirements.txt` zamiast ręcznej listy (koniec driftu — padał `tqdm`);
-  - dodany `python -m pytest` → **152 testy** realnie w CI (pominięte `test_ai_core`=uśpiony MiDaS i `test_processor`=lokalne GPU/CUDA);
-  - bump `checkout@v5`/`setup-python@v6` (koniec ostrzeżeń Node 20).
-  - 2 czerwone runy po drodze (drift zależności; `No module named 'src'` przez gołe `pytest` zamiast `python -m pytest`) — zdiagnozowane i naprawione; finalny run **success**. Inwariant: [[project_ci_pipeline]].
-- ✓ **GitHub „About" wypełnione** (`gh repo edit`): description, homepage→live-demo, 10 topics; korekta rzetelności `opencv`→`scikit-image` (cv2 nieimportowane — [[project_requirements_curated]]).
-
-## Co zostało (backlog sesji)
-
-- ⟳ **Wybór kierunku „co dalej"** (patrz NASTĘPNY KROK): A1 chunked-16K / A2 eksport DZI / B jakość — czeka na decyzję usera.
-- ⟳ `benchmark.py`: pomiar peak-RAM niewiarygodny (psutil delta vs realne ~10 GB) — sampling-thread (pozycja B).
-- ⟳ `test_processor`: twardo asertuje CUDA → zmienić na `skipif(not cuda)`, żeby był przenośny (wtedy może wrócić do CI). NISKI.
-- ⟳ Drobne README↔kod: typo realnie wspiera `--res 2K` (README mówi 4K/8K/16K); workflow wymienia 2 z 6 skanowanych katalogów.
-- ⟳ Live demo: zróżnicowanie źródeł (triangle/photo = ta sama osoba); więcej mozaik 8K w viewerze. NISKI.
-- ⟳ Świadomie odrzucone (over-engineering solo-portfolio): CoC, SECURITY.md, CITATION.cff, Docker/cross-platform, plugin system kształtów.
-
-## Aktywne pliki
-
-- `.github/workflows/ci.yml` (install z requirements.txt; `python -m pytest`; ignore test_ai_core+test_processor; akcje v5/v6 — [[project_ci_pipeline]])
-- `README.md` + `README.pl.md` (dwujęzyczne, przełącznik w linii 3 — parytet 25 sekcji)
-- `requirements.txt` (kurowany, ZWALIDOWANY w czystym venv — [[project_requirements_curated]])
-- GitHub About: description + homepage + 10 topics (ustawione przez `gh repo edit`)
-
-## Otwarte pytania
-
-- Czy zróżnicować pozostałe źródła live-demo (triangle/photo = ta sama osoba)? (rekomendacja: niski priorytet)
-- Czy udokumentować/zablokować `--res 2K` dla typo (silnik to wspiera, README nie)?
-
-## Do MEMORY.md (przeniesiono)
-
-- [[project_requirements_curated]] — requirements.txt jest KUROWANY (nie pip freeze); musi mieć matplotlib + fonttools; torch/transformers opcjonalne (uśpiony ai_core); cv2 nieimportowane (2026-06-24)
-
-_(starsze sesje usunięte — archiwum trzyma maks. 5 ostatnich)_
-

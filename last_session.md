@@ -1,48 +1,46 @@
 # last_session.md
 
-**Sesja:** 2026-06-28 · 10:30-13:04
+**Sesja:** 2026-06-28 · 22:05-22:30
 **Status:** ✓ Zakończona poprawnie
-**Punkt odniesienia (git):** ebc790b @ main (origin ZSYNCHRONIZOWANY — wszystkie 4 commity wypchnięte, branch == origin/main)
+**Punkt odniesienia (git):** 26c5d0a @ main (origin ZSYNCHRONIZOWANY — `26c5d0a` wypchnięty, branch == origin/main)
 
 ---
 
 ## ▸ NASTĘPNY KROK (zacznij tutaj)
 
-**Krok 6 z `PLAN_PORTFOLIO.md` — adwersarialny audyt twierdzeń README (przed publikacją).** Jeden przebieg (`/code-audit` lub subagent `Explore`): „znajdź każdą liczbę / feature / flagę / ścieżkę w README.md **i** README.pl.md, której nie potwierdza kod". Cel: wyłapać przechwalstwo, martwe linki, nieaktualne flagi, rozjazd EN↔PL. Po audycie: lista znalezisk → poprawki w obu README jednym commitem `docs(readme): fix unverified claims`.
+**Podmiana triangle + hexagon w galerii na prawdziwe 16K — CZEKA NA PLIKI OD USERA.** User sam wygeneruje 16K triangle+hexagon i napisze, że gotowe. Wtedy: (1) wstaw nowe `.dzi` + foldery `*_files/` do `docs/tiles/`, (2) usuń stare `showcase_triangle_20260502_101900*` i `hexagon_jump_16K*`, (3) zaktualizuj `tileSources` **oraz** etykiety w `docs/index.html` (8K→16K, nowe wymiary/MP, przyciski btn4/btn5). Pułapki: `Format="jpg"` w XML (nie `"jpeg"` → czarny ekran OpenSeadragon, [[project_dzi_format_bug]]); sprawdź budżet GitHub Pages (piramidy obecnie ~165 MB).
 
-Kontekst: Kroki 1–4 portfolio domknięte i wypchnięte; przed pochwaleniem się projektem (LinkedIn/HN) warto, by każde twierdzenie w README było pokryte kodem. Niski wysiłek, higiena. Krok 5 (PyInstaller `.exe`) świadomie odłożony jako większy, osobny projekt o średnim ROI ([[project_portfolio_phase]]).
+Kontekst: galeria miała „3×16K + 2×8K"; user chce 5×16K. Akcja jest zablokowana do momentu, aż user dostarczy pliki — jeśli na /start ich jeszcze nie ma, w międzyczasie zrób **Krok 6 portfolio** (audyt twierdzeń README, patrz backlog).
 
 ---
 
 ## Co zrobiono w tej sesji
 
-- ✓ **Krok 1 — galeria live 16K** (`ad5d6c8`): zweryfikowano 3 mozaiki 16K (foto/spectre/typo); zmierzono realny DZI (foto 35.5 + spectre 49.5 + typo 79.7 = **~165 MB/3**, obalony szacunek 150–300 MB/szt.); podmieniono stare sloty 8K w `docs/tiles` na 16K (slug `spectre_parrot`→`spectre_mosaic`); przebudowano `docs/index.html` (3×16K + 2×8K, uczciwe etykiety MP); link hero w README EN+PL.
-- ✓ **Krok 2 — social preview** (`6d5a8ea`): wygenerowano 5 konceptów → wybrany magnifier b (~30 tiles, kolorowy obszar kapelusza); `assets/examples/social_preview.png` 256-color PNG **0.55 MB** (<1 MB); user wgrał w repo Settings.
-- ✓ **Krok 3 — Performance Engineering** (`170636c`): case study A1 w README EN+PL (PeakRAMSampler → atrybucja float64 cdist → `_euclid_f32` + `_LazyMask` pod inwariantami → 16K ~10→3.9 GB, ~21→5.9 min); odświeżono 3 nieaktualne noty (roadmap DZI [x], viewer 3×16K, rozmiar repo).
-- ✓ **Krok 4 — post o monokafelku** (`ebc790b`): `docs/posts/aperiodic-monotile-mosaic{,.pl}.md` EN+PL + assety z `generate_spectre_tiling()` (grid kolorowany wg orientacji, GIF 36-klatkowy reveal, sylwetka 14-boku); linki z sekcji Spectre obu README.
-- ✓ **Wszystkie 4 commity wypchnięte**; branch == origin/main.
+- ✓ **README hero podmienione na magnifier papugi 4×4** (commit `26c5d0a`, na origin/main): stare `spectre_full.jpg` nie pokazywało kafelków nawet po zoomie → nowy `assets/examples/spectre_hero_magnifier.jpg` (1600×900, wariant „e" z 5 propozycji). Styl jak social_preview: żółty box na lewej krawędzi dzioba (przejście kolor→białe tło), linie łączące, inset ~4×4 kafelki, podpis „every tile is a separate photograph". Podmieniono w `README.md`+`README.pl.md` (linia 17); `spectre_full.jpg` ZOSTAJE w tabeli progressive-zoom (linia 103).
+- ✓ **Audyt rozdzielczości galerii:** potwierdzono że tylko **photo/symbol/spectre = 16K**; **triangle (8192×4612) i hexagon (8192×6144) = 8K**. Etykiety w `docs/index.html` są uczciwe („8K"); plik hexagona myląco nazwany `hexagon_jump_16K.dzi` (realnie 8K) — kosmetyka, niewidoczna dla zwiedzających.
+- ✓ Commit `26c5d0a` wypchnięty na origin; branch == origin/main.
 
 ## Co zostało (backlog sesji)
 
-- ⟳ **Krok 6 (NASTĘPNY KROK):** adwersarialny audyt twierdzeń README.
-- ⟳ **Krok 5:** zero-friction install (PyInstaller `.exe`, model-free) — wysiłek wysoki, ROI średni; odłożony jako osobny projekt.
-- ⟳ **TODO odłożony:** pasek postępu dla przycisku „Export Deep Zoom" + dołożyć `test_dzi` ([[project_dzi_gui_polish_todo]]) — przy przebiegu czyszczącym GUI.
+- ⟳ **Galeria 5×16K (NASTĘPNY KROK):** swap triangle+hexagon na 16K — czeka na pliki od usera.
+- ⟳ **Krok 6 portfolio (standing):** adwersarialny audyt twierdzeń README.md/README.pl.md (każda liczba/feature/flaga/ścieżka pokryta kodem) → poprawki jednym commitem `docs(readme): fix unverified claims`. Nieaktualny w tej sesji, nadal otwarty.
+- ⟳ **Krok 5 portfolio:** PyInstaller `.exe` (model-free) — wysiłek wysoki, ROI średni; osobny projekt.
+- ⟳ **TODO odłożony:** pasek postępu „Export Deep Zoom" + `test_dzi` ([[project_dzi_gui_polish_todo]]).
 - ⟳ Świadomie ODŁOŻONE: Wariant C (A1/A2), ML/CLIP, Docker/plugin.
 
 ## Aktywne pliki
 
-- `README.md` + `README.pl.md` (cel audytu Kroku 6)
-- `docs/index.html`, `docs/tiles/{photo,symbol,spectre}_mosaic*` (galeria 16K)
-- `docs/posts/aperiodic-monotile-mosaic{,.pl}.md` + `docs/posts/img/*` (post monotile)
-- `assets/examples/social_preview.png` (social preview, wgrany w Settings)
-- Generatory (scratchpad, nie w repo): `gen_social.py`, `gen_magnifier.py`, `gen_final.py`, `gen_monotile.py`
+- `docs/index.html`, `docs/tiles/{showcase_triangle_*,hexagon_jump_16K}*` (cel swapu 16K)
+- `README.md` + `README.pl.md` (hero zmienione; cel Kroku 6)
+- `assets/examples/spectre_hero_magnifier.jpg` (nowe hero)
+- Generator (scratchpad, nie w repo): `gen_parrot_magnifier.py` (źródło: `output/github_readme/spectre_parrot_16K.jpg`, tile pitch ~140 px w 16K)
 
 ## Otwarte pytania
 
-- Krok 4: czy przepuścić prozę posta przez Claude.ai (web) pod konkretną platformę (HN/dev.to/LinkedIn) — plan zakładał narrację na web; draft w CC gotowy do publikacji jak jest.
-- Krok 5 vs odłożenie: czy w ogóle robimy `.exe`, czy zostaje przy „clone + run".
+- Galeria: czy 5×16K zmieści się w budżecie GitHub Pages (obecnie ~165 MB piramid + 2×16K dojdzie ~70-100 MB)? Sprawdzić przy swapie.
+- Przy swapie: zmienić też mylącą nazwę `hexagon_jump_16K.dzi` na coś bez „16K" w starej wersji / nadać sensowny slug nowym plikom.
 
 ## Do MEMORY.md (przeniesiono/zaktualizowano w tej sesji)
 
-- [[project_portfolio_phase]] — dodano postęp: Kroki 1–4 WDROŻONE (commity ad5d6c8 / 6d5a8ea / 170636c / ebc790b), realny pomiar DZI 165 MB/3, parametry faktycznie użyte, status kroków 5–6.
-- [[project_dzi_gui_polish_todo]] — NOWY: odłożony pasek postępu „Export Deep Zoom" + brakujący `test_dzi`.
+- [Aktywne TODO] NOWY wpis [2026-06-28] „Galeria — podmiana triangle+hexagon na 16K (CZEKA NA USERA)" — audyt rozdzielczości + plan swapu + pułapki.
+- [Aktywne TODO] NOWY wpis [2026-06-28] „README hero = magnifier papugi 4×4" (commit `26c5d0a`) — co, dlaczego, generator, że `spectre_full.jpg` zostaje w tabeli zoom.
