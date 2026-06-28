@@ -14,7 +14,7 @@
 ![CI](https://github.com/Piotr1686/Neural-Mosaic/actions/workflows/ci.yml/badge.svg)
 
 <p align="center">
-  <img src="assets/examples/spectre_full.jpg" width="80%" alt="Neural-Mosaic — spectre tiling with black grout" />
+  <img src="assets/examples/spectre_hero_magnifier.jpg" width="80%" alt="Neural-Mosaic — spectre mosaic of a parrot with a 4×4-tile zoom inset showing that every tile is a separate photograph" />
 </p>
 <p align="center">
   <em>A single photograph, rebuilt from thousands of others — here on the chiral aperiodic <strong>spectre</strong> monotile with black grout.</em>

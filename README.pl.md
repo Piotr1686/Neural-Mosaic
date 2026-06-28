@@ -14,7 +14,7 @@
 ![CI](https://github.com/Piotr1686/Neural-Mosaic/actions/workflows/ci.yml/badge.svg)
 
 <p align="center">
-  <img src="assets/examples/spectre_full.jpg" width="80%" alt="Neural-Mosaic — kafelkowanie spectre z czarną fugą" />
+  <img src="assets/examples/spectre_hero_magnifier.jpg" width="80%" alt="Neural-Mosaic — mozaika spectre papugi z powiększeniem 4×4 kafelki pokazującym, że każdy kafelek to osobne zdjęcie" />
 </p>
 <p align="center">
   <em>Pojedyncze zdjęcie, odtworzone z tysięcy innych — tutaj na chiralnym, aperiodycznym monokafelku <strong>spectre</strong> z czarną fugą.</em>
