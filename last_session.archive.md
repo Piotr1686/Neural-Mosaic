@@ -1,3 +1,49 @@
+## ═══ Sesja zarchiwizowana [2026-06-28 13:04] ═══
+
+# last_session.md
+
+**Sesja:** 2026-06-27 · 22:00-22:10
+**Status:** ✓ Zakończona poprawnie
+**Punkt odniesienia (git):** fae2ef5 @ main (origin ZSYNCHRONIZOWANY — push wykonany na starcie sesji, branch == origin/main)
+
+---
+
+## ▸ NASTĘPNY KROK (zacznij tutaj)
+
+**Weryfikacja dostarczonych mozaik 16K + osadzenie w viewerze GitHub Pages (Krok 1 — live zoomable gallery hero).** User generuje sam 2 mozaiki 16K (foto + typo) wg ustalonych parametrów i przynosi do weryfikacji. Zadanie: sprawdzić jakość/rozpoznawalność makro + gęstość zoomu, zmierzyć realny rozmiar DZI (zastąpić szacunek 150–300 MB/szt. faktem), wyeksportować przez `make_dzi` / przycisk GUI „Export Deep Zoom", osadzić w `docs/` (OpenSeadragon na Pages) i dodać na górze README EN+PL wielki link „🔍 Open the live zoomable gallery".
+
+Kontekst: faza portfolio = prezentacja, nie kod ([[project_portfolio_phase]]). Ustalono parametry „pod wow" (poniżej). Dopiero po pomiarze realnego DZI decyzja czy dokładamy 3. mozaikę (spectre/monotile).
+
+---
+
+## Co zrobiono w tej sesji
+
+- ✓ **Push origin** — wypchnięto 2 zaległe commity `e6766b5..fae2ef5` (plan portfolio `c9f6101` + zapis sesji `fae2ef5`); branch == origin/main, CI zielony.
+- ✓ **Ustalono budżet galerii** — Pages repo ~1 GB miękki limit; 16K DZI ~150–300 MB/szt. (mozaiki słabo kompresują JPEG przez gęste krawędzie). Plan: start od **2 mozaik**, zmierz, ew. dołóż spectre (~sufit 0.9 GB).
+- ✓ **Ustalono parametry „pod wow"** (z realnych pokręteł GUI) — Foto: 16K, tile_scale 0.5, shape kite/hexagon_romb, blend 0%, tint 0%, border off. Typo: 16K, white_on_black, variation 5, 2–3 grupy fontów, scale 0.5–0.75. Mechanizm: iluzja dwóch skal.
+- ✓ **MEMORY zaktualizowane** — [[project_portfolio_phase]] dostał blok „Ustalenia Krok 1 — galeria" z budżetem i parametrami; status = user generuje, przyniesie do weryfikacji.
+
+## Co zostało (backlog sesji)
+
+- ⟳ **Krok 1 (w toku):** weryfikacja mozaik → eksport DZI → osadzenie w `docs/` viewer → link hero w README EN+PL.
+- ⟳ **PLAN_PORTFOLIO.md kroki 2–6:** GitHub social preview (1280×640) · sekcja Performance Engineering · post „aperiodic monotile mosaic" · zero-friction install (PyInstaller) · adwersarialny audyt twierdzeń README.
+- ⟳ Świadomie ODŁOŻONE: Wariant C (A1/A2), ML/CLIP, Docker/plugin. test_dzi (follow-up z A2).
+
+## Aktywne pliki
+
+- `PLAN_PORTFOLIO.md` (plan fazy), `README.md` + `README.pl.md` (dojdzie link hero)
+- Do Kroku 1: `src/tools/make_dzi.py`, `src/gui.py` (przycisk „Export Deep Zoom"), `docs/` (OpenSeadragon viewer), `assets/examples/` (16K + `mosaic_zoom.gif`)
+
+## Otwarte pytania
+
+- Ile finalnie mozaik w galerii (2 vs +spectre) — rozstrzygnie pomiar realnego DZI.
+- Social preview: kompozycja w CC czy layout na Claude.ai (web)?
+- Dobór konkretnych obrazów-celów (wysoki kontrast, rozpoznawalny temat) — po stronie usera.
+
+## Do MEMORY.md (przeniesiono/zaktualizowano w tej sesji)
+
+- [[project_portfolio_phase]] — dodano blok „Ustalenia Krok 1 — galeria (2026-06-27)": budżet Pages, parametry wow foto/typo, status „user generuje → weryfikacja w kolejnej sesji".
+
 ## ═══ Sesja zarchiwizowana [2026-06-27 22:10] ═══
 
 # last_session.md
@@ -204,64 +250,5 @@ Pełna architektura/inwarianty: [[project_a1_memory_arch]], [[project_a2_dzi_exp
 
 - [[project_requirements_curated]] — requirements.txt jest KUROWANY (nie pip freeze); musi mieć matplotlib + fonttools; torch/transformers opcjonalne (uśpiony ai_core); cv2 nieimportowane (2026-06-24)
 
-## ═══ Sesja zarchiwizowana [2026-06-24 23:21] ═══
-
-# last_session.md
-
-**Sesja:** 2026-06-24 (checkpoint /save · sesja trwa)
-**Status:** ⟳ W toku
-**Punkt odniesienia (git):** 2875f99 @ main (origin zsynchronizowany)
-
----
-
-## ▸ NASTĘPNY KROK (zacznij tutaj)
-
-**Brak twardego następnego kroku — obie otwarte kwestie z 2026-06-21 domknięte (live-demo zweryfikowane, wariant white_on_black dodany do README + pushed).** Do wyboru z backlogu poniżej; najbliższy sensowny kandydat: ewentualne zróżnicowanie źródeł live-demo `photo`(portrait.jpg) vs `triangle`(portrait2.jpg) — ta sama osoba, różne sceny. Rekomendacja: NISKI priorytet (kosmetyk; demo pokazuje zmienną „kształt kafla", nie galerię osób). Render typo 8K jest tani (~7 s).
-
----
-
-## Co zrobiono w tej sesji (2026-06-24)
-
-- ✓ **Weryfikacja live-demo (end-to-end, na żywo)**: wszystkie 5 DZI mają `Format="jpg"`, pełna piramida 0–13, wymiary zgodne z etykietami; deploy GitHub Pages odpowiada; kafelki `13/0_0.jpg` to prawidłowe JPEG-i; obejrzane motywy: **hexagon=skok/niebo, spectre=papuga/safari** (właściwe kształty, różne źródła). Zero czarnego ekranu dla świeżego użytkownika (lokalny cache → Ctrl+F5).
-- ✓ **Wariant typo `white_on_black` do galerii README** (commit `2875f99`, pushed): 2 mastery 8K z `IMG_20220727` (skok), Latin monospace, black_on_white + white_on_black; reprodukowalny krok `build_mode_compare()` w `make_matrices.py` → kompozyt side-by-side `assets/examples/typo_mode_compare.jpg` (1562×644); nowa podsekcja README „Symbol Mosaic — two style modes".
-- ✓ **Push porządkowy**: wypchnięto też zaległy commit sesyjny `cc9f991` z 2026-06-21; origin/main zsynchronizowany.
-
----
-
-## Co zrobiono w poprzedniej sesji (2026-06-21)
-
-- ✓ **Głęboki audyt README** — 4 tiery, ~20 znalezisk (błędy faktograficzne vs kod, sprzeczności, wizualia, marketing)
-- ✓ **Opcja B — realne pisma egzotyczne w TypoEngine** (commit `1fbad26`): `indexer_typo` pełne pokrycie ~44 bloków Unicode + `--full-scan`; `engine_typo` filtr świadomy grup (`_LATIN_GROUPS`); testy zaktualizowane; reindeks → **43 829 glifów**, wszystkie 7 grup żyją; 184 testy passed; walidacja wizualna (mozaika z hieroglifów)
-- ✓ **Rendery demo 16K**: spectre+grout (papuga) + tryptyk zbliżeń, macierz grup fontów, glyph-detail (CJK/hieroglify/odręczne), macierz rozmiaru; nowy `src/tools/make_matrices.py`
-- ✓ **Benchmark** (`tests/benchmark.py`): format jednokolumnowy (koniec atrapy GPU/CPU) + prawdziwe liczby (16K kite 21 min itd.)
-- ✓ **README przepisane** (commit `bb59a1f`): nazwa Neural-Mosaic, EN, TOC, diagram Mermaid, Tech Highlights, downloadery sprostowane (Picsum/LoremFlickr + Openverse/Met/Artic), wzór anti-rep, NUM_TILES, wymiary 16K, stopka autora; usunięto `symbol_color.jpg` + 6 zoom GIF (~47 MB)
-- ✓ **Live demo (docs/, GitHub Pages)**: spectre→papuga 8K (`aa787ea`), hexagon→skok 8K (`59a0bff`); różne źródła per kształt; sprostowane kłamliwe etykiety triangle/hexagon
-- ✓ Wszystkie 4 commity **wypchnięte na origin/main**; MEMORY.md zaktualizowane (3 wpisy 2026-06-21)
-
-## Co zostało (backlog sesji)
-
-- ✓ ~~Opcjonalnie: wariant `white_on_black` do galerii typo w README~~ — ZROBIONE 2026-06-24 (`2875f99`)
-- ⟳ Live demo: `photo`(portrait.jpg) i `triangle`(portrait2.jpg) to ta sama osoba — ewentualne dalsze zróżnicowanie (NISKI priorytet)
-- ⟳ `benchmark.py`: pomiar peak-RAM niewiarygodny (psutil delta ~0.46 GB vs realne ~10 GB) — ewentualny sampling-thread
-- ⟳ Niereferowane assety (`symbol_bw`, `symbol_detail`, `mosaic_portrait_spectre`, `mosaic_zoom`) — zostawione (używa ich `make_showcase`)
-- ⟳ Stary backlog: `feature/semantic-clip` TODO w MEMORY nieaktualne (CLIP odrzucony); zoom-GIF spectre; UX backlog z 2026-06-04
-
-## Aktywne pliki
-
-- `README.md`, `src/tools/make_matrices.py` (galeria typo + krok `build_mode_compare`)
-- `assets/examples/typo_mode_compare.jpg` (nowy asset side-by-side, tracked)
-- `src/cli.py` (render typo `--mode white_on_black --font-groups D_latin_clean`)
-- `docs/index.html`, `docs/tiles/spectre_parrot.*`, `docs/tiles/hexagon_jump_16K.*` (live demo — zweryfikowane)
-- Mastery w `output/github_readme/` (gitignored): `typo_mode_bow_8K.png`, `typo_mode_wob_8K.png` + 16K masters — do reprodukcji kompozytów/DZI
-
-## Otwarte pytania
-
-- Czy zróżnicować pozostałe źródła live-demo (triangle/photo = ta sama osoba)? (rekomendacja: niski priorytet)
-- ✓ ~~Czy dodać wariant `white_on_black` do galerii typo w README?~~ — TAK, zrobione 2026-06-24
-
-## Do MEMORY.md (przeniesiono)
-
-- „Opcja B — realne pisma egzotyczne w TypoEngine" (Rozwiązane problemy) z inwariantem: zakresy `indexer_typo` ↔ `_LATIN_GROUPS`; reindeks po zmianie; sprostowanie nieaktualnych color modes
-- „README przepisane + sprostowane fakty vs kod" (downloadery Picsum/LoremFlickr vs v2; TARGET_SHORT_SIDE ignorowane; wzór anti-rep; nazwa Neural-Mosaic)
-- „Live demo — różne źródła per kształt, 8K" (make_dzi --max-level 13, Format=jpg, 5 mozaik)
+_(starsze sesje usunięte — archiwum trzyma maks. 5 ostatnich)_
 
