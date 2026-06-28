@@ -96,6 +96,8 @@
 
 The **spectre** is the chiral aperiodic monotile ([Smith, Myers, Kaplan, Goodman-Strauss, 2023](https://arxiv.org/abs/2305.17743)) — a 14-sided shape that tiles the plane in a pattern that *never repeats*. Black grout makes the geometry legible: step in and every tile resolves into a separate photograph.
 
+> 📖 **Read the write-up:** [Photomosaics on an aperiodic monotile](docs/posts/aperiodic-monotile-mosaic.md) — what the spectre is, why it suits a mosaic, and how the engine tiles it.
+
 <table>
   <tr>
     <td align="center"><b>Full mosaic</b><br><img src="assets/examples/spectre_full.jpg" width="320" alt="Spectre full"></td>

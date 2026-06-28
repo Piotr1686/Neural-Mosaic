@@ -96,6 +96,8 @@
 
 **Spectre** to chiralny, aperiodyczny monokafelek ([Smith, Myers, Kaplan, Goodman-Strauss, 2023](https://arxiv.org/abs/2305.17743)) — 14-bok, który pokrywa płaszczyznę wzorem, który *nigdy się nie powtarza*. Czarna fuga sprawia, że geometria jest czytelna: zbliż się, a każdy kafelek rozkłada się na osobne zdjęcie.
 
+> 📖 **Przeczytaj write-up:** [Fotomozaiki na aperiodycznym monokafelku](docs/posts/aperiodic-monotile-mosaic.pl.md) — czym jest spectre, czemu pasuje do mozaiki i jak silnik go kafelkuje.
+
 <table>
   <tr>
     <td align="center"><b>Pełna mozaika</b><br><img src="assets/examples/spectre_full.jpg" width="320" alt="Spectre pełna"></td>
