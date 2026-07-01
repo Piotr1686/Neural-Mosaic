@@ -6,9 +6,9 @@ Generates all images required for the README gallery section.
 Produces (in assets/examples/):
     source_portrait.jpg        - resized source image (<=800 px wide)
     mosaic_portrait_square.jpg - Smart mosaic, square tiles
-    mosaic_portrait_kite.jpg   - Smart mosaic, kite tiles
+    mosaic_portrait_kites.jpg  - Smart mosaic, kites tiles
     detail_square.jpg          - Centre-crop detail of the square mosaic
-    detail_kite.jpg            - Centre-crop detail of the kite mosaic
+    detail_kites.jpg           - Centre-crop detail of the kites mosaic
     symbol_bw.jpg              - Symbol mosaic, black_on_white
     symbol_detail.jpg          - Centre-crop detail of the B&W symbol mosaic
 
@@ -258,7 +258,7 @@ def main():
     )
     parser.add_argument(
         "--skip-smart", action="store_true",
-        help="Skip Smart Engine renders (square + kite)",
+        help="Skip Smart Engine renders (square + kites)",
     )
     parser.add_argument(
         "--skip-typo", action="store_true",
@@ -267,7 +267,7 @@ def main():
     parser.add_argument(
         "--shape",
         choices=["square", "triangle", "hexagon", "hexagon_romb", "romb", "brick_wall",
-                 "rectangle_3x1", "kite", "spectre"],
+                 "rectangle_3x1", "kites", "spectre"],
         default="square",
         help="Tile shape for Smart Engine (default: square)",
     )

@@ -12,8 +12,8 @@
 - Indeks buduje `src/indexer_smart.py` → `data/smart_index.pkl`; schema_version="5x5", feature_dim=75
 - Dopasowanie przez `cKDTree` + `cdist` (euclidean), chunk_size=500, top-50 kandydatów
 - Spatial anti-repetition: `cKDTree` po współrzędnych kafelka, search_radius = 1.5×base_s
-- Obsługuje geometrie: square, rectangle_3x1, brick_wall, hexagon, hexagon_romb, triangle, romb, kite
-- Kite geometry = 8-kite "hat" z płaskiej siatki heksagonalnej (axial coords q, r, k)
+- Obsługuje geometrie: square, rectangle_3x1, brick_wall, hexagon, hexagon_romb, triangle, romb, kites, spectre
+- Geometria `kites` = deltoidalna trójheksagonalna: każdy spłaszczony heksagon dzielony na 6 latawców, każdy latawiec = osobny sektor/zdjęcie (per-tile, deterministyczne, bez RNG). Zastąpiła stary tryb `kite` (8-kite "hat" z losową orientacją) — 2026-06-30
 - LIBRARY_DIRS: data/library_starter/tiles, library_public, library_extended, library_private
 - Blokada renderowania przy niezgodnym indeksie (hard block jeśli dim≠75 lub schema≠"5x5")
 - Post-processing: Color Blend (0–30%, Image.blend) + Tile Tint (0–40%, RGB mean shift)
@@ -114,6 +114,14 @@
 - Pierwszy obraz w `README.md`+`README.pl.md` podmieniony: `spectre_full.jpg` → `assets/examples/spectre_hero_magnifier.jpg` (1600×900, wariant „e"). Powód: stare hero nie pokazywało kafelków nawet po powiększeniu
 - Styl jak social_preview: pełna mozaika + żółty box na lewej krawędzi dzioba (przejście kolor→białe tło) + linie + inset ~4×4 kafelki + „every tile is a separate photograph". Generator: scratchpad `gen_parrot_magnifier.py` (źródło: `output/github_readme/spectre_parrot_16K.jpg`, tile pitch ~140 px w 16K). `spectre_full.jpg` ZOSTAJE w tabeli progressive-zoom (linia 103)
 
+[2026-06-30] **Tryb `kite` → `kites` ZROBIONE (NIEZACOMMITOWANE)** — stary `kite` (losowe 8-kite hats) zastąpiony deltoidalnym per-tile `kites` (6 latawców/hex, każdy osobnym sektorem, bez RNG, reprodukowalny bit-w-bit). Zmiana w `engine_smart.py` + nazwa wszędzie (gui/cli/make_showcase/benchmark/README EN+PL/MEMORY). 201/201 testów, render zweryfikowany. Szczegóły: [[project_kites_mode]]. **Working tree dirty — czeka na commit** `feat(engine): replace random-hat 'kite' with deterministic per-tile 'kites'`.
+
+[2026-06-30] **PLAN: 10 nowych kształtów „wow" + schemat na podglądzie GUI** (7 sprintów, user zatwierdza po każdym)
+- **Schemat ułożenia w GUI** (Twój pomysł, robimy PIERWSZY): po wyborze „Tile Shape" w panelu podglądu (`lbl_preview_p`, `_fit_preview`) pojawia się schemat ułożenia; zastępowany realnym renderem po „Generate Preview". Dropdown default → **„None"** (pusto, preview zablokowany). Schematy w `assets/shape_schemes/<shape_mode>.png`.
+- **Tier A** (8, czyste wielokąty — drop-in jak spectre/kites): `penrose`, `phyllotaxis`, `voronoi`, `sunburst`, `trunc_square` (4.8.8), `trunc_hex` (3.12.12), `rhombitrihex` (3.4.6.4), `pythagorean`. **Tier B** (2, maski krzywoliniowe — wymaga `_CurvedMask`): `truchet`, `truchet_hex`.
+- **Sprint 2 = refaktor**: wydzielić `_build_polygon_sectors()` (dziś zduplikowane w kites+spectre) + rejestr `shape_mode→generator`, ZANIM dojdą nowe kształty. Golden SHA-256 muszą zostać zielone.
+- **Reindeks NIE potrzebny** (kształty po stronie targetu; indeks 79-dim agnostyczny). **`hexagon_romb` == „tumbling blocks"** (heksagon = 3 romby przez `mask_left/right/top`). Generatory schematów (wszystkie 19, wierne geometrii silnika) gotowe w scratchpad: `gen_shape_schemes.py` + `shapes10.py`. Plan szczegółowy: ostatnia odpowiedź asystenta (7 sprintów, M1–M7).
+
 ---
 
 ## Odrzucone podejścia
@@ -129,8 +137,8 @@
 
 ## Słownik projektu
 
-- **hat** — 8-kite cluster użyty jako jedna jednostka tiling (kite geometry)
-- **kite** — pojedynczy romb z siatki heksagonalnej (q, r, k)
+- **kite** — pojedynczy latawiec (1/6 spłaszczonego heksagonu): [środek, środek_kraw(k-1), wierzchołek(k), środek_kraw(k)]
+- **kites** (tryb) — deltoidalne kafelkowanie per-tile: 6 latawców/heksagon, każdy osobnym sektorem (zastąpiło stary `kite`/hat)
 - **density** — średnia jasność glifu typograficznego (0=biały, 1=czarny)
 - **freq_penalty** — kara za ponowne użycie tego samego kafelka (domyślnie 30.0)
 

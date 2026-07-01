@@ -191,13 +191,13 @@ Reconstructs the target image by tiling it with photographs from your library. M
 |---|---|
 | Output resolution | 2K · 4K · 8K · **16K** |
 | Tile size multiplier | 0.5 · 0.75 · 1.0 · 1.75 · 2.0 |
-| Tile shape | `square` · `rectangle_3x1` · `brick_wall` · `hexagon` · `hexagon_romb` · `romb` · `triangle` · `kite` · `spectre` |
+| Tile shape | `square` · `rectangle_3x1` · `brick_wall` · `hexagon` · `hexagon_romb` · `romb` · `triangle` · `kites` · `spectre` |
 | Allow Mirroring | Horizontally flips tiles on the fly, doubling the effective library without using extra disk |
 | Black Borders (Grout) | Adds a dark gap between tiles — simulates real mosaic grout lines |
 | Color Blend | 0%–30% — blends the original photo over the mosaic for softer transitions |
 | Tile Tint | 0%–40% — shifts each tile toward the target sector mean for tighter colour accuracy |
 
-The **`kite`** shape arranges tiles as diamonds on a flat-topped hexagonal grid. The **`spectre`** shape tiles the image with the strictly chiral aperiodic monotile — see [Tech Highlights](#tech-highlights).
+The **`kites`** shape splits each flat-topped hexagon into 6 kites and renders every kite as its own photo (deltoidal trihexagonal grid). The **`spectre`** shape tiles the image with the strictly chiral aperiodic monotile — see [Tech Highlights](#tech-highlights).
 
 **Anti-repetition system.** A neighbour constraint discourages any tile from the same source image touching itself, combined with a frequency penalty that grows as a tile is reused. Together they stop any single photograph from dominating the composition (details in [How It Works](#how-it-works)).
 
@@ -438,7 +438,7 @@ Batch output names are **timestamp-free** — `{stem}_{engine}_{res}_{shape|mode
 | `--engine {smart,typo}` | both | required | Which renderer to use |
 | `--res {2K,4K,8K,16K}` | both | `8K` | Output resolution |
 | `--index PATH` | both | `data/<engine>_index.pkl` | Override index location |
-| `--shape SHAPE` | smart | `square` | `square` · `rectangle_3x1` · `brick_wall` · `hexagon` · `hexagon_romb` · `romb` · `triangle` · `kite` · `spectre` |
+| `--shape SHAPE` | smart | `square` | `square` · `rectangle_3x1` · `brick_wall` · `hexagon` · `hexagon_romb` · `romb` · `triangle` · `kites` · `spectre` |
 | `--scale FLOAT` | both | `1.0` | Tile/glyph size multiplier (0.5–2.0) |
 | `--blend FLOAT` | smart | `0.0` | Original-over-mosaic blend, 0.0–0.3 |
 | `--tint FLOAT` | smart | `0.0` | Tile tint toward sector colour, 0.0–0.4 |

@@ -9,7 +9,7 @@ into the Performance section of README.md.
 
 Usage:
     python -m tests.benchmark              # all benchmarks (~30+ min on full library)
-    python -m tests.benchmark --quick      # skip 16K kite render
+    python -m tests.benchmark --quick      # skip 16K kites render
     python -m tests.benchmark --no-typo   # skip Symbol Mosaic (no typo index needed)
     python -m tests.benchmark --quick --no-typo
 """
@@ -347,7 +347,7 @@ def main():
     )
     parser.add_argument(
         "--quick", action="store_true",
-        help="Skip 16K kite render (long — can take 15-30 min)",
+        help="Skip 16K kites render (long — can take 15-30 min)",
     )
     parser.add_argument(
         "--no-typo", action="store_true",
@@ -361,13 +361,13 @@ def main():
     ]
     if not args.quick:
         render_configs.append(
-            {"label": "Render 16K - kite tiles", "res": "16K", "shape": "kite",   "scale": 1.0}
+            {"label": "Render 16K - kites tiles", "res": "16K", "shape": "kites",  "scale": 1.0}
         )
 
     print("=" * 64)
     print("  Neural-Mosaic Benchmark")
     if args.quick:
-        print("  Mode: --quick  (16K kite skipped)")
+        print("  Mode: --quick  (16K kites skipped)")
     print("=" * 64)
 
     run_sampler = PeakRAMSampler().start()

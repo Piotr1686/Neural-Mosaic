@@ -3,8 +3,8 @@ src/engine_smart.py
 -------------------
 Colour-matched photomosaic engine (SmartEngine).
 
-Supports multiple tile geometries including the kite (diamond) shape and
-the chiral aperiodic "spectre" monotile (src/spectre_tiling.py).
+Supports multiple tile geometries including the per-tile deltoidal kite
+grid ("kites") and the chiral aperiodic "spectre" monotile (src/spectre_tiling.py).
 Each sector of the target image is matched to the best-fitting tile from
 the pre-built CIELAB feature index with spatial anti-repetition enforcement.
 
@@ -16,10 +16,8 @@ slices the first 75 dimensions, so old and new indexes are both accepted.
 """
 import numpy as np
 import pickle
-import random
 import math
 import threading
-from collections import defaultdict
 from PIL import Image, ImageOps, ImageDraw
 from tqdm import tqdm
 from scipy.spatial import cKDTree
@@ -358,27 +356,26 @@ class SmartEngine:
         sectors_data = []
 
         # ==========================================
-        # KITE TILING (DIAMOND GEOMETRY)
+        # KITE TILING (DELTOIDAL TRIHEXAGONAL, PER-TILE)
         # ==========================================
-        if shape_mode == "kite":
-            print(f"Mode: Kite tiling. Borders: {border_mode}")
+        if shape_mode == "kites":
+            # Each hexagon on the flat-topped grid splits into 6 kites; every
+            # kite is its own sector (one photo per kite). The earlier "kite"
+            # mode bundled 8 kites into randomly-oriented einstein "hats", which
+            # read as chaotic blobs and emphasised the black borders. Per-tile
+            # is fully deterministic (no RNG): the (q, r, k) iteration order is a
+            # pure function of geometry, so preview and render stay reproducible
+            # and the _neighbors_cache entry keyed by _nkey is stable.
+            print(f"Mode: Kite tiling (deltoidal, per-tile). Borders: {border_mode}")
 
             s  = base_s
             r3 = math.sqrt(3)
-
-            BASE_HAT = [
-                (0, 0, 0), (0, 0, 1), (0, 0, 2), (0, 0, 3), (0, 0, 5),
-                (0, 1, 4), (0, 1, 5),
-                (1, 0, 3),
-            ]
-
-            target_kites  = set()
-            kite_centroids = {}
 
             range_q = int(target_w / (1.5 * s)) + 3
             range_r = int(target_h / (r3 * s)) + 3
 
             print("Building kite grid...")
+            target_kites = []
             for q in range(-range_q, range_q):
                 for r in range(-range_r, range_r):
                     cx = 1.5 * s * q
@@ -391,116 +388,57 @@ class SmartEngine:
                             cent_y = sum(p[1] for p in poly) / 4
 
                             if 0 <= cent_x < target_w and 0 <= cent_y < target_h:
-                                target_kites.add((q, r, k))
-                            kite_centroids[(q, r, k)] = (cent_x, cent_y)
+                                target_kites.append((cx, cy, k))
 
-            uncovered_targets = list(target_kites)
-            uncovered_targets.sort(
-                key=lambda k: (kite_centroids[k][0] - target_w/2)**2
-                              + (kite_centroids[k][1] - target_h/2)**2
-            )
+            print(f"Rendering {len(target_kites)} kites...")
+            for i_kite, (cx, cy, k) in enumerate(tqdm(target_kites, desc="Sampling kite sectors")):
+                poly = self._get_kite_poly(cx, cy, s, k)
+                kite_cx = sum(p[0] for p in poly) / 4
+                kite_cy = sum(p[1] for p in poly) / 4
 
-            occupied   = set()
-            placed_hats = []
+                # Shrink toward the kite's own centroid (not a hat centroid): the
+                # black border now outlines every individual kite.
+                padded_poly = []
+                for px, py in poly:
+                    nx = kite_cx + (px - kite_cx) * render_padding
+                    ny = kite_cy + (py - kite_cy) * render_padding
+                    padded_poly.append((nx, target_h - ny))
 
-            # Deterministic per render geometry: an unseeded RNG produced a
-            # different hat layout (and sector count) every run, which both
-            # broke preview/render reproducibility and poisoned the
-            # _neighbors_cache entry shared by renders with the same _nkey
-            # (stale adjacency, possible IndexError on the second render).
-            rng = random.Random(f"kite_{base_s}_{target_w}_{target_h}")
+                min_x = min(p[0] for p in padded_poly)
+                max_x = max(p[0] for p in padded_poly)
+                min_y = min(p[1] for p in padded_poly)
+                max_y = max(p[1] for p in padded_poly)
 
-            kite_to_hats = defaultdict(list)
-            for target_k in target_kites:
-                t_q, t_r, t_k = target_k
-                for rot in range(6):
-                    for flip in [False, True]:
-                        for b_idx in range(8):
-                            bq, br, bk = BASE_HAT[b_idx]
-                            trans_q, trans_r, trans_k = self._transform_kite_index(
-                                bq, br, bk, 0, 0, rot, flip
-                            )
-                            if trans_k == t_k:
-                                dq = t_q - trans_q
-                                dr = t_r - trans_r
-                                hat = tuple(
-                                    self._transform_kite_index(x, y, z, dq, dr, rot, flip)
-                                    for x, y, z in BASE_HAT
-                                )
-                                if hat not in kite_to_hats[target_k]:
-                                    kite_to_hats[target_k].append(hat)
+                bw, bh = int(max_x - min_x), int(max_y - min_y)
+                if bw <= 0 or bh <= 0: continue
 
-            for k_target in tqdm(uncovered_targets, desc="Assembling hats edge-to-edge"):
-                if k_target in occupied:
-                    continue
+                safe_box = (int(min_x), int(min_y), int(max_x), int(max_y))
+                sb = (max(0, safe_box[0]), max(0, safe_box[1]), min(target_w, safe_box[2]), min(target_h, safe_box[3]))
+                if sb[2] <= sb[0] or sb[3] <= sb[1]: continue
 
-                valid_hats = [
-                    hat for hat in kite_to_hats[k_target]
-                    if not any(k in occupied for k in hat)
-                ]
+                s_img = target.crop(sb)
+                if s_img.size != (bw, bh):
+                    tmp = Image.new("RGB", (bw, bh), (0,0,0))
+                    tmp.paste(s_img, (sb[0] - safe_box[0], sb[1] - safe_box[1]))
+                    s_img = tmp
 
-                if valid_hats:
-                    chosen_hat = rng.choice(valid_hats)
-                    placed_hats.append(chosen_hat)
-                    for k in chosen_hat:
-                        occupied.add(k)
-                else:
-                    placed_hats.append((k_target,))
-                    occupied.add(k_target)
+                shifted_poly = [(p[0] - min_x, p[1] - min_y) for p in padded_poly]
+                lazy_mask = _LazyMask(shifted_poly, bw, bh, aa=1)
+                mask_kite = lazy_mask.render()
 
-            print("Rendering 8-kite hats...")
-            for i_hat, hat_kites in enumerate(placed_hats):
-                hat_polys = []
-                for q, r, k in hat_kites:
-                    cx   = 1.5 * s * q
-                    cy   = r3 * s * (r + q / 2.0)
-                    poly = self._get_kite_poly(cx, cy, s, k)
-                    hat_polys.append(poly)
+                # Replace outside-mask pixels with the kite's mean colour so the
+                # bounding box does not leak neighbouring content into the LAB
+                # match (same treatment as the spectre mode).
+                feat_img = self._mean_fill_outside_mask(s_img, mask_kite)
 
-                all_pts = [p for poly in hat_polys for p in poly]
-                hat_cx  = sum(p[0] for p in all_pts) / len(all_pts)
-                hat_cy  = sum(p[1] for p in all_pts) / len(all_pts)
-
-                for k_idx, poly in enumerate(hat_polys):
-                    padded_poly = []
-                    for px, py in poly:
-                        nx = hat_cx + (px - hat_cx) * render_padding
-                        ny = hat_cy + (py - hat_cy) * render_padding
-                        padded_poly.append((nx, target_h - ny))
-
-                    min_x = min(p[0] for p in padded_poly)
-                    max_x = max(p[0] for p in padded_poly)
-                    min_y = min(p[1] for p in padded_poly)
-                    max_y = max(p[1] for p in padded_poly)
-
-                    bw, bh = int(max_x - min_x), int(max_y - min_y)
-                    if bw <= 0 or bh <= 0: continue
-
-                    safe_box = (int(min_x), int(min_y), int(max_x), int(max_y))
-                    sb = (max(0, safe_box[0]), max(0, safe_box[1]), min(target_w, safe_box[2]), min(target_h, safe_box[3]))
-                    if sb[2] <= sb[0] or sb[3] <= sb[1]: continue
-
-                    s_img = target.crop(sb)
-                    if s_img.size != (bw, bh):
-                        tmp = Image.new("RGB", (bw, bh), (0,0,0))
-                        tmp.paste(s_img, (sb[0] - safe_box[0], sb[1] - safe_box[1]))
-                        s_img = tmp
-
-                    shifted_poly = [(p[0] - min_x, p[1] - min_y) for p in padded_poly]
-                    lazy_mask = _LazyMask(shifted_poly, bw, bh, aa=1)
-                    mask_kite = lazy_mask.render()
-
-                    # Replace outside-mask pixels with the kite's mean colour
-                    # so the bounding box does not leak neighbouring content
-                    # into the LAB match (same treatment as the spectre mode).
-                    feat_img = self._mean_fill_outside_mask(s_img, mask_kite)
-
-                    # Store the lazy descriptor, not the rasterised mask: it is
-                    # re-rendered identically at composite time (see putalpha).
-                    sectors_data.append({
-                        "meta": (i_hat, int(min_x), int(min_y), lazy_mask, bw, bh, len(hat_kites) > 1),
-                        "feature": self._compute_sector_feature(feat_img, edge_aware)
-                    })
+                # is_hat=False -> standard spatial anti-repetition across all
+                # neighbours (no hat grouping to scope it to). Store the lazy
+                # descriptor, not the rasterised mask: it is re-rendered
+                # identically at composite time (see putalpha).
+                sectors_data.append({
+                    "meta": (i_kite, int(min_x), int(min_y), lazy_mask, bw, bh, False),
+                    "feature": self._compute_sector_feature(feat_img, edge_aware)
+                })
 
         # ==========================================
         # SPECTRE TILING (CHIRAL APERIODIC MONOTILE)

@@ -191,13 +191,13 @@ Odtwarza obraz docelowy, kafelkując go zdjęciami z Twojej biblioteki. Dopasowa
 |---|---|
 | Rozdzielczość wyjściowa | 2K · 4K · 8K · **16K** |
 | Mnożnik rozmiaru kafelka | 0.5 · 0.75 · 1.0 · 1.75 · 2.0 |
-| Kształt kafelka | `square` · `rectangle_3x1` · `brick_wall` · `hexagon` · `hexagon_romb` · `romb` · `triangle` · `kite` · `spectre` |
+| Kształt kafelka | `square` · `rectangle_3x1` · `brick_wall` · `hexagon` · `hexagon_romb` · `romb` · `triangle` · `kites` · `spectre` |
 | Zezwól na odbicia (Mirroring) | W locie odbija kafelki w poziomie, podwajając efektywną bibliotekę bez dodatkowego miejsca na dysku |
 | Czarne obwódki (fuga) | Dodaje ciemną przerwę między kafelkami — symuluje prawdziwe linie fugi w mozaice |
 | Color Blend | 0%–30% — miesza oryginalne zdjęcie na mozaikę, łagodząc przejścia |
 | Tile Tint | 0%–40% — przesuwa każdy kafelek ku średniej barwie docelowego sektora dla większej wierności koloru |
 
-Kształt **`kite`** układa kafelki jako romby na heksagonalnej siatce ze spłaszczonym wierzchołkiem. Kształt **`spectre`** kafelkuje obraz ściśle chiralnym, aperiodycznym monokafelkiem — zobacz [Najciekawsze rozwiązania techniczne](#najciekawsze-rozwiązania-techniczne).
+Kształt **`kites`** dzieli każdy spłaszczony heksagon na 6 latawców i renderuje każdy latawiec jako osobne zdjęcie (siatka deltoidalna trójheksagonalna). Kształt **`spectre`** kafelkuje obraz ściśle chiralnym, aperiodycznym monokafelkiem — zobacz [Najciekawsze rozwiązania techniczne](#najciekawsze-rozwiązania-techniczne).
 
 **System antypowtórzeniowy.** Ograniczenie sąsiedztwa zniechęca do tego, by jakikolwiek kafelek z tego samego źródłowego obrazu stykał się sam ze sobą, w połączeniu z karą częstotliwościową rosnącą wraz z ponownym użyciem kafelka. Razem powstrzymują pojedyncze zdjęcie przed zdominowaniem kompozycji (szczegóły w [Jak to działa](#jak-to-działa)).
 
@@ -438,7 +438,7 @@ Nazwy wyjścia batcha są **bez znacznika czasu** — `{stem}_{engine}_{res}_{sh
 | `--engine {smart,typo}` | oba | wymagane | Którego renderera użyć |
 | `--res {2K,4K,8K,16K}` | oba | `8K` | Rozdzielczość wyjściowa |
 | `--index PATH` | oba | `data/<engine>_index.pkl` | Nadpisanie lokalizacji indeksu |
-| `--shape SHAPE` | smart | `square` | `square` · `rectangle_3x1` · `brick_wall` · `hexagon` · `hexagon_romb` · `romb` · `triangle` · `kite` · `spectre` |
+| `--shape SHAPE` | smart | `square` | `square` · `rectangle_3x1` · `brick_wall` · `hexagon` · `hexagon_romb` · `romb` · `triangle` · `kites` · `spectre` |
 | `--scale FLOAT` | oba | `1.0` | Mnożnik rozmiaru kafelka/glifu (0.5–2.0) |
 | `--blend FLOAT` | smart | `0.0` | Blend oryginału na mozaikę, 0.0–0.3 |
 | `--tint FLOAT` | smart | `0.0` | Barwienie kafelka ku kolorowi sektora, 0.0–0.4 |
