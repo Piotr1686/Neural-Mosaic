@@ -18,6 +18,7 @@ import numpy as np
 import pickle
 import math
 import threading
+from dataclasses import dataclass
 from PIL import Image, ImageOps, ImageDraw
 from tqdm import tqdm
 from scipy.spatial import cKDTree
@@ -82,6 +83,88 @@ class _LazyMask:
         scaled = [(x * self.aa, y * self.aa) for (x, y) in self.poly]
         ImageDraw.Draw(m).polygon(scaled, fill=255)
         return m.resize((self.bw, self.bh), Image.Resampling.LANCZOS)
+
+
+# ==========================================================================
+# SHAPE REGISTRY  (single source of truth for the shape list + geometry)
+# ==========================================================================
+def _gen_kites(engine, target_w, target_h, base_s):
+    """Yield per-kite polygons of the deltoidal trihexagonal grid, in image
+    space (y down).
+
+    Each hexagon on the flat-topped grid splits into 6 kites; every kite is its
+    own sector. The (q, r, k) iteration order is a pure function of geometry, so
+    preview and render stay reproducible (no RNG). The Cartesian kites are built
+    y-up, filtered by their (unflipped) centroid, then each vertex is flipped to
+    image space here — the y-flip stays inside the generator so `_polygon_sector`
+    is orientation-agnostic (see PLAN_SHAPES.md Sprint 2, contract point 2).
+    """
+    s = base_s
+    r3 = math.sqrt(3)
+    range_q = int(target_w / (1.5 * s)) + 3
+    range_r = int(target_h / (r3 * s)) + 3
+
+    for q in range(-range_q, range_q):
+        for r in range(-range_r, range_r):
+            cx = 1.5 * s * q
+            cy = r3 * s * (r + q / 2.0)
+            if -2 * s < cx < target_w + 2 * s and -2 * s < cy < target_h + 2 * s:
+                for k in range(6):
+                    poly = engine._get_kite_poly(cx, cy, s, k)
+                    cent_x = sum(p[0] for p in poly) / 4
+                    cent_y = sum(p[1] for p in poly) / 4
+                    if 0 <= cent_x < target_w and 0 <= cent_y < target_h:
+                        yield [(px, target_h - py) for px, py in poly]
+
+
+def _gen_spectre(engine, target_w, target_h, base_s):
+    """Yield the chiral aperiodic spectre monotiles as image-space polygons.
+
+    `generate_spectre_tiling` already emits points in image space (y down), so
+    the generator is a thin adaptor over it.
+    """
+    for spec in generate_spectre_tiling(target_w, target_h, base_s):
+        yield list(spec.points)
+
+
+@dataclass(frozen=True)
+class ShapeSpec:
+    """Descriptor for one tile shape.
+
+    kind      : "grid"    -> axis-aligned crop + shared mask (grid branch).
+                "polygon" -> per-tile polygon via `_polygon_sector`.
+    generator : callable(engine, target_w, target_h, base_s) -> iterable[poly],
+                each poly a list of (x, y) vertices in image space (y down).
+                None for grid shapes.
+    aa        : anti-aliasing supersample for the polygon mask (1 = native).
+    seeded    : reserved for future variable-cell shapes that need a
+                deterministic RNG seed (voronoi/phyllotaxis/poincare, S5).
+    """
+    kind: str
+    generator: object = None
+    aa: int = 1
+    seeded: bool = False
+
+
+# Ordered registry — GUI dropdown, CLI --shape choices, make_showcase and the
+# benchmark all read the names from `shape_names()` so adding a shape is a
+# one-line edit here (the earlier kite->kites rename touched five files).
+SHAPE_MODES = {
+    "square":        ShapeSpec("grid"),
+    "rectangle_3x1": ShapeSpec("grid"),
+    "brick_wall":    ShapeSpec("grid"),
+    "hexagon":       ShapeSpec("grid"),
+    "hexagon_romb":  ShapeSpec("grid"),
+    "romb":          ShapeSpec("grid"),
+    "triangle":      ShapeSpec("grid"),
+    "kites":         ShapeSpec("polygon", _gen_kites, aa=1),
+    "spectre":       ShapeSpec("polygon", _gen_spectre, aa=4),
+}
+
+
+def shape_names():
+    """Ordered list of registered shape-mode names (single source of truth)."""
+    return list(SHAPE_MODES.keys())
 
 
 class SmartEngine:
@@ -337,6 +420,69 @@ class SmartEngine:
         mean_rgb = (arr * m).sum(axis=(0, 1)) / m_sum
         filled = arr * m + mean_rgb * (1.0 - m)
         return Image.fromarray(np.clip(filled, 0, 255).astype(np.uint8))
+
+    def _polygon_sector(self, target, poly, render_padding, aa, edge_aware):
+        """Build one non-grid (polygon) sector from a single image-space polygon.
+
+        Shared core of every polygon shape (kites, spectre, and the Sprint 3+
+        tilings). `poly` is a list of (x, y) vertices already in image space
+        (y down) — any y-flip belongs in the shape generator, not here.
+
+        Steps: shrink toward the polygon centroid by `render_padding`; take the
+        bounding box; crop the target to it; `_LazyMask` at supersample `aa`;
+        `_mean_fill_outside_mask` so the bbox's neighbouring content does not
+        pollute the LAB match; compute the feature.
+
+        Bounding-box strategy is the KITE one (PLAN_SHAPES.md Sprint 2, point 1):
+        the paste origin may be negative at the top/left edge, handled by an
+        offset repaste (`sb[0] - safe_box[0]`) rather than clamping min to 0.
+        This correctly places edge tiles whose polygon spills off-canvas — the
+        off-canvas strip stays black and is clipped by the negative-dest
+        alpha_composite at assembly time.
+
+        Returns a sector dict {"meta": (0, min_x, min_y, lazy_mask, bw, bh,
+        False), "feature": ...} (the caller overwrites the placeholder index 0),
+        or None if the sector is degenerate or entirely off-canvas.
+        """
+        target_w, target_h = target.size
+        n = len(poly)
+        cx = sum(p[0] for p in poly) / n
+        cy = sum(p[1] for p in poly) / n
+        padded_poly = [
+            (cx + (px - cx) * render_padding, cy + (py - cy) * render_padding)
+            for px, py in poly
+        ]
+
+        min_x = min(p[0] for p in padded_poly)
+        max_x = max(p[0] for p in padded_poly)
+        min_y = min(p[1] for p in padded_poly)
+        max_y = max(p[1] for p in padded_poly)
+
+        bw, bh = int(max_x - min_x), int(max_y - min_y)
+        if bw <= 0 or bh <= 0:
+            return None
+
+        safe_box = (int(min_x), int(min_y), int(max_x), int(max_y))
+        sb = (max(0, safe_box[0]), max(0, safe_box[1]),
+              min(target_w, safe_box[2]), min(target_h, safe_box[3]))
+        if sb[2] <= sb[0] or sb[3] <= sb[1]:
+            return None
+
+        s_img = target.crop(sb)
+        if s_img.size != (bw, bh):
+            tmp = Image.new("RGB", (bw, bh), (0, 0, 0))
+            tmp.paste(s_img, (sb[0] - safe_box[0], sb[1] - safe_box[1]))
+            s_img = tmp
+
+        shifted_poly = [(p[0] - min_x, p[1] - min_y) for p in padded_poly]
+        lazy_mask = _LazyMask(shifted_poly, bw, bh, aa=aa)
+        mask = lazy_mask.render()
+        feat_img = self._mean_fill_outside_mask(s_img, mask)
+
+        return {
+            "meta": (0, int(min_x), int(min_y), lazy_mask, bw, bh, False),
+            "feature": self._compute_sector_feature(feat_img, edge_aware),
+        }
 
     def _do_render(self, target, shape_mode, tile_scale, border_mode=False, blend_strength=0.0, tint_strength=0.0, progress_cb=None):
         """Core rendering kernel — accepts a pre-scaled PIL Image, returns PIL Image.
