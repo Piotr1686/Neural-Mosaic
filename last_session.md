@@ -1,46 +1,51 @@
 # last_session.md
 
-**Sesja:** 2026-06-28 · 22:05-22:30
-**Status:** ✓ Zakończona poprawnie
-**Punkt odniesienia (git):** 26c5d0a @ main (origin ZSYNCHRONIZOWANY — `26c5d0a` wypchnięty, branch == origin/main)
+**Sesja:** 2026-07-02 · ~20:45-23:00
+**Status:** ✓ Zakończona poprawnie (przygotowanie do zmiany modelu na Opus)
+**Punkt odniesienia (git):** e6c55f4 @ main (4 commity przed origin/main — NIEWYPCHNIĘTE; working tree czysty poza plikami stanu)
 
 ---
 
-## ▸ NASTĘPNY KROK (zacznij tutaj)
+## ▸ NASTĘPNY KROK (zacznij tutaj) — dla Opusa
 
-**Podmiana triangle + hexagon w galerii na prawdziwe 16K — CZEKA NA PLIKI OD USERA.** User sam wygeneruje 16K triangle+hexagon i napisze, że gotowe. Wtedy: (1) wstaw nowe `.dzi` + foldery `*_files/` do `docs/tiles/`, (2) usuń stare `showcase_triangle_20260502_101900*` i `hexagon_jump_16K*`, (3) zaktualizuj `tileSources` **oraz** etykiety w `docs/index.html` (8K→16K, nowe wymiary/MP, przyciski btn4/btn5). Pułapki: `Format="jpg"` w XML (nie `"jpeg"` → czarny ekran OpenSeadragon, [[project_dzi_format_bug]]); sprawdź budżet GitHub Pages (piramidy obecnie ~165 MB).
+**Sprint 2 — refaktor rdzenia kształtów wg `PLAN_SHAPES.md` (sekcja „Sprint 2").** Konkretnie: (1) golden testy SHA-256 renderów kites+spectre+2 grid PRZED zmianami; (2) ekstrakcja helpera `_polygon_sector(target, poly, render_padding, aa)` z zduplikowanej logiki kites/spectre w `src/engine_smart.py:341-500` (bbox-strategia od KITES, repaste z offsetem); (3) rejestr `SHAPE_MODES` w `engine_smart.py` jako single source of truth (GUI dropdown gui.py:389, CLI, make_showcase, benchmark czytają z niego); (4) golden identyczne PO refaktorze → commit.
 
-Kontekst: galeria miała „3×16K + 2×8K"; user chce 5×16K. Akcja jest zablokowana do momentu, aż user dostarczy pliki — jeśli na /start ich jeszcze nie ma, w międzyczasie zrób **Krok 6 portfolio** (audyt twierdzeń README, patrz backlog).
+Kontekst: user zatwierdził wdrożenie WSZYSTKICH 20 nowych kształtów (10 Opusa + 10 Fable); finalną selekcję zrobi po wdrożeniu, na mozaikach testowych. `PLAN_SHAPES.md` (root) to kanoniczny plan (S2–S9) z geometrią per kształt i pułapkami — czytać PRZED kodowaniem każdego sprintu. Działająca geometria 10 kształtów Fable jest w `src/tools/gen_fable_shape_schemes.py` — przenosić, nie wymyślać od nowa.
 
 ---
 
 ## Co zrobiono w tej sesji
 
-- ✓ **README hero podmienione na magnifier papugi 4×4** (commit `26c5d0a`, na origin/main): stare `spectre_full.jpg` nie pokazywało kafelków nawet po zoomie → nowy `assets/examples/spectre_hero_magnifier.jpg` (1600×900, wariant „e" z 5 propozycji). Styl jak social_preview: żółty box na lewej krawędzi dzioba (przejście kolor→białe tło), linie łączące, inset ~4×4 kafelki, podpis „every tile is a separate photograph". Podmieniono w `README.md`+`README.pl.md` (linia 17); `spectre_full.jpg` ZOSTAJE w tabeli progressive-zoom (linia 103).
-- ✓ **Audyt rozdzielczości galerii:** potwierdzono że tylko **photo/symbol/spectre = 16K**; **triangle (8192×4612) i hexagon (8192×6144) = 8K**. Etykiety w `docs/index.html` są uczciwe („8K"); plik hexagona myląco nazwany `hexagon_jump_16K.dzi` (realnie 8K) — kosmetyka, niewidoczna dla zwiedzających.
-- ✓ Commit `26c5d0a` wypchnięty na origin; branch == origin/main.
+- ✓ **/recover po przerwanej sesji:** potwierdzono, że Sprint 1a (schematy, `2ec504c`) i commit kites (`5e5d0e0`) były wykonane w nieudokumentowanej sesji; Sprint 1b był kompletny w working tree.
+- ✓ **Sprint 1b domknięty** (`3a186b7`): schemat kształtu w podglądzie po wyborze z dropdown, pusty default, guardy preview+render, poprawiony placeholder; 201/201 testów.
+- ✓ **Audyt wdrożenia kształtów** (kites vs spectre): niespójności Y-flip / bbox-clamp / AA, brak single source of truth dla listy kształtów → wymagania do Sprint 2 zapisane w PLAN_SHAPES.md.
+- ✓ **Analiza 10 propozycji Opusa:** ranking wow; ryzyka: truchet (pułapka koncepcyjna — prototyp przed `_CurvedMask`), sunburst (krzywe krawędzie → polygonizacja), voronoi (RNG → seeded), mikrokomórki (próg min-area).
+- ✓ **10 propozycji Fable ZAAKCEPTOWANE przez usera** → razem 20 kształtów w kolejce: girih, ammann_beenker, pinwheel, voderberg, cairo, floret, poincare, escher_lizard, gosper, weave.
+- ✓ **Schematy 10 kształtów Fable** (`e6c55f4`): `assets/shape_schemes/*.png` (720×720) + montaż `output/kite_schemes/proposals_fable_10_shapes.png` + generator `src/tools/gen_fable_shape_schemes.py` (COMMITOWANY). Geometria zweryfikowana wizualnie w kilku iteracjach (naprawione: znak Cramera w multigrid, wzór promienia {7,3}, dedup odbić, multi-seed girih, kolory floret/pinwheel).
+- ✓ **PLAN_SHAPES.md** — kanoniczny plan wdrożenia 20 kształtów dla Opusa: sprinty S2–S9 pogrupowane po maszynerii, geometria + pułapki per kształt, wyzwania przekrojowe, definicja ukończenia.
+- ✓ Pamięć: aktualizacje `project_10_shapes_plan`, `project_fable_shape_proposals` (nowy), usunięty nieaktualny `project_pending_commits`; root MEMORY.md wpis [2026-07-02].
 
 ## Co zostało (backlog sesji)
 
-- ⟳ **Galeria 5×16K (NASTĘPNY KROK):** swap triangle+hexagon na 16K — czeka na pliki od usera.
-- ⟳ **Krok 6 portfolio (standing):** adwersarialny audyt twierdzeń README.md/README.pl.md (każda liczba/feature/flaga/ścieżka pokryta kodem) → poprawki jednym commitem `docs(readme): fix unverified claims`. Nieaktualny w tej sesji, nadal otwarty.
-- ⟳ **Krok 5 portfolio:** PyInstaller `.exe` (model-free) — wysiłek wysoki, ROI średni; osobny projekt.
-- ⟳ **TODO odłożony:** pasek postępu „Export Deep Zoom" + `test_dzi` ([[project_dzi_gui_polish_todo]]).
-- ⟳ Świadomie ODŁOŻONE: Wariant C (A1/A2), ML/CLIP, Docker/plugin.
+- ⟳ **Sprint 2** (NASTĘPNY KROK) → potem S3–S9 wg PLAN_SHAPES.md.
+- ⟳ **`git push`** — 4 commity lokalne (`5e5d0e0`, `2ec504c`, `3a186b7`, `e6c55f4`) + commit stanu sesji; user nie zdecydował.
+- ⟳ **Standing:** galeria 16K triangle+hexagon (czeka na pliki usera); test_dzi + pasek postępu DZI ([[project_dzi_gui_polish_todo]]).
 
 ## Aktywne pliki
 
-- `docs/index.html`, `docs/tiles/{showcase_triangle_*,hexagon_jump_16K}*` (cel swapu 16K)
-- `README.md` + `README.pl.md` (hero zmienione; cel Kroku 6)
-- `assets/examples/spectre_hero_magnifier.jpg` (nowe hero)
-- Generator (scratchpad, nie w repo): `gen_parrot_magnifier.py` (źródło: `output/github_readme/spectre_parrot_16K.jpg`, tile pitch ~140 px w 16K)
+- `PLAN_SHAPES.md` (kanoniczny plan — punkt wejścia Opusa)
+- `src/engine_smart.py` (cel Sprint 2: linie 341-500 kites/spectre → `_polygon_sector` + rejestr)
+- `src/tools/gen_fable_shape_schemes.py` (referencyjna geometria 10 kształtów Fable)
+- `assets/shape_schemes/` (29 PNG = 19 z `2ec504c` [9 istniejących + 10 Opusa] + 10 Fable z `e6c55f4`)
+- `src/gui.py` (Sprint 1b zamknięty; dropdown rozszerzać z rejestru per sprint)
 
 ## Otwarte pytania
 
-- Galeria: czy 5×16K zmieści się w budżecie GitHub Pages (obecnie ~165 MB piramid + 2×16K dojdzie ~70-100 MB)? Sprawdzić przy swapie.
-- Przy swapie: zmienić też mylącą nazwę `hexagon_jump_16K.dzi` na coś bez „16K" w starej wersji / nadać sensowny slug nowym plikom.
+- **`git push`?** 5 commitów lokalnych po commicie stanu — proponowany na starcie sesji Opusa.
+- **Girih w silniku (S7):** greedy ~97% pokrycia zostawia dziury — opcje (a) zaprojektowany patch okresowy, (b) wypełnianie dziur tłem, (c) prototyp→decyzja. Decyzja z userem na starcie S7.
+- **Truchet (S8):** go/no-go po prototypie 1 kafelka.
 
-## Do MEMORY.md (przeniesiono/zaktualizowano w tej sesji)
+## Do MEMORY.md (przeniesiono)
 
-- [Aktywne TODO] NOWY wpis [2026-06-28] „Galeria — podmiana triangle+hexagon na 16K (CZEKA NA USERA)" — audyt rozdzielczości + plan swapu + pułapki.
-- [Aktywne TODO] NOWY wpis [2026-06-28] „README hero = magnifier papugi 4×4" (commit `26c5d0a`) — co, dlaczego, generator, że `spectre_full.jpg` zostaje w tabeli zoom.
+- [Aktywne TODO] NOWY [2026-07-02] „KSZTAŁTY: plan rozszerzony do 20 — kanoniczny plan = PLAN_SHAPES.md" (S1a+1b zrobione, wymagania S2, pułapki geometryczne); wpisy [2026-06-30] zaktualizowane (kites ZACOMMITOWANE, stary plan SUPERSEDED).
+- [.claude] `project_fable_shape_proposals.md` (nowy, zaakceptowane), `project_10_shapes_plan.md` (→PLAN_SHAPES.md), usunięty `project_pending_commits.md`.
