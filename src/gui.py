@@ -39,6 +39,7 @@ ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
 FONTS_DIR = Path("assets/fonts")
+SHAPE_SCHEMES_DIR = Path("assets/shape_schemes")
 STARTER_TARGET = 500
 
 _THUMB_DIR = Path("data/.thumbs")
@@ -387,9 +388,9 @@ class App(ctk.CTk):
         ctk.CTkLabel(frame, text="Tile Shape").pack(pady=(10, 0))
         shapes = ["square", "rectangle_3x1", "brick_wall", "hexagon", "hexagon_romb", "romb", "triangle", "kites", "spectre"]
         self.combo_shape = ctk.CTkComboBox(
-            frame, values=shapes,
+            frame, values=shapes, command=self._on_shape_selected,
         )
-        self.combo_shape.set("hexagon_romb")
+        self.combo_shape.set("")
         self.combo_shape.pack(pady=5)
 
         self.check_mirror = ctk.CTkCheckBox(
@@ -457,6 +458,7 @@ class App(ctk.CTk):
             command=self._trigger_smart_preview,
         )
         self.btn_preview_p.pack(side="left")
+        self.btn_preview_p.configure(state="disabled")  # no shape selected yet
 
         self.lbl_preview_p = ctk.CTkLabel(
             prev_frame,
@@ -642,10 +644,36 @@ class App(ctk.CTk):
 
     _ZOOM_SHORT_EDGE = {"¼": 450, "½": 900, "Full": 1800}
 
+    def _on_shape_selected(self, choice):
+        """Show the shape's layout scheme in the preview pane and unlock rendering.
+
+        The scheme is a static asset (assets/shape_schemes/<shape>.png), not a
+        render — this only previews the tiling geometry, it doesn't trigger any
+        auto-render (preview stays manual, see project_preview_on_demand).
+        """
+        if not choice:
+            self._preview_pil_p = None
+            self._preview_last_fit_p = None
+            self.lbl_preview_p.configure(image="", text="Select a Tile Shape\nto enable preview")
+            self.lbl_preview_status_p.configure(text="")
+            self.btn_preview_p.configure(state="disabled")
+            return
+        self.btn_preview_p.configure(state="normal")
+        scheme_path = SHAPE_SCHEMES_DIR / f"{choice}.png"
+        if scheme_path.exists():
+            self._show_smart_preview(Image.open(scheme_path))
+            self.lbl_preview_status_p.configure(
+                text=f"Shape scheme: {choice}  —  click Generate Preview to render")
+        else:
+            self.lbl_preview_status_p.configure(text=f"(no scheme preview for '{choice}')")
+
     def _trigger_smart_preview(self):
         if self.smart_engine is None or not getattr(self, "path_p", None):
             self.lbl_preview_status_p.configure(
                 text="Load index and select an image first")
+            return
+        if not self.combo_shape.get():
+            self.lbl_preview_status_p.configure(text="Select a Tile Shape first")
             return
         # allow_mirror / edge_aware affect matching but render_preview reads them
         # from engine.settings (not kwargs). Sync from the checkboxes here, on the
@@ -974,6 +1002,9 @@ class App(ctk.CTk):
     def run_photo(self):
         if not self.smart_engine or not getattr(self, 'path_p', None):
             self.log("Error: Load Smart Index and Select Image first!")
+            return
+        if not self.combo_shape.get():
+            self.log("Error: Select a Tile Shape first!")
             return
         out = self._get_auto_filename("Smart", ".jpg")
         if not out:
