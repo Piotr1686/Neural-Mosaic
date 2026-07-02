@@ -1,51 +1,64 @@
 # last_session.md
 
-**Sesja:** 2026-07-02 · ~20:45-23:05
-**Status:** ✓ Zakończona poprawnie (model przełączony na Opus; wszystko wypchnięte)
-**Punkt odniesienia (git):** 37af281 @ main (zsynchronizowany z origin/main — wszystko WYPCHNIĘTE; working tree czysty)
+**Sesja:** 2026-07-02 · ~23:05-23:35
+**Status:** ✓ Zakończona poprawnie (przerwana na życzenie usera przy ~94% tokenów; stan spójny, 50/50 testów)
+**Punkt odniesienia (git):** e9d52ce @ main (working tree DIRTY — Sprint 2 W TOKU, niezacommitowane; e9d52ce nadal NIEwypchnięty na origin)
 
 ---
 
-## ▸ NASTĘPNY KROK (zacznij tutaj) — dla Opusa
+## ▸ NASTĘPNY KROK (zacznij tutaj)
 
-**Sprint 2 — refaktor rdzenia kształtów wg `PLAN_SHAPES.md` (sekcja „Sprint 2").** Konkretnie: (1) golden testy SHA-256 renderów kites+spectre+2 grid PRZED zmianami; (2) ekstrakcja helpera `_polygon_sector(target, poly, render_padding, aa)` z zduplikowanej logiki kites/spectre w `src/engine_smart.py:341-500` (bbox-strategia od KITES, repaste z offsetem); (3) rejestr `SHAPE_MODES` w `engine_smart.py` jako single source of truth (GUI dropdown gui.py:389, CLI, make_showcase, benchmark czytają z niego); (4) golden identyczne PO refaktorze → commit.
+**Dokończ refaktor `_do_render` w `src/engine_smart.py` — podmień 2 gałęzie na 1 polygon.** Konkretnie: zastąp bloki `if shape_mode == "kites": ... elif shape_mode == "spectre": ...` (obecnie ~linie 504-644, kończą się tuż przed `else:` gałęzi grid) JEDNĄ gałęzią:
+```python
+spec = SHAPE_MODES.get(shape_mode)
+if spec is not None and spec.kind == "polygon":
+    print(f"Mode: {shape_mode} (polygon sectors). Borders: {border_mode}")
+    polys = list(spec.generator(self, target_w, target_h, base_s))
+    for i_poly, poly in enumerate(tqdm(polys, desc=f"Sampling {shape_mode} sectors")):
+        sector = self._polygon_sector(target, poly, render_padding, spec.aa, edge_aware)
+        if sector is None:
+            continue
+        m = sector["meta"]
+        sector["meta"] = (i_poly,) + m[1:]   # meta[0] nieużywane gdy is_hat=False
+        sectors_data.append(sector)
+else:
+    # ... istniejąca gałąź grid (zmień `else:` grida tak, by był fallbackiem) ...
+```
+Potem: (a) `pytest tests/test_golden_shapes.py` — **kites MUSI zostać identyczny**; ⚠ **spectre MOŻE paść** (helper=strategia kites/offset, nie spectre/clamp-min→0 — patrz Otwarte pytania); (b) podłącz `shape_names()` w `gui.py:389`, `cli.py:26` (`_SMART_SHAPES`), `make_showcase.py:269` (import z `engine_smart`); (c) pełny `pytest`; (d) commit.
 
-Kontekst: user zatwierdził wdrożenie WSZYSTKICH 20 nowych kształtów (10 Opusa + 10 Fable); finalną selekcję zrobi po wdrożeniu, na mozaikach testowych. `PLAN_SHAPES.md` (root) to kanoniczny plan (S2–S9) z geometrią per kształt i pułapkami — czytać PRZED kodowaniem każdego sprintu. Działająca geometria 10 kształtów Fable jest w `src/tools/gen_fable_shape_schemes.py` — przenosić, nie wymyślać od nowa.
+Kontekst: helper `_polygon_sector`, rejestr `SHAPE_MODES`, generatory `_gen_kites`/`_gen_spectre` i `shape_names()` SĄ JUŻ w `engine_smart.py` (dodane addytywnie, przetestowane pośrednio), ale `_do_render` ich jeszcze NIE używa — nadal działają stare, zduplikowane gałęzie. To ostatni krok Sprint 2 przed S3.
 
 ---
 
 ## Co zrobiono w tej sesji
 
-- ✓ **/recover po przerwanej sesji:** potwierdzono, że Sprint 1a (schematy, `2ec504c`) i commit kites (`5e5d0e0`) były wykonane w nieudokumentowanej sesji; Sprint 1b był kompletny w working tree.
-- ✓ **Sprint 1b domknięty** (`3a186b7`): schemat kształtu w podglądzie po wyborze z dropdown, pusty default, guardy preview+render, poprawiony placeholder; 201/201 testów.
-- ✓ **Audyt wdrożenia kształtów** (kites vs spectre): niespójności Y-flip / bbox-clamp / AA, brak single source of truth dla listy kształtów → wymagania do Sprint 2 zapisane w PLAN_SHAPES.md.
-- ✓ **Analiza 10 propozycji Opusa:** ranking wow; ryzyka: truchet (pułapka koncepcyjna — prototyp przed `_CurvedMask`), sunburst (krzywe krawędzie → polygonizacja), voronoi (RNG → seeded), mikrokomórki (próg min-area).
-- ✓ **10 propozycji Fable ZAAKCEPTOWANE przez usera** → razem 20 kształtów w kolejce: girih, ammann_beenker, pinwheel, voderberg, cairo, floret, poincare, escher_lizard, gosper, weave.
-- ✓ **Schematy 10 kształtów Fable** (`e6c55f4`): `assets/shape_schemes/*.png` (720×720) + montaż `output/kite_schemes/proposals_fable_10_shapes.png` + generator `src/tools/gen_fable_shape_schemes.py` (COMMITOWANY). Geometria zweryfikowana wizualnie w kilku iteracjach (naprawione: znak Cramera w multigrid, wzór promienia {7,3}, dedup odbić, multi-seed girih, kolory floret/pinwheel).
-- ✓ **PLAN_SHAPES.md** — kanoniczny plan wdrożenia 20 kształtów dla Opusa: sprinty S2–S9 pogrupowane po maszynerii, geometria + pułapki per kształt, wyzwania przekrojowe, definicja ukończenia.
-- ✓ Pamięć: aktualizacje `project_10_shapes_plan`, `project_fable_shape_proposals` (nowy), usunięty nieaktualny `project_pending_commits`; root MEMORY.md wpis [2026-07-02].
+- ✓ **/start + sanity-check:** stan spójny; wykryto że `e9d52ce` (finalizacja poprz. sesji) NIE jest wypchnięty na origin (branch +1).
+- ✓ **Golden testy Sprint 2** (`tests/test_golden_shapes.py`): 8 przypadków (square/hexagon_romb/kites/spectre × border on/off), deterministyczna syntetyczna biblioteka (32 kafle, seed 12345) + gradient 384×288, SHA-256 policzone na silniku PRZED refaktorem (skrypt scratchpad), reprodukowalne 2×. **8/8 zielone.**
+- ✓ **Szkielet refaktoru w `engine_smart.py`** (addytywny, kod nadal działa): helper `_polygon_sector(target, poly, render_padding, aa, edge_aware)` (bbox-strategia kites); dataclass `ShapeSpec` + rejestr `SHAPE_MODES` + `shape_names()`; generatory modułowe `_gen_kites`/`_gen_spectre` (Y-flip przeniesiony do generatora); `from dataclasses import dataclass`.
+- ✓ **Dowód równoważności kites:** Y-flip w generatorze + shrink-do-centroidu w helperze = identyczny `padded_poly` (flip afiniczny komutuje z centroidem).
+- ✓ **Weryfikacja:** `pytest tests/test_golden_shapes.py tests/test_smart_engine.py` → **50/50 zielone** po dodaniu szkieletu.
 
 ## Co zostało (backlog sesji)
 
-- ⟳ **Sprint 2** (NASTĘPNY KROK) → potem S3–S9 wg PLAN_SHAPES.md.
-- ✓ **`git push` ZROBIONY** — `d67dd08..37af281` na origin/main (5 commitów: kites, schematy Opusa, Sprint 1b, pakiet Fable, stan sesji). Branch zsynchronizowany.
-- ✓ **Model przełączony na Opus 4.8** (2026-07-02) — Opus zaczyna od Sprint 2.
+- ⟳ **Dokończyć Sprint 2** (NASTĘPNY KROK): podmiana gałęzi w `_do_render` + wiring GUI/CLI/showcase do `shape_names()` + golden PO + commit. Potem S3 (multigrid: penrose, ammann_beenker).
+- ⟳ **DIRTY working tree:** `src/engine_smart.py` (M), `tests/test_golden_shapes.py` (??) — NIEzacommitowane (Sprint 2 niedokończony).
+- ⟳ **`e9d52ce` nadal NIEwypchnięty** na origin/main (branch +1). Rozważyć push przy najbliższym commicie.
 - ⟳ **Standing:** galeria 16K triangle+hexagon (czeka na pliki usera); test_dzi + pasek postępu DZI ([[project_dzi_gui_polish_todo]]).
 
 ## Aktywne pliki
 
-- `PLAN_SHAPES.md` (kanoniczny plan — punkt wejścia Opusa)
-- `src/engine_smart.py` (cel Sprint 2: linie 341-500 kites/spectre → `_polygon_sector` + rejestr)
-- `src/tools/gen_fable_shape_schemes.py` (referencyjna geometria 10 kształtów Fable)
-- `assets/shape_schemes/` (29 PNG = 19 z `2ec504c` [9 istniejących + 10 Opusa] + 10 Fable z `e6c55f4`)
-- `src/gui.py` (Sprint 1b zamknięty; dropdown rozszerzać z rejestru per sprint)
+- `src/engine_smart.py` (szkielet gotowy; do zrobienia: podmiana gałęzi w `_do_render` ~504-644)
+- `tests/test_golden_shapes.py` (bramka golden — nie zmieniać hashy bez powodu)
+- `PLAN_SHAPES.md` (kanoniczny plan S2–S9)
+- `src/gui.py:389`, `src/cli.py:26`, `src/tools/make_showcase.py:269` (do podłączenia `shape_names()`)
+- `src/tools/gen_fable_shape_schemes.py` (referencyjna geometria 10 kształtów Fable — dla S3+)
 
 ## Otwarte pytania
 
-- **Girih w silniku (S7):** greedy ~97% pokrycia zostawia dziury — opcje (a) zaprojektowany patch okresowy, (b) wypełnianie dziur tłem, (c) prototyp→decyzja. Decyzja z userem na starcie S7.
+- ⚠ **Golden spectre może paść po podmianie gałęzi.** Helper używa strategii bboxa kites (repaste z offsetem, `int(min_x)` może być ujemne), a stara gałąź spectre clampowała `min` do `0.0` i pastowała w `(0,0)`. Dla kafli spectre przecinających GÓRNY/LEWY brzeg zmienia to sub-pikselowe wyrównanie maski. **Decyzja przy wznowieniu:** jeśli padnie → (a) zregenerować golden spectre + udokumentować poprawne edge handling (wg PLAN_SHAPES.md pkt 1 — kites strategia jest zamierzona), albo (b) dodać per-shape flagę strategii bboxa do `ShapeSpec`. Rekomendacja: (a) — plan świadomie unifikuje na strategii kites.
+- **Girih (S7):** greedy ~97% pokrycia → dziury; decyzja z userem na starcie S7.
 - **Truchet (S8):** go/no-go po prototypie 1 kafelka.
 
 ## Do MEMORY.md (przeniesiono)
 
-- [Aktywne TODO] NOWY [2026-07-02] „KSZTAŁTY: plan rozszerzony do 20 — kanoniczny plan = PLAN_SHAPES.md" (S1a+1b zrobione, wymagania S2, pułapki geometryczne); wpisy [2026-06-30] zaktualizowane (kites ZACOMMITOWANE, stary plan SUPERSEDED).
-- [.claude] `project_fable_shape_proposals.md` (nowy, zaakceptowane), `project_10_shapes_plan.md` (→PLAN_SHAPES.md), usunięty `project_pending_commits.md`.
+- [Aktywne TODO] NOWY [2026-07-02] „Sprint 2 W TOKU — golden + szkielet gotowe, wiring NIE" (golden 8/8, `_polygon_sector`+`SHAPE_MODES`+generatory addytywnie, dowód równoważności kites, ⚠ ryzyko golden spectre).

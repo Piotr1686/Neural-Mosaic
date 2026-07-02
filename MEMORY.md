@@ -128,6 +128,12 @@
 - **Audyt wdrożenia → wymagania Sprint 2** (w PLAN_SHAPES.md): kontrakt generatorów w przestrzeni obrazu (y w dół); helper `_polygon_sector()` z bbox-strategią od kites (nie spectre); aa=4 dla nowych; rejestr `SHAPE_MODES` jako single source of truth dla GUI/CLI/tools; golden SHA-256 przed/po refaktorze
 - **Pułapki geometryczne rozwiązane** (szczegóły w PLAN_SHAPES.md, nie powtarzać błędów): znak Cramera w multigrid de Bruijna; promień {7,3} to `cosh R = cot(π/p)·cot(π/q)` (NIE `cos/sin`); dedup odbić hiperbolicznych po centroidzie zaokrąglonym do 1e-3; orientacje pinwheela rosną zbyt wolno by pokazać je na schemacie (2 klasy mod 180° — to cecha, nie bug); greedy girih max ~97% pokrycia → produkcyjna decyzja w S7
 
+[2026-07-02] **Sprint 2 W TOKU (refaktor rdzenia kształtów) — golden + szkielet gotowe, wiring NIE**
+- **Golden testy** `tests/test_golden_shapes.py` (8 przypadków: square/hexagon_romb/kites/spectre × border on/off; deterministyczna syntetyczna biblioteka 32 kafli seed 12345 + gradient 384×288; SHA-256 policzone na silniku PRZED refaktorem, reprodukowalne 2×) — **8/8 zielone**. To bramka Sprint 2: muszą zostać zielone PO refaktorze.
+- Do `engine_smart.py` dodane **addytywnie (jeszcze NIEUŻYWANE w `_do_render` — stare gałęzie kites/spectre wciąż aktywne, kod działa, 50/50 testów)**: helper `_polygon_sector(target, poly, render_padding, aa, edge_aware)` (bbox-strategia kites: repaste z offsetem `sb[0]-safe_box[0]`, bez clamp-min→0); rejestr `SHAPE_MODES` (dataclass `ShapeSpec{kind,generator,aa,seeded}`) + `shape_names()`; generatory modułowe `_gen_kites`/`_gen_spectre` (Y-flip WEWNĄTRZ generatora, kontrakt: poly w przestrzeni obrazu y-down).
+- **Dowód równoważności kites:** przeniesienie Y-flip do generatora + shrink-do-centroidu w helperze daje IDENTYCZNY `padded_poly` (flip afiniczny komutuje z centroidem) → kites golden nie powinien się zmienić.
+- ⚠ **RYZYKO do decyzji przy wznowieniu:** helper używa strategii bboxa kites (offset) zamiast spectre (clamp min→0). Dla kafli spectre przecinających GÓRNY/LEWY brzeg zmienia sub-pikselowe wyrównanie maski (`int(min_x)` vs `0.0`) → **golden spectre MOŻE paść**. Jeśli padnie: albo zregenerować golden spectre + udokumentować (poprawne edge handling wg PLAN_SHAPES.md pkt 1), albo dodać per-shape flagę strategii bboxa.
+
 ---
 
 ## Odrzucone podejścia

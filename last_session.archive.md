@@ -1,3 +1,19 @@
+## ═══ Sesja zarchiwizowana [2026-07-02 23:30] ═══
+
+# last_session.md
+
+**Sesja:** 2026-07-02 · ~20:45-23:05
+**Status:** ✓ Zakończona poprawnie (model przełączony na Opus; wszystko wypchnięte)
+**Punkt odniesienia (git):** 37af281 @ main (zsynchronizowany z origin/main — wszystko WYPCHNIĘTE; working tree czysty)
+
+## ▸ NASTĘPNY KROK — Sprint 2 refaktor rdzenia kształtów wg PLAN_SHAPES.md
+(1) golden SHA-256 kites+spectre+2 grid PRZED zmianami; (2) helper `_polygon_sector`; (3) rejestr `SHAPE_MODES`; (4) golden identyczne PO → commit.
+
+## Co zrobiono (skrót)
+- Sprint 1b domknięty (3a186b7); audyt kites vs spectre; 20 kształtów w kolejce (10 Opus + 10 Fable, e6c55f4); PLAN_SHAPES.md kanoniczny; push d67dd08..37af281; model→Opus 4.8; finalizacja e9d52ce.
+
+---
+
 ## ═══ Sesja zarchiwizowana [2026-07-02 22:55] ═══
 
 # last_session.md
