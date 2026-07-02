@@ -1,8 +1,8 @@
 # last_session.md
 
-**Sesja:** 2026-07-02 · ~20:45-23:00
-**Status:** ✓ Zakończona poprawnie (przygotowanie do zmiany modelu na Opus)
-**Punkt odniesienia (git):** e6c55f4 @ main (4 commity przed origin/main — NIEWYPCHNIĘTE; working tree czysty poza plikami stanu)
+**Sesja:** 2026-07-02 · ~20:45-23:05
+**Status:** ✓ Zakończona poprawnie (model przełączony na Opus; wszystko wypchnięte)
+**Punkt odniesienia (git):** 37af281 @ main (zsynchronizowany z origin/main — wszystko WYPCHNIĘTE; working tree czysty)
 
 ---
 
@@ -28,7 +28,8 @@ Kontekst: user zatwierdził wdrożenie WSZYSTKICH 20 nowych kształtów (10 Opus
 ## Co zostało (backlog sesji)
 
 - ⟳ **Sprint 2** (NASTĘPNY KROK) → potem S3–S9 wg PLAN_SHAPES.md.
-- ⟳ **`git push`** — 4 commity lokalne (`5e5d0e0`, `2ec504c`, `3a186b7`, `e6c55f4`) + commit stanu sesji; user nie zdecydował.
+- ✓ **`git push` ZROBIONY** — `d67dd08..37af281` na origin/main (5 commitów: kites, schematy Opusa, Sprint 1b, pakiet Fable, stan sesji). Branch zsynchronizowany.
+- ✓ **Model przełączony na Opus 4.8** (2026-07-02) — Opus zaczyna od Sprint 2.
 - ⟳ **Standing:** galeria 16K triangle+hexagon (czeka na pliki usera); test_dzi + pasek postępu DZI ([[project_dzi_gui_polish_todo]]).
 
 ## Aktywne pliki
@@ -41,7 +42,6 @@ Kontekst: user zatwierdził wdrożenie WSZYSTKICH 20 nowych kształtów (10 Opus
 
 ## Otwarte pytania
 
-- **`git push`?** 5 commitów lokalnych po commicie stanu — proponowany na starcie sesji Opusa.
 - **Girih w silniku (S7):** greedy ~97% pokrycia zostawia dziury — opcje (a) zaprojektowany patch okresowy, (b) wypełnianie dziur tłem, (c) prototyp→decyzja. Decyzja z userem na starcie S7.
 - **Truchet (S8):** go/no-go po prototypie 1 kafelka.
 
