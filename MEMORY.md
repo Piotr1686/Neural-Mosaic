@@ -134,6 +134,15 @@
 - **Dowód równoważności kites:** przeniesienie Y-flip do generatora + shrink-do-centroidu w helperze daje IDENTYCZNY `padded_poly` (flip afiniczny komutuje z centroidem) → kites golden nie powinien się zmienić.
 - ⚠ **RYZYKO do decyzji przy wznowieniu:** helper używa strategii bboxa kites (offset) zamiast spectre (clamp min→0). Dla kafli spectre przecinających GÓRNY/LEWY brzeg zmienia sub-pikselowe wyrównanie maski (`int(min_x)` vs `0.0`) → **golden spectre MOŻE paść**. Jeśli padnie: albo zregenerować golden spectre + udokumentować (poprawne edge handling wg PLAN_SHAPES.md pkt 1), albo dodać per-shape flagę strategii bboxa.
 
+[2026-07-03] **KSZTAŁTY: +16 nowych schematów-propozycji (21-36) + TWARDA reguła „prawdziwa teselacja"** (sesja na Fable 5; NIEZACOMMITOWANE)
+- **Nowy generator** `src/tools/gen_extra_shape_schemes.py` (importuje helpery z `gen_fable_shape_schemes`). Pula propozycji: 20 → **36**. Montaż `output/kite_schemes/proposals_extra_15_shapes.png`.
+- **WYMÓG NADRZĘDNY usera:** każdy kształt musi być PRAWDZIWĄ teselacją brzeg-w-brzeg — kafle NIE nakładają się, pasują idealnie z każdej strony, wypełniają CAŁY prostokąt bez luk, samopowtarzalne. To unieważniło pośrednią technikę „siatka tła + motyw na wierzchu" (to było nakładanie).
+- **Rozwiązanie konfliktu koło-vs-prostokąt (pomysł usera):** pierścienie KOŁOWE rozszerzane poza rogi i **przycinane** do prostokąta (`_clip_rect` = Sutherland-Hodgman) → środek okrągły, rogi ucięte, pełna teselacja. Helper `_radial_clip_cells(R, rings, pal, seed, swirl)` obsługuje rosette/mandala/nautilus/vortex/shatter. Seam-fix: offset o pół sektora co drugi pierścień.
+- **ETAP B ZROBIONE (10 pewnych teselacji):** sierpinski (prawdziwy rekurencyjny, dziury=komórki, kafelkowany up+down), gereh (ośmiokąt=gwiazda-8+8 latawców — PARTYCJA, nie nakładka), koch_island (reptile, period=4^depth NIE bbox), rosette/mandala (koła przycięte), nautilus/vortex (radialne ze skrętem), shatter, moire (GEOMETRYCZNA zwichrowana siatka — pod zdjęciami ≠ square, w przeciwieństwie do wersji „kolor"), braid (basketweave płaski). Stary „sierpinski" (przesunięte trójkąty) → przemianowany `stagger_tri` (#36).
+- **Fix w `gen_fable_shape_schemes.py`:** poincaré (siatka tła w rogach), voderberg (promień poza rogi + kapsel centralny).
+- **ETAP A PENDING (5 trudnych aperiodycznych/reptile, oznaczone `[ETAP A]`):** bloom→Voronoi phyllotaxis+clip, hirotaka→Penrose (pentaflake nie kafelkuje), koch_snowflake→2-rozmiarowy, dragon→twindragon-reptile (teraz placeholder-wstęgi order=6), kepler_ty→teselacja 5-krotna.
+- **Sprint 2 (`_do_render` refaktor) NADAL nietknięty** — ta sesja to pełny pivot na schematy. Selekcja finalna 36 kształtów do silnika PO ETAP A.
+
 ---
 
 ## Odrzucone podejścia
