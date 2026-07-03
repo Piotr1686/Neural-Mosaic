@@ -331,7 +331,21 @@ def gen_poincare():
 
     ring_pal = [(220, 170, 70), (170, 90, 80), (90, 120, 160),
                 (120, 160, 110), (150, 110, 160), (200, 130, 90), (100, 140, 150)]
+    # background cell grid so the four corners outside the unit disk are photo
+    # cells, not black (a hyperbolic {7,3} tiling cannot itself fill a rectangle)
     polys = []
+    Rw = 1.04
+    bg_rng = np.random.default_rng(170)
+    bg_pal = [(60, 58, 66), (66, 60, 58), (58, 64, 62), (64, 60, 64), (62, 58, 60)]
+    ncell = 15
+    step = 2 * Rw / ncell
+    for a in range(ncell):
+        for b in range(ncell):
+            x, y = -Rw + a * step, -Rw + b * step
+            if abs(complex(x + step / 2, y + step / 2)) < 0.985:
+                continue  # inside the disk -> the tiling covers it
+            rect = [(x, y), (x + step, y), (x + step, y + step), (x, y + step)]
+            polys.append((rect, vary(bg_rng, bg_pal[(a + b) % len(bg_pal)], 12)))
     for poly, depth in result:
         pts = []
         for k in range(p):
@@ -350,7 +364,10 @@ def gen_voderberg():
     step = 360.0 / NWEDGE          # 12 deg
     twist = step / 2               # spiral shear per ring
     bend = 5.0                     # radial edge bow (deg)
-    radii = [0.10, 0.34, 0.62, 0.94, 1.30]
+    # rings run past the far corner (world R=0.92 -> corner ~1.30) so every angle
+    # is covered out to the rectangle edge; a solid centre cap replaces the
+    # spiral singularity (otherwise 30 sub-pixel slivers collide at r=0)
+    radii = [0.06, 0.20, 0.36, 0.55, 0.78, 1.05, 1.38, 1.75]
     pal = [(205, 140, 60), (120, 130, 160), (180, 90, 70), (140, 160, 100)]
 
     def radial(theta_deg, rin, rout, nseg=14):
@@ -380,6 +397,11 @@ def gen_voderberg():
             poly = e_left + arc_out + list(reversed(e_right)) + arc_in
             col = vary(rng, pal[(k + 2 * m) % 2 + 2 * (m % 2)], 14)
             polys.append((poly, col))
+    # solid centre cap (drawn last, on top of the innermost slivers)
+    ncap = 24
+    cap = [(0.075 * math.cos(2 * math.pi * t / ncap), 0.075 * math.sin(2 * math.pi * t / ncap))
+           for t in range(ncap)]
+    polys.append((cap, vary(rng, pal[0], 8)))
     R = 0.92
     return polys, (-R, -R, R, R)
 
