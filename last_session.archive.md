@@ -1,3 +1,63 @@
+## ═══ Sesja zarchiwizowana [2026-07-04 11:30] ═══
+
+# last_session.md
+
+**Sesja:** 2026-07-03 · (długa sesja na modelu Fable 5)
+**Status:** ✓ Zakończona poprawnie (ETAP B schematów ZACOMMITOWANY `6aef038` + push)
+**Punkt odniesienia (git):** 6aef038 @ main (ETAP B feat commit; po push zsynchronizowany z origin/main — dawne e9d52ce/b6429aa/8aca263 też wypchnięte)
+
+---
+
+## ▸ NASTĘPNY KROK (zacznij tutaj)
+
+**ETAP A: przerobić 5 pozostałych schematów na PRAWDZIWE teselacje.** Kolejność wg pewności:
+1. `gen_bloom` (najpewniejsze) → `scipy.spatial.Voronoi` na ziarnach phyllotaxis (kąt złoty) rozszerzonych POZA ramkę, każdy region przez istniejący `_clip_rect(poly, R)` do `[-R,R]²`. Voronoi ziaren słonecznika = naturalna teselacja wypełniająca.
+2. `gen_hirotaka` → Penrose (deflacja trójkątów Robinsona), pokolorowany na gwiazdy 5-krotne.
+3. `gen_koch_snowflake` → 2-rozmiarowy kafel Kocha (duży + mniejszy towarzysz kafelkują).
+4. `gen_dragon` → twindragon-**reptile** (kafle w kształcie smoka), zastąpić placeholder-wstęgi (teraz `order=6`, ~16k wielokątów przy order 9 wieszało montaż).
+5. `gen_kepler_ty` → teselacja 5-krotna gap-free (aperiodyczna, najtrudniejsza).
+
+Kontekst: user narzucił iteracyjnie TWARDĄ regułę — KAŻDY kształt musi być prawdziwą teselacją brzeg-w-brzeg (bez nakładania, bez luk, wypełnia prostokąt, samopowtarzalny). ETAP B (10 pewnych) zrobiony i zweryfikowany wizualnie; ETAP A to 5 trudnych aperiodycznych/reptile/fraktalnych, świadomie odłożonych i oznaczonych `[ETAP A]` w `SHAPES`. Wszystkie generatory szybkie (<0.02s) — jedyny problem wydajności to render dragona (dużo wielokątów).
+
+---
+
+## Co zrobiono w tej sesji
+
+- ✓ **Analiza (na życzenie usera):** problemy mozaik girih/poincaré/voderberg (dziury greedy, subpikselowe kafle przy brzegu dysku, osobliwość centrum spirali); centralny kafel problematyczny (duży kafel-dominant w poincaré/girih, drzazgi w voderberg). **Czarna pustka w `kites`** — diagnoza: luka generacji siatki, człon shear `q/2` vs stały `range_r` (engine_smart.py:520) → prawy-dolny róg bez kafli. Fix (nie wdrożony): pętla `r` wokół `-q/2`.
+- ✓ **Nowy generator `src/tools/gen_extra_shape_schemes.py`** — 16 schematów (21-35 + `stagger_tri` 36). Importuje helpery z `gen_fable_shape_schemes`.
+- ✓ **ETAP B — 10 PRAWDZIWYCH teselacji** (wypełniają prostokąt, zero nakładania/luk): `sierpinski` (PRZEROBIONY na prawdziwy rekurencyjny z zagnieżdżonymi dziurami-komórkami, kafelkowany up+down), `gereh` (ośmiokąt=gwiazda-8+8 latawców, partycja), `koch_island` (reptile Minkowskiego, period=4^depth), `rosette`+`mandala` (koncentryczne KOŁA przycięte do prostokąta — pomysł usera), `nautilus`+`vortex` (radialne pierścienie ze skrętem, log/liniowe), `shatter` (radialne poza rogi), `moire` (GEOMETRYCZNA zwichrowana siatka — nie kolor), `braid` (basketweave, płaski przeplot bez nad/pod).
+- ✓ **`stagger_tri` (#36)** — stary „sierpinski" (przesunięte warstwy trójkątów) zachowany pod nową nazwą na życzenie usera.
+- ✓ **Poprawki w `gen_fable_shape_schemes.py`:** `poincaré` (siatka tła w rogach poza dyskiem), `voderberg` (promień poza rogi + kapsel centralny → wypełnia), `kepler_ty` w extra (gęstszy dekagon+10 pięciokątów — nadal ETAP A).
+- ✓ **Techniki (do pamięci):** helper `_radial_clip_cells` (sektory×pierścienie, rozszerz poza rogi + clip), `_clip_rect` (Sutherland-Hodgman do prostokąta), seam-fix (offset o pół sektora co drugi pierścień).
+- ✓ **Referencje usera:** czasopismomatematyka.pl (gereh=wypełnianie wielokątów liniami z krawędzi → przerobiłem na partycję; „fraktal Hirotaki" pokazany graficznie bez definicji → placeholder pentaflake/Penrose).
+
+## Co zostało (backlog sesji)
+
+- ✓ **COMMIT + PUSH ZROBIONE:** ETAP B `6aef038` (feat shapes) + `chore(session)` wypchnięte na origin/main.
+- ⟳ **ETAP A (NASTĘPNY KROK):** 5 trudnych — bloom→Voronoi, hirotaka→Penrose, koch_snowflake→2-size, dragon→reptile, kepler_ty→teselacja 5-krotna.
+- ⟳ **Montaż** `output/kite_schemes/proposals_extra_15_shapes.png` regenerowany w tle na końcu (36 shapes) — sprawdzić przy starcie.
+- ⟳ **Sprint 2 (`_do_render` refaktor)** — NADAL NIETKNIĘTY (pivot na schematy); zduplikowane gałęzie kites/spectre wciąż w engine_smart.py:507/592, cli.py:26 zahardkodowany. To był oryginalny „następny krok" z poprzedniej sesji.
+- ⟳ **`kites` czarna pustka** — fix zdiagnozowany (pętla r wokół -q/2), niewdrożony (dotyka golden → regeneracja hasha, po Sprint 2).
+- ⟳ **Standing:** galeria 16K triangle+hexagon (czeka na pliki usera); test_dzi + pasek postępu DZI ([[project_dzi_gui_polish_todo]]).
+
+## Aktywne pliki
+
+- `src/tools/gen_extra_shape_schemes.py` (NOWY — 16 schematów; helpery `_radial_clip_cells`/`_clip_rect`; ETAP A: bloom/hirotaka/koch_snowflake/dragon/kepler_ty)
+- `src/tools/gen_fable_shape_schemes.py` (M — poincaré/voderberg/kepler naprawione)
+- `assets/shape_schemes/*.png` (~16 nowych/zmienionych)
+- `src/engine_smart.py` (NIETKNIĘTY — cel Sprint 2 refaktor + fix pustki kites)
+
+## Otwarte pytania
+
+- ⚠ **Commit teraz?** Propozycja (2 commity): (1) `feat(shapes): 15+ schematow jako prawdziwe teselacje (ETAP B) + gen_extra_shape_schemes.py` obejmujący gen_extra + assets + poincare/voderberg fix; (2) osobno stan sesji. Push (+3 niewypchnięte: e9d52ce, b6429aa, 8aca263) — do decyzji.
+- Decyzja B potwierdzona przez usera: rodzina kolista→teselacja gwiaździsta/koncentryczna; niemożliwe→kafelkujące kuzyny. Trudne ETAP A mogą wyjść przybliżone (oznaczyć uczciwie).
+- Selekcja finalna 36 kształtów → które wdrożyć w silniku — PO wygenerowaniu wszystkich (ETAP A).
+
+## Do MEMORY.md (przeniesiono)
+
+- Repo MEMORY.md: NOWY wpis [2026-07-03] o ETAP B (10 teselacji), regule „prawdziwa teselacja", technikach `_radial_clip_cells`/`_clip_rect`, ETAP A pending.
+- Auto-memory: [[project_extra_15_shapes]] rozbudowane (wymóg teselacji, decyzje B, moire≡square caveat, gereh/koch_island/dragon).
+
 ## ═══ Sesja zarchiwizowana [2026-07-03 23:43] ═══
 
 # last_session.md
@@ -182,55 +242,3 @@ Kontekst: galeria miała „3×16K + 2×8K"; user chce 5×16K. Akcja jest zablok
 
 - [Aktywne TODO] NOWY wpis [2026-06-28] „Galeria — podmiana triangle+hexagon na 16K (CZEKA NA USERA)" — audyt rozdzielczości + plan swapu + pułapki.
 - [Aktywne TODO] NOWY wpis [2026-06-28] „README hero = magnifier papugi 4×4" (commit `26c5d0a`) — co, dlaczego, generator, że `spectre_full.jpg` zostaje w tabeli zoom.
-
-## ═══ Sesja zarchiwizowana [2026-06-28 22:28] ═══
-
-# last_session.md
-
-**Sesja:** 2026-06-28 · 10:30-13:04
-**Status:** ✓ Zakończona poprawnie
-**Punkt odniesienia (git):** ebc790b @ main (origin ZSYNCHRONIZOWANY — wszystkie 4 commity wypchnięte, branch == origin/main)
-
----
-
-## ▸ NASTĘPNY KROK (zacznij tutaj)
-
-**Krok 6 z `PLAN_PORTFOLIO.md` — adwersarialny audyt twierdzeń README (przed publikacją).** Jeden przebieg (`/code-audit` lub subagent `Explore`): „znajdź każdą liczbę / feature / flagę / ścieżkę w README.md **i** README.pl.md, której nie potwierdza kod". Cel: wyłapać przechwalstwo, martwe linki, nieaktualne flagi, rozjazd EN↔PL. Po audycie: lista znalezisk → poprawki w obu README jednym commitem `docs(readme): fix unverified claims`.
-
-Kontekst: Kroki 1–4 portfolio domknięte i wypchnięte; przed pochwaleniem się projektem (LinkedIn/HN) warto, by każde twierdzenie w README było pokryte kodem. Niski wysiłek, higiena. Krok 5 (PyInstaller `.exe`) świadomie odłożony jako większy, osobny projekt o średnim ROI ([[project_portfolio_phase]]).
-
----
-
-## Co zrobiono w tej sesji
-
-- ✓ **Krok 1 — galeria live 16K** (`ad5d6c8`): zweryfikowano 3 mozaiki 16K (foto/spectre/typo); zmierzono realny DZI (foto 35.5 + spectre 49.5 + typo 79.7 = **~165 MB/3**, obalony szacunek 150–300 MB/szt.); podmieniono stare sloty 8K w `docs/tiles` na 16K (slug `spectre_parrot`→`spectre_mosaic`); przebudowano `docs/index.html` (3×16K + 2×8K, uczciwe etykiety MP); link hero w README EN+PL.
-- ✓ **Krok 2 — social preview** (`6d5a8ea`): wygenerowano 5 konceptów → wybrany magnifier b (~30 tiles, kolorowy obszar kapelusza); `assets/examples/social_preview.png` 256-color PNG **0.55 MB** (<1 MB); user wgrał w repo Settings.
-- ✓ **Krok 3 — Performance Engineering** (`170636c`): case study A1 w README EN+PL (PeakRAMSampler → atrybucja float64 cdist → `_euclid_f32` + `_LazyMask` pod inwariantami → 16K ~10→3.9 GB, ~21→5.9 min); odświeżono 3 nieaktualne noty (roadmap DZI [x], viewer 3×16K, rozmiar repo).
-- ✓ **Krok 4 — post o monokafelku** (`ebc790b`): `docs/posts/aperiodic-monotile-mosaic{,.pl}.md` EN+PL + assety z `generate_spectre_tiling()` (grid kolorowany wg orientacji, GIF 36-klatkowy reveal, sylwetka 14-boku); linki z sekcji Spectre obu README.
-- ✓ **Wszystkie 4 commity wypchnięte**; branch == origin/main.
-
-## Co zostało (backlog sesji)
-
-- ⟳ **Krok 6 (NASTĘPNY KROK):** adwersarialny audyt twierdzeń README.
-- ⟳ **Krok 5:** zero-friction install (PyInstaller `.exe`, model-free) — wysiłek wysoki, ROI średni; odłożony jako osobny projekt.
-- ⟳ **TODO odłożony:** pasek postępu dla przycisku „Export Deep Zoom" + dołożyć `test_dzi` ([[project_dzi_gui_polish_todo]]) — przy przebiegu czyszczącym GUI.
-- ⟳ Świadomie ODŁOŻONE: Wariant C (A1/A2), ML/CLIP, Docker/plugin.
-
-## Aktywne pliki
-
-- `README.md` + `README.pl.md` (cel audytu Kroku 6)
-- `docs/index.html`, `docs/tiles/{photo,symbol,spectre}_mosaic*` (galeria 16K)
-- `docs/posts/aperiodic-monotile-mosaic{,.pl}.md` + `docs/posts/img/*` (post monotile)
-- `assets/examples/social_preview.png` (social preview, wgrany w Settings)
-- Generatory (scratchpad, nie w repo): `gen_social.py`, `gen_magnifier.py`, `gen_final.py`, `gen_monotile.py`
-
-## Otwarte pytania
-
-- Krok 4: czy przepuścić prozę posta przez Claude.ai (web) pod konkretną platformę (HN/dev.to/LinkedIn) — plan zakładał narrację na web; draft w CC gotowy do publikacji jak jest.
-- Krok 5 vs odłożenie: czy w ogóle robimy `.exe`, czy zostaje przy „clone + run".
-
-## Do MEMORY.md (przeniesiono/zaktualizowano w tej sesji)
-
-- [[project_portfolio_phase]] — dodano postęp: Kroki 1–4 WDROŻONE (commity ad5d6c8 / 6d5a8ea / 170636c / ebc790b), realny pomiar DZI 165 MB/3, parametry faktycznie użyte, status kroków 5–6.
-- [[project_dzi_gui_polish_todo]] — NOWY: odłożony pasek postępu „Export Deep Zoom" + brakujący `test_dzi`.
-
