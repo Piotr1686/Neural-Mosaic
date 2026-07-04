@@ -105,7 +105,11 @@ def _gen_kites(engine, target_w, target_h, base_s):
     range_r = int(target_h / (r3 * s)) + 3
 
     for q in range(-range_q, range_q):
-        for r in range(-range_r, range_r):
+        # centre the r-window on -q/2: cy = r3*s*(r + q/2), so a fixed window
+        # scans a cy band displaced by q/2 at large |q| and leaves the far
+        # corner without hexagons (black wedge bottom-right, fixed 2026-07-04)
+        r_mid = -(q // 2)
+        for r in range(r_mid - range_r, r_mid + range_r):
             cx = 1.5 * s * q
             cy = r3 * s * (r + q / 2.0)
             if -2 * s < cx < target_w + 2 * s and -2 * s < cy < target_h + 2 * s:
@@ -523,7 +527,11 @@ class SmartEngine:
             print("Building kite grid...")
             target_kites = []
             for q in range(-range_q, range_q):
-                for r in range(-range_r, range_r):
+                # centre the r-window on -q/2 (same fix as _gen_kites): the shear
+                # term q/2 in cy displaced the scanned band at large |q|, leaving
+                # the bottom-right corner without kites (fixed 2026-07-04)
+                r_mid = -(q // 2)
+                for r in range(r_mid - range_r, r_mid + range_r):
                     cx = 1.5 * s * q
                     cy = r3 * s * (r + q / 2.0)
 
