@@ -1,23 +1,29 @@
-"""Generate schematic previews for 15 additional tile-shape proposals (21-35).
+"""Generate schematic previews for the additional tile-shape proposals (21-36).
 
-9 user-requested named shapes + 6 original inventions. These are PROPOSAL
-previews (720x720 GUI swatches), NOT engine implementations. Pure geometry +
-PIL, deterministic (seeded RNG only). ASCII-only prints (CP1250 terminal).
+PROPOSAL previews (720x720 GUI swatches), NOT engine implementations. Pure
+geometry + PIL + scipy (Voronoi), deterministic (seeded RNG only). ASCII-only
+prints (CP1250 terminal).
 
-HARD REQUIREMENT (user, 2026-07-03): every shape must be self-repeating and
-FILL THE WHOLE RECTANGLE - no empty corners, no holes, every cell = one photo.
-Radial motifs (mandala, rosette, nautilus, vortex, bloom, shatter) and fractals
-with holes (sierpinski, koch_snowflake, hirotaka) therefore repeat on a lattice
-over a full-canvas background grid (`_bg_grid`) that fills any residual gap.
-The four natively plane-filling schemes (gereh, koch_island, moire, braid) tile
-directly.
+HARD REQUIREMENT (user, 2026-07-03): every shape must be a TRUE tessellation -
+edge-to-edge, no overlaps, no gaps, fills the whole rectangle, self-repeating.
+Rev 2026-07-04 (user corrections): the background-grid crutch is gone from all
+kept shapes; every cell is part of the tessellation itself:
+  - bloom          -> Voronoi diagram of a sunflower phyllotaxis (golden angle)
+  - dragon         -> twindragon rep-tile partition (base 1+i digit squares)
+  - gereh          -> 4.8.8 partition into quads only (star split into 8 kites)
+  - kepler_ty      -> Penrose-like rhombic tiling (de Bruijn pentagrid, N=5)
+  - koch_snowflake -> two-size Koch snowflake tessellation (ratio 1/sqrt(3))
+  - sierpinski     -> brick-staggered rows, holes = photo cells by level
+  - nautilus       -> log-spiral rings, pole OUTSIDE the frame (no singularity);
+                      replaces the radial family (mandala / vortex / shatter
+                      REMOVED as near-duplicates, 2026-07-04)
+  - rosette        -> REVIVED as the 12-fold Islamic rosette the user linked
+                      (Shrine of Moulay Idriss II, Fez): 3.12.12 partition
+  - scales         -> NEW (user link): fish-scale shield cells, checkerboard
+                      circle lattice
+  - pebbles        -> NEW (user image): variable-density Voronoi pebble mosaic
 
-Three names were geometrically ambiguous; labelled interpretations:
-  - hirotaka   -> pentaflake / pentagonal IFS (source shows it graphically only,
-                  with NO definition - czasopismomatematyka.pl 'O smokach' cz.2)
-  - kepler_ty  -> stylised 5-fold Harmonices Mundi cluster (pentagon+star+decagon)
-  - gereh      -> girih strapwork ON a tessellation (octagon+square 4.8.8 with
-                  8-point khatam stars), per czasopismomatematyka.pl 'gereh cz.4'
+Still pending [ETAP A]: hirotaka (pentaflake placeholder on a bg grid).
 
 Run:
   C:/Users/plazo/miniconda3/envs/mosaic/python.exe -m src.tools.gen_extra_shape_schemes
@@ -28,9 +34,10 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
+from scipy.spatial import Voronoi
 
 from src.tools.gen_fable_shape_schemes import (
-    ASSETS_DIR, SIZE, BG, OUTLINE, render, vary, hsv_rgb, c2t,
+    ASSETS_DIR, render, vary, hsv_rgb, c2t, _clip_rect,
 )
 
 OUT_DIR = Path("output/kite_schemes")
@@ -47,111 +54,10 @@ def _reg_poly(centre, r, n, phase=0.0):
     return [centre + r * cmath.exp(1j * (phase + 2 * math.pi * k / n)) for k in range(n)]
 
 
-def _star_poly(centre, r_out, r_in, n, phase=0.0):
-    pts = []
-    for k in range(n):
-        pts.append(centre + r_out * cmath.exp(1j * (phase + 2 * math.pi * k / n)))
-        pts.append(centre + r_in * cmath.exp(1j * (phase + 2 * math.pi * (k + 0.5) / n)))
-    return pts
-
-
-def _annular_sector(r0, r1, a0, a1, nseg=6):
-    pts = []
-    for i in range(nseg + 1):
-        a = a0 + (a1 - a0) * i / nseg
-        pts.append(r1 * cmath.exp(1j * a))
-    for i in range(nseg + 1):
-        a = a1 + (a0 - a1) * i / nseg
-        pts.append(r0 * cmath.exp(1j * a))
-    return pts
-
-
-def _clip_rect(poly, R):
-    """Sutherland-Hodgman clip of a polygon (list of (x,y)) to the square
-    [-R, R]^2. Returns clipped vertex list (possibly empty)."""
-    def clip(pts, inside, inter):
-        out = []
-        m = len(pts)
-        for i in range(m):
-            a, b = pts[i], pts[(i + 1) % m]
-            ina, inb = inside(a), inside(b)
-            if ina:
-                out.append(a)
-                if not inb:
-                    out.append(inter(a, b))
-            elif inb:
-                out.append(inter(a, b))
-        return out
-
-    def ix(a, b, t):        # intersection with vertical x = t
-        (ax, ay), (bx, by) = a, b
-        f = (t - ax) / (bx - ax)
-        return (t, ay + f * (by - ay))
-
-    def iy(a, b, t):        # intersection with horizontal y = t
-        (ax, ay), (bx, by) = a, b
-        f = (t - ay) / (by - ay)
-        return (ax + f * (bx - ax), t)
-
-    pts = poly
-    pts = clip(pts, lambda p: p[0] >= -R, lambda a, b: ix(a, b, -R))
-    if not pts:
-        return pts
-    pts = clip(pts, lambda p: p[0] <= R, lambda a, b: ix(a, b, R))
-    if not pts:
-        return pts
-    pts = clip(pts, lambda p: p[1] >= -R, lambda a, b: iy(a, b, -R))
-    if not pts:
-        return pts
-    pts = clip(pts, lambda p: p[1] <= R, lambda a, b: iy(a, b, R))
-    return pts
-
-
-def _radial_clip_cells(R, rings, pal, seed, swirl=0.0, nseg=6, coloff=0):
-    """Radial tessellation clipped to the rectangle. rings = [(r0, r1, n), ...];
-    each ring is split into n circular-arc sectors (optionally sheared by
-    `swirl` radians per ring for a spiral), then every cell is clipped to
-    [-R, R]^2. Rings extend past the corners so the square is fully covered.
-    Result is a true partition: no overlaps, no gaps."""
-    rng = np.random.default_rng(seed)
-
-    def sector(r0, r1, a0, a1):
-        pts = []
-        for s in range(nseg + 1):
-            a = a0 + (a1 - a0) * s / nseg
-            pts.append((r1 * math.cos(a), r1 * math.sin(a)))
-        for s in range(nseg + 1):
-            a = a1 + (a0 - a1) * s / nseg
-            pts.append((r0 * math.cos(a), r0 * math.sin(a)))
-        return pts
-
-    polys = []
-    for ri, (r0, r1, n) in enumerate(rings):
-        if n <= 1:
-            disk = [(r1 * math.cos(2 * math.pi * t / 40), r1 * math.sin(2 * math.pi * t / 40))
-                    for t in range(40)]
-            cl = _clip_rect(disk, R)
-            if len(cl) >= 3:
-                polys.append((cl, vary(rng, pal[coloff % len(pal)], 8)))
-            continue
-        # stagger every other ring by half a sector (brick offset) so the radial
-        # edges never line up into a continuous seam from centre to edge
-        off = (math.pi / n) if (ri % 2 == 1) else 0.0
-        base = ri * swirl + off
-        for k in range(n):
-            a0 = base + 2 * math.pi * k / n
-            a1 = base + 2 * math.pi * (k + 1) / n
-            cl = _clip_rect(sector(r0, r1, a0, a1), R)
-            if len(cl) < 3:
-                continue
-            col = pal[(coloff + ri + (k % 2) + (1 if k % 3 == 0 else 0)) % len(pal)]
-            polys.append((cl, vary(rng, col, 9)))
-    return polys
-
-
 def _bg_grid(R, cell, seed, pal=BG_PAL):
     """Full-canvas square-cell grid covering [-R, R]^2 so no corner is ever
-    black. Drawn FIRST; motifs paint on top."""
+    black. Drawn FIRST; motifs paint on top. (Only the ETAP-A hirotaka
+    placeholder still uses this - every accepted shape tiles natively.)"""
     rng = np.random.default_rng(seed)
     polys = []
     n = int(math.ceil(2 * R / cell)) + 1
@@ -177,29 +83,8 @@ def _lattice(R, spacing, hexoffset=False):
 
 
 # ==========================================
-# 21. SIERPINSKI TRIANGLE  [wypelnia: siatka gaskets + tlo]
+# 21. SIERPINSKI TRIANGLE  [natywne wypelnienie, cegielki]
 # ==========================================
-def _sierp_tris(a, b, c, d, out):
-    if d == 0:
-        out.append((a, b, c))
-        return
-    ab, bc, ca = (a + b) / 2, (b + c) / 2, (c + a) / 2
-    _sierp_tris(a, ab, ca, d - 1, out)
-    _sierp_tris(ab, b, bc, d - 1, out)
-    _sierp_tris(ca, bc, c, d - 1, out)
-
-
-def _sierp_unit(c, R, up, rng, pal):
-    ph = math.pi / 2 if up else -math.pi / 2
-    A = c + R * cmath.exp(1j * ph)
-    B = c + R * cmath.exp(1j * (ph + 2 * math.pi / 3))
-    C = c + R * cmath.exp(1j * (ph + 4 * math.pi / 3))
-    tris = []
-    _sierp_tris(A, B, C, 4, tris)
-    return [(c2t([a, b, cc]), vary(rng, pal[i % len(pal)], 12))
-            for i, (a, b, cc) in enumerate(tris)]
-
-
 def _sierpinski_cells(A, B, C, depth, cells):
     """Classic Sierpinski recursion: the 3 corner sub-triangles recurse; the
     central inverted sub-triangle is a 'hole' cell tagged with its level. Every
@@ -216,14 +101,20 @@ def _sierpinski_cells(A, B, C, depth, cells):
 
 
 def gen_sierpinski():
-    """The real Sierpinski triangle: a big triangle recursively subdivided with
-    nested dark holes, replicated in every direction by tiling up- AND down-
-    pointing Sierpinski triangles (which interlock to fill the plane)."""
+    """Sierpinski triangles tiling the plane (up + down interlock), depth 3,
+    with ODD ROWS SHIFTED by half a period (brick stagger) so the big level-3
+    holes spread evenly instead of lining up in columns. T-junctions on the
+    horizontal row boundaries are fine for a mosaic partition (no gaps).
+
+    Photo-mapping plan: every triangle is one photo cell -
+      level 0 (solid leaves, side S/8)  -> smallest photos, dense texture;
+      level 1..3 holes (side S/4..S/2)  -> progressively LARGER single photos,
+    so the fractal reads through photo scale, not through empty space."""
     rng = np.random.default_rng(211)
     R = 1.0
-    S = 0.66
+    S = 0.95
     H = S * math.sqrt(3) / 2
-    depth = 4
+    depth = 3
     pal_solid = [(224, 170, 92), (214, 148, 70)]
     pal_hole = [(44, 48, 62), (58, 50, 66), (48, 62, 58), (66, 54, 56)]
     polys = []
@@ -231,8 +122,9 @@ def gen_sierpinski():
     cols = int(2 * R / S) + 3
     for r in range(-1, rows):
         y0 = -R + r * H
-        for c in range(-1, cols):
-            x0 = -R + c * S
+        xoff = (S / 2) if (r % 2) else 0.0     # brick stagger per row
+        for c in range(-2, cols):
+            x0 = -R + c * S + xoff
             BL, BR, TOP = complex(x0, y0), complex(x0 + S, y0), complex(x0 + S / 2, y0 + H)
             TL, TR, BOT = complex(x0 + S / 2, y0 + H), complex(x0 + 1.5 * S, y0 + H), complex(x0 + S, y0)
             for tri, par in [((BL, BR, TOP), (r + c) % 2), ((TL, TR, BOT), (r + c + 1) % 2)]:
@@ -275,44 +167,56 @@ def gen_stagger_tri():
 
 
 # ==========================================
-# 22. KEPLER 'Ty' (stylised, lattice)  [wypelnia: klaster na siatce + tlo]
+# 22. KEPLER 'Ty' (Penrose rhombs, pentagrid)  [natywne wypelnienie]
 # ==========================================
-def _kepler_unit(centre, R, rng):
-    """Decagon with a regular pentagon edge-glued to every edge (they meet with
-    NO gap: 144 + 108 + 108 = 360 at each decagon vertex), plus pentagrams in the
-    5 outer notches - the Harmonices Mundi decagon/pentagon/pentagram motif."""
-    pal_dec = (206, 162, 78)
-    pal_pen = (96, 130, 165)
-    pal_star = (176, 92, 84)
-    edge = R * 0.42
-    Rd = edge / (2 * math.sin(math.pi / 10))
-    ap = edge / (2 * math.tan(math.pi / 5))
-    Rp = edge / (2 * math.sin(math.pi / 5))
-    dec = _reg_poly(centre, Rd, 10, math.pi / 10)
-    out = [(c2t(dec), vary(rng, pal_dec, 8))]
-    for k in range(10):
-        a, b = dec[k], dec[(k + 1) % 10]
-        mid = (a + b) / 2
-        outw = (mid - centre) / abs(mid - centre)
-        pcen = mid + ap * outw
-        ph = cmath.phase(a - pcen)
-        pent = [pcen + Rp * cmath.exp(1j * (ph + 2 * math.pi * m / 5)) for m in range(5)]
-        out.append((c2t(pent), vary(rng, pal_pen, 12)))
-    # pentagrams in 5 alternate outer notches (toward every other decagon vertex)
-    for k in range(1, 10, 2):
-        vdir = (dec[k] - centre) / abs(dec[k] - centre)
-        scen = centre + (Rd + 1.9 * ap) * vdir
-        out.append((c2t(_star_poly(scen, Rp * 0.85, Rp * 0.34, 5, cmath.phase(vdir))),
-                    vary(rng, pal_star, 10)))
-    return out
-
-
 def gen_kepler_ty():
+    """Kepler-like 5-fold tiling done EXACTLY: de Bruijn pentagrid (N=5) dual ->
+    Penrose-type rhombic tiling (fat 72 + thin 36 rhombs). Gap-free and
+    overlap-free by construction; the fat/thin colouring brings out the 5-fold
+    stars and decagon rosettes of Kepler's Harmonices Mundi patterns, while
+    every cell stays a photo-friendly rhombus (same family as the `romb` mode).
+    Same validated Cramer/K-vector construction as gen_ammann_beenker (N=4)."""
     rng = np.random.default_rng(22)
-    R = 1.0
-    polys = _bg_grid(R, 0.15, 220)
-    for c in _lattice(R, 0.80, hexoffset=True):
-        polys += _kepler_unit(c, 0.44, rng)
+    N = 5
+    zeta = [cmath.exp(2j * math.pi * k / N) for k in range(N)]
+    gamma = [0.05, 0.15, 0.25, 0.35, 0.20]     # sum = 1.0 (canonical class)
+    RANGE = 9
+    pal_fat = [(214, 152, 64), (188, 96, 74)]
+    pal_thin = (74, 92, 122)
+    polys = []
+    for k in range(N):
+        for l in range(k + 1, N):
+            for m in range(-RANGE, RANGE + 1):
+                for n in range(-RANGE, RANGE + 1):
+                    ak = zeta[k].conjugate()
+                    al = zeta[l].conjugate()
+                    det = ak.real * al.imag - ak.imag * al.real
+                    if abs(det) < 1e-12:
+                        continue
+                    bk, bl = m + gamma[k], n + gamma[l]
+                    px = (bk * al.imag - bl * ak.imag) / det
+                    py = (bk * al.real - bl * ak.real) / det
+                    p = complex(px, py)
+                    if abs(p) > RANGE:
+                        continue
+                    K = [0] * N
+                    for j in range(N):
+                        if j == k or j == l:
+                            continue
+                        K[j] = math.ceil((p * zeta[j].conjugate()).real - gamma[j])
+                    basev = sum(K[j] * zeta[j] for j in range(N) if j not in (k, l))
+                    verts = []
+                    for a, b in [(0, 0), (1, 0), (1, 1), (0, 1)]:
+                        verts.append(basev + (m + a) * zeta[k] + (n + b) * zeta[l])
+                    ctr = sum(verts) / 4
+                    if abs(ctr) > 8.0:
+                        continue
+                    if (l - k) % N in (1, 4):      # 72-degree fat rhombs
+                        col = vary(rng, pal_fat[k % 2], 12)
+                    else:                          # 36-degree thin rhombs
+                        col = vary(rng, pal_thin, 10)
+                    polys.append((c2t(verts), col))
+    R = 5.2
     return polys, (-R, -R, R, R)
 
 
@@ -320,13 +224,16 @@ def gen_kepler_ty():
 # 23. GEREH ON A TESSELLATION  [natywne wypelnienie]
 # ==========================================
 def gen_gereh():
-    """Gereh as a true PARTITION: octagon+square 4.8.8 tiling where each octagon
-    is split into an 8-point khatam star cell + 8 kite cells (star tip -> edge
-    midpoint, kites over the vertices). Nothing overlaps; every cell is a photo."""
+    """Gereh as a true PARTITION of quads only (rev 2026-07-04: the previous
+    version kept the whole 8-point star as ONE spiky cell - impractical to fill
+    with a photo). Octagon+square 4.8.8 tiling; each octagon splits into
+    8 central kites (they compose the khatam star via colour) + 8 outer kites
+    over the vertices. Every cell is a compact quadrilateral."""
     rng = np.random.default_rng(23)
     p = 1 + math.sqrt(2)
     Roct = 1.0 / (2 * math.sin(math.pi / 8))     # octagon circumradius (edge 1)
-    r_in = (1.0 / (2 * math.tan(math.pi / 8))) * 0.42
+    apoth = 1.0 / (2 * math.tan(math.pi / 8))    # octagon apothem
+    r_in = apoth * 0.60                          # fatter star core than rev 1 (0.42)
     pal_star = (214, 170, 82)
     pal_kite = (66, 86, 116)
     pal_sq = (176, 92, 84)
@@ -339,10 +246,11 @@ def gen_gereh():
             Mid = [(V[k] + V[(k + 1) % 8]) / 2 for k in range(8)]          # star tips
             inner = [c + r_in * cmath.exp(1j * (math.pi / 8 + math.pi / 4 * (k + 1)))
                      for k in range(8)]
-            star = []
+            # star = 8 kite cells around the centre (photo-friendly quads that
+            # still READ as one 8-point star through the shared colour)
             for k in range(8):
-                star += [Mid[k], inner[k]]
-            polys.append((c2t(star), vary(rng, pal_star, 8)))
+                kite_c = [c, inner[(k - 1) % 8], Mid[k], inner[k]]
+                polys.append((c2t(kite_c), vary(rng, pal_star, 9)))
             for k in range(8):
                 kite = [Mid[k], V[(k + 1) % 8], Mid[(k + 1) % 8], inner[k]]
                 polys.append((c2t(kite), vary(rng, pal_kite, 10)))
@@ -354,63 +262,88 @@ def gen_gereh():
 
 
 # ==========================================
-# 24. HEIGHWAY DRAGON (twindragons on a lattice)  [wypelnia: siatka smokow + tlo]
+# 24. TWINDRAGON (rep-tile partition)  [natywne wypelnienie]
 # ==========================================
-def _dragon_turns(order):
-    seq = [1]
-    for _ in range(order - 1):
-        seq = seq + [1] + [-x for x in reversed(seq)]
-    return seq
+def _twindragon_boundary(order):
+    """Boundary polygon of the order-n twindragon: the 2^n unit squares at
+    Gaussian integers sum(d_k (1+i)^k), d_k in {0,1}. Interior edges cancel in
+    opposite pairs; the survivors are chained into one loop (at pinch vertices
+    the sharpest LEFT turn keeps the interior consistently on the left)."""
+    b = 1 + 1j
+    cells = {0j}
+    for k in range(order):
+        step = b ** k
+        cells |= {z + step for z in cells}
 
+    edges = set()
+    for z in cells:
+        x, y = int(round(z.real)), int(round(z.imag))
+        corner = [(x, y), (x + 1, y), (x + 1, y + 1), (x, y + 1)]
+        for i in range(4):
+            e = (corner[i], corner[(i + 1) % 4])
+            back = (e[1], e[0])
+            if back in edges:
+                edges.remove(back)
+            else:
+                edges.add(e)
 
-def _dragon_pts(order, origin, phase, scale):
-    seq = _dragon_turns(order)
-    z = origin
-    head = phase
-    pts = [z]
-    z = z + scale * cmath.exp(1j * head)
-    pts.append(z)
-    for t in seq:
-        head += t * math.pi / 2
-        z = z + scale * cmath.exp(1j * head)
-        pts.append(z)
-    return pts
-
-
-def _dragon_unit(centre, scale, order, rng):
-    width = 0.34 * scale
-    out = []
-
-    def ribbon(pts, base):
-        for i in range(len(pts) - 1):
-            a, b = pts[i], pts[i + 1]
-            d = b - a
-            nrm = (d / abs(d)) * 1j * width if abs(d) > 1e-9 else 0
-            t = i / (len(pts) - 1)
-            col = tuple(int(np.clip(cc * (0.7 + 0.5 * t), 0, 255)) for cc in base)
-            out.append((c2t([a + nrm, b + nrm, b - nrm, a - nrm]), vary(rng, col, 8)))
-
-    p0 = _dragon_pts(order, centre, 0.0, scale)
-    ribbon(p0, (210, 140, 60))
-    ribbon(_dragon_pts(order, p0[-1], math.pi, scale), (90, 130, 170))
-    return out
+    nxt = {}
+    for a, bb in edges:
+        nxt.setdefault(a, []).append(bb)
+    start = min(nxt)
+    loop = [start]
+    cur = start
+    prev_dir = (0, -1)
+    while True:
+        cands = nxt[cur]
+        if len(cands) == 1:
+            chosen = cands[0]
+        else:
+            def turn(nb):
+                d = (nb[0] - cur[0], nb[1] - cur[1])
+                a0 = math.atan2(prev_dir[1], prev_dir[0])
+                a1 = math.atan2(d[1], d[0])
+                t = (a1 - a0) % (2 * math.pi)
+                return t if t > 1e-9 else 2 * math.pi
+            chosen = min(cands, key=turn)      # sharpest left turn first
+        cands.remove(chosen)
+        prev_dir = (chosen[0] - cur[0], chosen[1] - cur[1])
+        if chosen == start:
+            break
+        loop.append(chosen)
+        cur = chosen
+    return loop
 
 
 def gen_dragon():
-    # ETAP A placeholder: still ribbons on a bg grid (NOT yet a true reptile
-    # partition). Order kept low so main()'s montage does not choke on ~16k
-    # polys/tile; the real twindragon-reptile rework is stage A.
+    """Back to the linked source (Heighway dragon, 'O smokach'): the TWINDRAGON
+    is a rep-tile, so congruent dragon-shaped tiles fill the plane exactly -
+    no overlaps, no gaps, no background. Lattice: (1+i)^n * Z[i]. Each fractal
+    'dragon' is one photo cell with the classic jagged coastline."""
     rng = np.random.default_rng(24)
-    R = 1.0
-    polys = _bg_grid(R, 0.14, 240)
-    order = 6
-    for c in _lattice(R, 1.0):
-        polys += _dragon_unit(c, 0.11, order, rng)
-    return polys, (-R, -R, R, R)
+    order = 8
+    loop = _twindragon_boundary(order)
+    lam = (1 + 1j) ** order
+    v1, v2 = lam, lam * 1j
+    ctr0 = complex(sum(x for x, _ in loop) / len(loop),
+                   sum(y for _, y in loop) / len(loop))
+    pal = [(205, 135, 62), (96, 128, 168), (176, 92, 84),
+           (150, 160, 96), (148, 110, 162), (206, 168, 88)]
+    Rw = 17.0
+    polys = []
+    for a in range(-4, 5):
+        for bb in range(-4, 5):
+            off = a * v1 + bb * v2
+            c = ctr0 + off
+            if abs(c.real - ctr0.real) > 2.6 * Rw or abs(c.imag - ctr0.imag) > 2.6 * Rw:
+                continue
+            col = vary(rng, pal[(a - 2 * bb) % len(pal)], 10)
+            polys.append(([(x + off.real, y + off.imag) for x, y in loop], col))
+    return polys, (ctr0.real - Rw, ctr0.imag - Rw, ctr0.real + Rw, ctr0.imag + Rw)
 
 
 # ==========================================
-# 25. KOCH SNOWFLAKE (hex lattice + gap fill)  [wypelnia: siatka platkow + tlo]
+# 25. KOCH SNOWFLAKE (two-size tessellation)  [natywne wypelnienie]
 # ==========================================
 def _koch_edge(a, b, d):
     if d == 0:
@@ -432,21 +365,34 @@ def _snowflake(centre, r, d, phase=0.0):
 
 
 def gen_koch_snowflake():
+    """The classic TWO-SIZE Koch snowflake tessellation: big flakes on a
+    triangular lattice (spacing = 2R, touching at their 6 radius-R points) and
+    small flakes (scale 1/sqrt(3), rotated 30 deg) in the two lattice holes.
+    Area check: cell sqrt(3)/2*(2R)^2 = big (2sqrt(3)/5)*3R^2*... = big + 2
+    small EXACTLY, so flakes join edge-to-edge on every side - no background.
+    (Finite Koch depth is a polygonal approximation of the limit fractal;
+    hairline seams below outline width.)"""
     rng = np.random.default_rng(25)
     R = 1.0
-    polys = _bg_grid(R, 0.11, 250)
-    pal = [(210, 150, 60), (90, 120, 160), (170, 95, 90), (120, 160, 110),
-           (150, 110, 160), (120, 120, 85)]
-    t1 = complex(0.62, 0)
-    t2 = complex(0.31, 0.62 * math.sqrt(3) / 2 * 2)
+    Rb = 0.42                        # big flake: centre -> vertex radius
+    spacing = 2 * Rb
+    t1 = complex(spacing, 0)
+    t2 = complex(spacing / 2, spacing * math.sqrt(3) / 2)
+    Rs = Rb / math.sqrt(3)           # small flake radius
+    depth = 3
+    pal_big = [(210, 150, 60), (170, 95, 90), (120, 160, 110), (150, 110, 160)]
+    pal_small = [(90, 120, 160), (120, 120, 85)]
+    polys = []
     for m in range(-4, 5):
         for n in range(-4, 5):
             c = m * t1 + n * t2
-            if abs(c) > 1.5:
+            if abs(c) > 2.4:
                 continue
-            phase = math.pi / 3 if (m + n) % 2 else 0.0
-            col = vary(rng, pal[(m - 2 * n) % 6], 10)
-            polys.append((c2t(_snowflake(c, 0.24, 3, phase)), col))
+            polys.append((c2t(_snowflake(c, Rb, depth, phase=0.0)),
+                          vary(rng, pal_big[(m - n) % len(pal_big)], 10)))
+            for hi, hc in enumerate((c + (t1 + t2) / 3, c + 2 * (t1 + t2) / 3)):
+                polys.append((c2t(_snowflake(hc, Rs, depth, phase=math.pi / 6)),
+                              vary(rng, pal_small[hi], 10)))
     return polys, (-R, -R, R, R)
 
 
@@ -493,7 +439,7 @@ def gen_koch_island():
 
 
 # ==========================================
-# 27. HIROTAKA (pentaflake IFS on a lattice)  [wypelnia: siatka pentaflake + tlo]
+# 27. HIROTAKA (pentaflake IFS on a lattice)  [ETAP A: wciaz tlo]
 # ==========================================
 def _pentaflake_unit(centre, R, phase, rng, pal):
     phi = (1 + math.sqrt(5)) / 2
@@ -529,89 +475,125 @@ def gen_hirotaka():
 
 
 # ==========================================
-# 28. ROSETTE (lattice of rosettes)  [wypelnia: siatka rozet + tlo]
+# 28. ROSETTE (12-fold Islamic, Fez)  [natywne wypelnienie]
 # ==========================================
 def gen_rosette():
-    """Concentric CIRCULAR geometric rosette as a true edge-to-edge tessellation:
-    real circular rings x angular sectors, expanded outward past the corners and
-    then CLIPPED to the rectangle (user's insight). Centre stays perfectly round;
-    edges/corners are clipped arcs. No overlaps, no gaps - each cell one photo."""
-    R = 1.0
-    diag = R * math.sqrt(2)
-    pal = [(214, 130, 70), (188, 84, 96), (110, 140, 175), (150, 168, 96),
-           (150, 108, 170), (96, 160, 140), (210, 168, 84)]
-    # true circular ring radii; the last exceeds the corner distance (~1.414)
-    rr = [0.0, 0.13, 0.28, 0.45, 0.63, 0.82, 1.02, 1.22, diag + 0.05]
-    ang_counts = [1, 12, 12, 24, 24, 36, 48, 48]     # one per ring gap
-    rings = [(rr[k], rr[k + 1], ang_counts[k]) for k in range(len(ang_counts))]
-    return _radial_clip_cells(R, rings, pal, 28), (-R, -R, R, R)
+    """12-fold Islamic rosette per the user's reference (zellij of the Shrine
+    of Moulay Idriss II, Fez; researchgate fig. 286876414): 12-pointed-star
+    rosettes on the 3.12.12 lattice (dodecagons edge-to-edge + equilateral
+    triangles). Each dodecagon partitions into 12 core kites (the gold star),
+    12 white petal quads reaching the dodecagon vertices and 12 edge triangles;
+    the interstitial 3.12.12 triangles are photo cells too. True partition -
+    every cell a compact quad/triangle, no gaps, no overlaps."""
+    rng = np.random.default_rng(28)
+    R12 = 1.0
+    ap = R12 * math.cos(math.pi / 12)
+    D = 2 * ap                                  # neighbour distance (shared edge)
+    t1 = complex(D, 0)
+    t2 = complex(D / 2, D * math.sqrt(3) / 2)
+    r0, r1 = 0.26 * R12, 0.52 * R12             # star inner notch / point radii
+    pal_core = (214, 170, 82)
+    pal_petal = (224, 216, 196)
+    pal_edge = (96, 130, 165)
+    pal_gap = (150, 92, 88)
+    centres = [m * t1 + n * t2 for m in range(-3, 4) for n in range(-3, 4)]
+    Rw = 2.55
+    polys = []
+
+    def u(ang):
+        return cmath.exp(1j * ang)
+
+    for c in centres:
+        # BOX filter, not radial: a radial cut drops corner rosettes whose
+        # dodecagons still poke into the frame (black wedges, fixed 2026-07-04)
+        if abs(c.real) > Rw + 1.15 * R12 or abs(c.imag) > Rw + 1.15 * R12:
+            continue
+        s = [c + r1 * u(math.pi / 6 * k) for k in range(12)]                  # star points
+        i_ = [c + r0 * u(math.pi / 6 * k + math.pi / 12) for k in range(12)]  # inner notches
+        t = [c + R12 * u(math.pi / 6 * k + math.pi / 12) for k in range(12)]  # dodecagon verts
+        for k in range(12):
+            polys.append((c2t([c, i_[(k - 1) % 12], s[k], i_[k]]), vary(rng, pal_core, 8)))
+            polys.append((c2t([i_[k], s[k], t[k], s[(k + 1) % 12]]), vary(rng, pal_petal, 9)))
+            polys.append((c2t([s[k], t[(k - 1) % 12], t[k]]), vary(rng, pal_edge, 10)))
+    # the two 3.12.12 interstitial triangles per lattice cell: vertices are the
+    # two dodecagon vertices closest to the hole, from each of the 3
+    # surrounding dodecagons (they coincide pairwise -> 3 unique points).
+    # SEPARATE pass over ALL centres: a hole inside the frame can belong to a
+    # base centre whose rosette is outside the draw filter (black-gap bug,
+    # fixed 2026-07-04); dedup because each hole is reachable from 3 centres.
+    seen_holes = set()
+    for c in centres:
+        for h in (c + (t1 + t2) / 3, c + 2 * (t1 + t2) / 3):
+            hkey = (round(h.real, 4), round(h.imag, 4))
+            if hkey in seen_holes:
+                continue
+            seen_holes.add(hkey)
+            if abs(h.real) > Rw + 0.6 or abs(h.imag) > Rw + 0.6:
+                continue
+            near = sorted(centres, key=lambda cc: abs(cc - h))[:3]
+            if abs(near[2] - h) > 0.8 * D:
+                continue                        # lattice border: incomplete hole
+            uniq = {}
+            for cc in near:
+                verts = [cc + R12 * u(math.pi / 6 * k + math.pi / 12) for k in range(12)]
+                verts.sort(key=lambda v: abs(v - h))
+                for v in verts[:2]:
+                    uniq[(round(v.real, 6), round(v.imag, 6))] = v
+            tri = sorted(uniq.values(), key=lambda v: cmath.phase(v - h))
+            if len(tri) == 3:
+                polys.append((c2t(tri), vary(rng, pal_gap, 10)))
+    return polys, (-Rw, -Rw, Rw, Rw)
 
 
 # ==========================================
-# 29. MANDALA (lattice of mandalas)  [wypelnia: siatka mandali + tlo]
-# ==========================================
-def gen_mandala():
-    """Concentric circular mandala, rings expanded past the corners and clipped
-    to the rectangle (true partition). Finer angular subdivision than rosette."""
-    R = 1.0
-    diag = R * math.sqrt(2)
-    pal = [(214, 150, 62), (176, 92, 84), (110, 140, 172), (150, 168, 96),
-           (150, 110, 162), (96, 160, 140)]
-    rr = [0.0, 0.10, 0.20, 0.32, 0.46, 0.62, 0.80, 1.02, diag + 0.05]
-    counts = [1, 8, 8, 16, 24, 24, 36, 48]
-    rings = [(rr[k], rr[k + 1], counts[k]) for k in range(len(counts))]
-    return _radial_clip_cells(R, rings, pal, 29), (-R, -R, R, R)
-
-
-# ==========================================
-# 30. NAUTILUS (lattice of shells)  [wypelnia: siatka muszli + tlo]
+# 30. NAUTILUS (pole outside the frame)  [natywne wypelnienie]
 # ==========================================
 def gen_nautilus():
-    """Log-spaced (geometric) rings with a slight swirl, clipped to the rectangle
-    - chambered-shell growth as a true radial partition (no overlaps/gaps)."""
+    """Log-spiral chambered growth WITHOUT a central singularity (rev
+    2026-07-04: replaces the whole radial family - rosette/mandala/vortex/
+    shatter were near-duplicates of this). The spiral pole sits OUTSIDE the
+    frame beyond the bottom-left corner, so the visible field is sweeping arc
+    cells that grow across the canvas. Geometric radii + a constant sector
+    count give near-square cells at every scale (log-polar); every cell is
+    clipped to the rectangle - true partition, no overlaps, no gaps."""
+    rng = np.random.default_rng(30)
     R = 1.0
-    diag = R * math.sqrt(2)
-    pal = [(214, 140, 66), (180, 92, 84), (110, 138, 170), (150, 165, 96)]
-    rr = [0.0]
-    r = 0.07
-    while r < diag + 0.1:
-        rr.append(r)
-        r *= 1.5
-    rr.append(diag + 0.1)
-    counts = [1] + [24] * (len(rr) - 2)
-    rings = [(rr[k], rr[k + 1], counts[k]) for k in range(len(counts))]
-    return _radial_clip_cells(R, rings, pal, 30, swirl=0.28), (-R, -R, R, R)
-
-
-# ==========================================
-# 31. SHATTER (full-plane radial fracture)  [natywne wypelnienie]
-# ==========================================
-def gen_shatter():
-    """Radial impact fracture from an off-centre point. Outer radius exceeds the
-    far corner distance, so the wedges cover the whole canvas - fills natively."""
-    rng = np.random.default_rng(31)
-    R = 1.0
-    centre = complex(-0.15, 0.1)
-    n_cracks = 15
-    angs = sorted((2 * math.pi * k / n_cracks + rng.uniform(-0.11, 0.11)) for k in range(n_cracks))
-    rings = [0.0, 0.28, 0.6, 0.95, 1.35, 1.85, 2.5]   # past the far corner
-    pal = [(200, 130, 66), (120, 135, 165), (172, 92, 88), (150, 160, 96)]
+    pole = complex(-1.55, -1.30)
+    g = 1.16                                   # ring growth ratio
+    r = abs(complex(-1, -1) - pole) * 0.55     # first ring well inside the near corner
+    radii = [r]
+    far = abs(complex(1, 1) - pole) + 0.15
+    while radii[-1] < far:
+        radii.append(radii[-1] * g)
+    nsec = 40
+    swirl = 0.42
+    pal = [(214, 140, 66), (110, 138, 170), (176, 92, 88), (150, 166, 96), (150, 110, 162)]
     polys = []
-    for i in range(len(angs)):
-        a0 = angs[i]
-        a1 = angs[(i + 1) % n_cracks] + (2 * math.pi if i + 1 == n_cracks else 0)
-        jag = rng.uniform(-0.05, 0.05)
-        for ri in range(len(rings) - 1):
-            r0 = rings[ri] * (1 + jag)
-            r1 = rings[ri + 1] * (1 + jag)
-            p0 = centre + r0 * cmath.exp(1j * a0)
-            p1 = centre + r1 * cmath.exp(1j * a0)
-            p2 = centre + r1 * cmath.exp(1j * a1)
-            p3 = centre + r0 * cmath.exp(1j * a1)
-            shade = 0.62 + 0.09 * ri
-            base = pal[(i + ri) % len(pal)]
-            col = tuple(int(np.clip(cc * shade, 0, 255)) for cc in base)
-            polys.append((c2t([p0, p1, p2, p3]), vary(rng, col, 10)))
+    # cap disk under the first ring (covers the near corner if it pokes in)
+    disk = [(pole.real + radii[0] * math.cos(2 * math.pi * t / 40),
+             pole.imag + radii[0] * math.sin(2 * math.pi * t / 40)) for t in range(40)]
+    cl = _clip_rect(disk, R)
+    if len(cl) >= 3:
+        polys.append((cl, vary(rng, pal[0], 8)))
+    for ri in range(len(radii) - 1):
+        r0, r1 = radii[ri], radii[ri + 1]
+        base = ri * swirl + (math.pi / nsec) * (ri % 2)   # half-sector brick offset
+        for k in range(nsec):
+            a0 = base + 2 * math.pi * k / nsec
+            a1 = base + 2 * math.pi * (k + 1) / nsec
+            pts = []
+            nseg = 5
+            for sg in range(nseg + 1):
+                aa = a0 + (a1 - a0) * sg / nseg
+                pts.append((pole.real + r1 * math.cos(aa), pole.imag + r1 * math.sin(aa)))
+            for sg in range(nseg + 1):
+                aa = a1 + (a0 - a1) * sg / nseg
+                pts.append((pole.real + r0 * math.cos(aa), pole.imag + r0 * math.sin(aa)))
+            cl = _clip_rect(pts, R)
+            if len(cl) < 3:
+                continue
+            col = pal[(ri + (k % 3)) % len(pal)]
+            polys.append((cl, vary(rng, col, 10)))
     return polys, (-R, -R, R, R)
 
 
@@ -683,47 +665,198 @@ def gen_braid():
 
 
 # ==========================================
-# 34. VORTEX (lattice of swirls)  [wypelnia: siatka wirow + tlo]
+# 35. BLOOM (Voronoi phyllotaxis)  [natywne wypelnienie]
 # ==========================================
-def gen_vortex():
-    """Radial rings with a strong per-ring swirl so the shared radial edges spiral
-    into arms, clipped to the rectangle. A true partition (no overlaps/gaps)."""
-    R = 1.0
-    diag = R * math.sqrt(2)
-    pal = [(214, 140, 66), (110, 138, 172), (176, 92, 88), (150, 166, 96), (150, 110, 164)]
-    rr = [0.0, 0.14, 0.28, 0.44, 0.62, 0.82, 1.04, 1.28, diag + 0.05]
-    counts = [1] + [10] * (len(rr) - 2)
-    rings = [(rr[k], rr[k + 1], counts[k]) for k in range(len(counts))]
-    return _radial_clip_cells(R, rings, pal, 34, swirl=0.42), (-R, -R, R, R)
-
-
-# ==========================================
-# 35. BLOOM (lattice of phyllotaxis rosettes)  [wypelnia: siatka kwiatow + tlo]
-# ==========================================
-def _bloom_unit(centre, R, rng, pal):
-    golden = math.pi * (3 - math.sqrt(5))
-    out = []
-    N = 90
-    for i in range(1, N):
-        r = R * math.sqrt(i / N)
-        a = i * golden
-        c = centre + r * cmath.exp(1j * a)
-        size = (0.05 + 0.09 * (i / N)) * R
-        u = cmath.exp(1j * a)
-        v = u * 1j
-        rh = [c + size * 1.4 * u, c + size * v, c - size * 1.4 * u, c - size * v]
-        out.append((c2t(rh), vary(rng, pal[i % len(pal)], 14)))
-    return out
-
-
 def gen_bloom():
+    """Sunflower bloom as a TRUE tessellation (rev 2026-07-04: no background,
+    no overlapping rosettes): Voronoi diagram of golden-angle phyllotaxis seeds.
+    r = c*sqrt(i) keeps seed density uniform, so the Voronoi cells are
+    near-equal-area everywhere while spiralling like a sunflower head. Seeds
+    extend past the corners; every bounded cell is clipped to the rectangle -
+    the cells join exactly (Voronoi partition) and fill the whole frame.
+    Colour follows i mod 21 (Fibonacci parastichy), so the 21 spiral arms of
+    the real sunflower show up in the mosaic."""
     rng = np.random.default_rng(35)
     R = 1.0
-    polys = _bg_grid(R, 0.13, 350)
+    diag = math.sqrt(2.0)
+    golden = math.pi * (3 - math.sqrt(5))
+    N = 520
+    c = (diag + 0.45) / math.sqrt(N)
+    pts = []
+    for i in range(1, N + 1):
+        rr = c * math.sqrt(i)
+        aa = i * golden
+        pts.append((rr * math.cos(aa), rr * math.sin(aa)))
+    vor = Voronoi(np.array(pts))
     pal = [(214, 138, 64), (180, 90, 84), (110, 138, 170), (150, 166, 96),
-           (150, 110, 162), (96, 160, 140)]
-    for c in _lattice(R, 0.62):
-        polys += _bloom_unit(c, 0.34, rng, pal)
+           (150, 110, 162), (96, 160, 140), (206, 168, 88)]
+    polys = []
+    for i in range(N):
+        reg = vor.regions[vor.point_region[i]]
+        if not reg or -1 in reg:
+            continue                       # unbounded outer cells: outside frame
+        poly = [tuple(vor.vertices[v]) for v in reg]
+        cl = _clip_rect(poly, R)
+        if len(cl) < 3:
+            continue
+        arm = (i + 1) % 21                 # parastichy arm id
+        polys.append((cl, vary(rng, pal[arm % len(pal)], 10)))
+    return polys, (-R, -R, R, R)
+
+
+# ==========================================
+# 37. SCALES (fish scales)  [natywne wypelnienie]
+# ==========================================
+def gen_scales():
+    """Fish-scale (imbricated scallop) tiling per the user's reference: circles
+    of radius r on the checkerboard lattice (dx=2r, dy=r, half-period row
+    offset) cover the plane exactly (covering radius = r); each scale = its
+    disk minus the two disks of the row below. The circle intersections land
+    exactly on the bottom point and the side points of each circle, so every
+    cell is the classic shield: a semicircular dome + two concave arcs meeting
+    in a bottom tip. True partition - no overlaps, no gaps."""
+    rng = np.random.default_rng(37)
+    R = 1.0
+    rs = 0.17
+    nseg = 16
+    tpl = []
+    for t_ in range(2 * nseg + 1):                      # dome: 180 -> 0 deg
+        a = math.pi - math.pi * t_ / (2 * nseg)
+        tpl.append((rs * math.cos(a), rs * math.sin(a)))
+    for t_ in range(1, nseg + 1):                       # right bite: 90 -> 180 on (rs,-rs)
+        a = math.pi / 2 + math.pi / 2 * t_ / nseg
+        tpl.append((rs + rs * math.cos(a), -rs + rs * math.sin(a)))
+    for t_ in range(1, nseg):                           # left bite: 0 -> 90 on (-rs,-rs)
+        a = math.pi / 2 * t_ / nseg
+        tpl.append((-rs + rs * math.cos(a), -rs + rs * math.sin(a)))
+    pal = [(64, 138, 148), (84, 158, 158), (104, 174, 164), (72, 122, 142)]
+    polys = []
+    nj = int(math.ceil(2 * R / rs)) + 2
+    ni = int(math.ceil(2 * R / (2 * rs))) + 2
+    for j in range(-nj // 2, nj):
+        y = j * rs - R + rs / 2
+        xoff = rs if (j % 2) else 0.0
+        for i in range(-ni // 2, ni):
+            x = i * 2 * rs + xoff - R
+            cell = [(px + x, py + y) for px, py in tpl]
+            cl = _clip_rect(cell, R)
+            if len(cl) < 3:
+                continue
+            polys.append((cl, vary(rng, pal[(j % 4)], 12)))
+    return polys, (-R, -R, R, R)
+
+
+# ==========================================
+# 38. PEBBLES (variable-density Voronoi)  [natywne wypelnienie]
+# ==========================================
+def gen_pebbles():
+    """Organic pebble mosaic per the user's reference image: a Voronoi
+    partition whose seed density varies smoothly across the canvas (sum of
+    random Gaussian blobs, rejection sampling), so clusters of small cells sit
+    next to patches of big ones. Exact Voronoi partition clipped to the frame -
+    no overlaps, no gaps. Distinct from the planned uniform `voronoi` (#15):
+    the multi-scale density IS the motif here."""
+    rng = np.random.default_rng(38)
+    R = 1.0
+    blobs = [(complex(rng.uniform(-1, 1), rng.uniform(-1, 1)),
+              rng.uniform(0.22, 0.5), rng.uniform(2.5, 8.0)) for _ in range(6)]
+    dmax = 1.0 + sum(w for _, _, w in blobs)
+
+    def dens(x, y):
+        d = 1.0
+        for c, s, w in blobs:
+            dd = abs(complex(x, y) - c)
+            d += w * math.exp(-(dd * dd) / (2 * s * s))
+        return d
+
+    M = 1.4
+    pts = []
+    while len(pts) < 720:
+        x = rng.uniform(-M, M)
+        y = rng.uniform(-M, M)
+        if rng.uniform(0, dmax) < dens(x, y):
+            pts.append((x, y))
+    vor = Voronoi(np.array(pts))
+    pal = [(196, 178, 150), (176, 160, 138), (188, 166, 128),
+           (162, 152, 140), (204, 188, 162), (170, 148, 118)]
+    polys = []
+    for i in range(len(pts)):
+        reg = vor.regions[vor.point_region[i]]
+        if not reg or -1 in reg:
+            continue
+        poly = [tuple(vor.vertices[v]) for v in reg]
+        cl = _clip_rect(poly, R)
+        if len(cl) < 3:
+            continue
+        polys.append((cl, vary(rng, pal[i % len(pal)], 12)))
+    return polys, (-R, -R, R, R)
+
+
+# ==========================================
+# 39. ROSETTE FRACTAL (spiral aloe)  [natywne wypelnienie]
+# ==========================================
+def gen_rosette_fractal():
+    """Spiral aloe (Aloe polyphylla) per the user's photo: a triangulated
+    annulus strip in LOG-POLAR space. Ring radii grow geometrically; each ring
+    is a strip of alternating triangles (tips outward = leaves, tips inward =
+    dark filler, exactly like the shadows between aloe leaves) and every ring
+    is phase-shifted, so the shared edges line up into logarithmic spiral
+    arms. Straight log-polar edges map to gently curved leaf edges. The centre
+    is capped by one small N-gon cell; everything is clipped to the rectangle.
+    True partition: the strips share sampled vertices edge-to-edge."""
+    rng = np.random.default_rng(39)
+    R = 1.0
+    N = 24
+    g = 1.30
+    r0 = 0.05
+    delta = 0.62 * 2 * math.pi / N      # per-ring phase shift -> spiral arms
+    diag = math.sqrt(2.0)
+    pal_leaf = [(96, 140, 76), (78, 124, 66), (112, 152, 86), (88, 132, 70)]
+    pal_gap = [(52, 72, 46), (60, 66, 44)]
+    radii = [r0]
+    while radii[-1] < diag + 0.1:
+        radii.append(radii[-1] * g)
+    offs = [i * delta for i in range(len(radii))]
+
+    def edge(i0, k0, i1, k1, nseg=6):
+        """Polyline between vertex k0 of ring i0 and vertex k1 of ring i1
+        (each k in its OWN ring's sector units), straight in (log r, theta)
+        space. Both cells sharing an edge sample it identically (exact seams).
+        Returns nseg points, endpoint excluded (loops concatenate edges)."""
+        u0, u1 = math.log(radii[i0]), math.log(radii[i1])
+        a0 = offs[i0] + 2 * math.pi * k0 / N
+        a1 = offs[i1] + 2 * math.pi * k1 / N
+        pts = []
+        for t in range(nseg):
+            f = t / nseg
+            u = u0 + (u1 - u0) * f
+            a = a0 + (a1 - a0) * f
+            pts.append((math.exp(u) * math.cos(a), math.exp(u) * math.sin(a)))
+        return pts
+
+    polys = []
+    cap = [(radii[0] * math.cos(offs[0] + 2 * math.pi * k / N),
+            radii[0] * math.sin(offs[0] + 2 * math.pi * k / N)) for k in range(N)]
+    cl = _clip_rect(cap, R)
+    if len(cl) >= 3:
+        polys.append((cl, vary(rng, pal_leaf[0], 8)))
+    # standard triangle strip between rings i and i+1 (valid for any phase
+    # shift): leaf_k = [A_k, A_k+1, B_k] (tip outward), fill_k = [A_k+1,
+    # B_k+1, B_k] (tip inward, dark like the shadow between aloe leaves)
+    for i in range(len(radii) - 1):
+        for k in range(N):
+            leaf = (edge(i, k, i, k + 1)
+                    + edge(i, k + 1, i + 1, k)
+                    + edge(i + 1, k, i, k))
+            pts = _clip_rect(leaf, R)
+            if len(pts) >= 3:
+                polys.append((pts, vary(rng, pal_leaf[(i + k) % len(pal_leaf)], 10)))
+            fill = (edge(i, k + 1, i + 1, k + 1)
+                    + edge(i + 1, k + 1, i + 1, k)
+                    + edge(i + 1, k, i, k + 1))
+            pts = _clip_rect(fill, R)
+            if len(pts) >= 3:
+                polys.append((pts, vary(rng, pal_gap[(i + k) % 2], 8)))
     return polys, (-R, -R, R, R)
 
 
@@ -731,22 +864,22 @@ def gen_bloom():
 # MONTAGE
 # ==========================================
 SHAPES = [
-    ("sierpinski", gen_sierpinski, "21. TROJKAT SIERPINSKIEGO", "[B] rekurencyjny, kafelkowany"),
-    ("kepler_ty", gen_kepler_ty, "22. TESELACJA 'Ty' KEPLERA", "[ETAP A] 5-krotny, do teselacji"),
-    ("gereh", gen_gereh, "23. GEREH (partycja)", "[B] osmiokat=gwiazda+8 latawcow"),
-    ("dragon", gen_dragon, "24. SMOK HARTERA-HEIGHWAYA", "[ETAP A] twindragon reptile"),
-    ("koch_snowflake", gen_koch_snowflake, "25. PLATEK KOCHA", "[ETAP A] 2-rozmiarowy kafel"),
+    ("sierpinski", gen_sierpinski, "21. TROJKAT SIERPINSKIEGO", "[B] cegielkowy rozklad dziur, kazdy trojkat=foto"),
+    ("kepler_ty", gen_kepler_ty, "22. KEPLER 'Ty' (Penrose)", "[B] pentagrid de Bruijna, romby 5-krotne"),
+    ("gereh", gen_gereh, "23. GEREH (partycja)", "[B] same czworokaty: 8 rombow gwiazdy + latawce"),
+    ("dragon", gen_dragon, "24. TWINDRAGON (reptile)", "[B] smoki kafelkuja plaszczyzne, zero nakladania"),
+    ("koch_snowflake", gen_koch_snowflake, "25. PLATEK KOCHA (2 rozmiary)", "[B] duze+male platki brzeg-w-brzeg"),
     ("koch_island", gen_koch_island, "26. WYSPA KOCHA (Minkowski)", "[B] reptile, kafelkuje"),
     ("hirotaka", gen_hirotaka, "27. FRAKTAL HIROTAKI (?)", "[ETAP A] -> Penrose"),
-    ("rosette", gen_rosette, "28. ROZETA (kolowa)", "[B] pierscienie kolowe, przyciete"),
-    ("mandala", gen_mandala, "29. MANDALA", "[B] koncentryczna, przycieta"),
-    ("nautilus", gen_nautilus, "30. NAUTILUS (wlasny)", "[B] log-pierscienie ze skretem"),
-    ("shatter", gen_shatter, "31. SHATTER (wlasny)", "[B] pekniecie, promien poza rogi"),
+    ("rosette", gen_rosette, "28. ROZETA 12-krotna (Fez)", "[B] zellij Moulay Idriss II, siatka 3.12.12"),
+    ("nautilus", gen_nautilus, "30. NAUTILUS", "[B] log-spirala, biegun poza kadrem (bez srodka)"),
     ("moire", gen_moire, "32. MOIRE (wlasny)", "[B] geom. siatka zwichrowana"),
     ("braid", gen_braid, "33. BRAID (wlasny)", "[B] basketweave, plaski przeplot"),
-    ("vortex", gen_vortex, "34. VORTEX (wlasny)", "[B] wir: pierscienie ze skretem"),
-    ("bloom", gen_bloom, "35. BLOOM (wlasny)", "[ETAP A] Voronoi phyllotaxis"),
+    ("bloom", gen_bloom, "35. BLOOM (slonecznik)", "[B] Voronoi phyllotaxis, 21 ramion"),
     ("stagger_tri", gen_stagger_tri, "36. TROJKATY PRZESUNIETE", "[B] przesuniete warstwy (b. sierpinski)"),
+    ("scales", gen_scales, "37. LUSKI (scales)", "[B] rybie luski: kopula + 2 luki, partycja"),
+    ("pebbles", gen_pebbles, "38. PEBBLES (kamyki)", "[B] Voronoi o zmiennej gestosci ziaren"),
+    ("rosette_fractal", gen_rosette_fractal, "39. ROZETA SPIRALNA (aloes)", "[B] log-polarne liscie, spiralne ramiona"),
 ]
 
 
@@ -764,7 +897,8 @@ def main():
         print(f"      {len(polys)} tiles -> assets/shape_schemes/{name}.png")
 
     PW, TH = 475, 60
-    cols_n, rows_n = 5, 3
+    cols_n = 4
+    rows_n = (len(SHAPES) + cols_n - 1) // cols_n
     mont = Image.new("RGB", (PW * cols_n, (PW + TH) * rows_n), (10, 10, 12))
     draw = ImageDraw.Draw(mont)
     try:

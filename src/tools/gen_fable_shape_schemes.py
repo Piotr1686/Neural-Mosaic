@@ -65,6 +65,47 @@ def c2t(poly):
     return [(z.real, z.imag) for z in poly]
 
 
+def _clip_rect(poly, R):
+    """Sutherland-Hodgman clip of a polygon (list of (x,y)) to the square
+    [-R, R]^2. Returns clipped vertex list (possibly empty)."""
+    def clip(pts, inside, inter):
+        out = []
+        m = len(pts)
+        for i in range(m):
+            a, b = pts[i], pts[(i + 1) % m]
+            ina, inb = inside(a), inside(b)
+            if ina:
+                out.append(a)
+                if not inb:
+                    out.append(inter(a, b))
+            elif inb:
+                out.append(inter(a, b))
+        return out
+
+    def ix(a, b, t):        # intersection with vertical x = t
+        (ax, ay), (bx, by) = a, b
+        f = (t - ax) / (bx - ax)
+        return (t, ay + f * (by - ay))
+
+    def iy(a, b, t):        # intersection with horizontal y = t
+        (ax, ay), (bx, by) = a, b
+        f = (t - ay) / (by - ay)
+        return (ax + f * (bx - ax), t)
+
+    pts = poly
+    pts = clip(pts, lambda p: p[0] >= -R, lambda a, b: ix(a, b, -R))
+    if not pts:
+        return pts
+    pts = clip(pts, lambda p: p[0] <= R, lambda a, b: ix(a, b, R))
+    if not pts:
+        return pts
+    pts = clip(pts, lambda p: p[1] >= -R, lambda a, b: iy(a, b, -R))
+    if not pts:
+        return pts
+    pts = clip(pts, lambda p: p[1] <= R, lambda a, b: iy(a, b, R))
+    return pts
+
+
 # ==========================================
 # 15. CAIRO PENTAGONAL
 # ==========================================
@@ -293,6 +334,19 @@ def _edge_arc(z1, z2, n=10):
 
 
 def gen_poincare():
+    """{7,3} continued OUTWARD by inversion, clipped to the frame (no bg).
+
+    User requirements (2026-07-04): NO background cells - the tiling itself
+    must reach every corner; iterate tiles outward; shrink the dominant central
+    heptagon; keep tile sizes closer together. A hyperbolic tiling only lives
+    inside the unit disk, so the corners are covered by its INVERSIVE
+    continuation: every tile is mirrored through the circle (v -> 1/conj(v)),
+    which makes the pattern grow outward again toward the corners - the
+    Escher-consistent way to 'stretch the elements to the rectangle edge and
+    clip'. A mild Moebius shift de-centres and slightly shrinks the central
+    heptagon; sizes now run big centre -> small rim -> big corners instead of
+    one giant tile plus dust.
+    """
     p, q = 7, 3
     # hyperbolic circumradius from the characteristic right triangle
     # (angles pi/p at centre, pi/q at vertex): cosh R = cot(pi/p) * cot(pi/q)
@@ -303,13 +357,12 @@ def gen_poincare():
     seen = set()
     result = []
     queue = deque([(central, 0)])
-    while queue and len(result) < 4000:
+    while queue and len(result) < 30000:
         poly, depth = queue.popleft()
         ctr = sum(poly) / p
-        # coarse key: reflections drift numerically along different BFS paths,
-        # so a fine key lets displaced duplicates through and they overdraw
-        # shallower tiles. Near the rim tiles are subpixel anyway.
-        key = (round(ctr.real, 3), round(ctr.imag, 3))
+        # key granularity: fine enough not to merge genuinely distinct rim
+        # tiles (diam ~0.004), coarse enough to absorb reflection drift
+        key = (round(ctr.real, 4), round(ctr.imag, 4))
         if key in seen:
             continue
         seen.add(key)
@@ -317,7 +370,7 @@ def gen_poincare():
         if diam < 0.004:
             continue
         result.append((poly, depth))
-        if depth >= 6 or diam < 0.012:
+        if depth >= 12 or diam < 0.009:
             continue
         for k in range(p):
             z1, z2 = poly[k], poly[(k + 1) % p]
@@ -331,28 +384,54 @@ def gen_poincare():
 
     ring_pal = [(220, 170, 70), (170, 90, 80), (90, 120, 160),
                 (120, 160, 110), (150, 110, 160), (200, 130, 90), (100, 140, 150)]
-    # background cell grid so the four corners outside the unit disk are photo
-    # cells, not black (a hyperbolic {7,3} tiling cannot itself fill a rectangle)
-    polys = []
-    Rw = 1.04
-    bg_rng = np.random.default_rng(170)
-    bg_pal = [(60, 58, 66), (66, 60, 58), (58, 64, 62), (64, 60, 64), (62, 58, 60)]
-    ncell = 15
-    step = 2 * Rw / ncell
-    for a in range(ncell):
-        for b in range(ncell):
-            x, y = -Rw + a * step, -Rw + b * step
-            if abs(complex(x + step / 2, y + step / 2)) < 0.985:
-                continue  # inside the disk -> the tiling covers it
-            rect = [(x, y), (x + step, y), (x + step, y + step), (x, y + step)]
-            polys.append((rect, vary(bg_rng, bg_pal[(a + b) % len(bg_pal)], 12)))
+    # Mild Moebius shift: nudges the giant central heptagon off-centre (and
+    # shrinks it a little) without cramming everything against the rim - a
+    # window inside the disk cannot work, hyperbolic tiles there are FEW and
+    # huge (tested: W=0.52 leaves 15 visible tiles).
+    a = complex(0.26, 0.11)
+    W = 1.30                    # half-window: rim circle at ~77% of half-width
+
+    def moeb(z):
+        return (z - a) / (1 - a.conjugate() * z)
+
+    def contains_origin(pts):
+        wn = 0
+        n = len(pts)
+        for i in range(n):
+            x0, y0 = pts[i]
+            x1, y1 = pts[(i + 1) % n]
+            if (y0 <= 0 < y1) or (y1 <= 0 < y0):
+                t = -y0 / (y1 - y0)
+                if x0 + t * (x1 - x0) > 0:
+                    wn += 1
+        return wn % 2 == 1
+
+    # thin dark disk under everything: hides the sub-pixel annulus at |w|=1
+    # where tiles below the diameter cutoff were dropped (reads as the shared
+    # outline between the disk and its inverted continuation, not as bg)
+    rim = [(1.02 * math.cos(2 * math.pi * t / 90), 1.02 * math.sin(2 * math.pi * t / 90))
+           for t in range(90)]
+    polys = [(rim, (10, 10, 12))]
     for poly, depth in result:
         pts = []
         for k in range(p):
-            pts += _edge_arc(poly[k], poly[(k + 1) % p], 8)
-        polys.append((c2t(pts), ring_pal[depth % 7]))
-    R = 1.04
-    return polys, (-R, -R, R, R)
+            pts += _edge_arc(poly[k], poly[(k + 1) % p], 6)
+        w = [(v.real, v.imag) for v in (moeb(z) for z in pts)]
+        cl = _clip_rect(w, W)
+        if len(cl) >= 3:
+            polys.append((cl, ring_pal[depth % 7]))
+        # ITERATE OUTWARD (user request): continue the pattern past the unit
+        # circle by inversion v -> 1/conj(v); tiles grow again toward the
+        # corners and get clipped by the rectangle. Skip the tile containing
+        # the origin (its inverted image is unbounded and lies beyond the
+        # frame corners anyway).
+        if contains_origin(w):
+            continue
+        inv = [(x / (x * x + y * y), y / (x * x + y * y)) for x, y in w]
+        cl = _clip_rect(inv, W)
+        if len(cl) >= 3:
+            polys.append((cl, ring_pal[depth % 7]))
+    return polys, (-W, -W, W, W)
 
 
 # ==========================================
@@ -637,7 +716,7 @@ SHAPES = [
     ("voderberg", gen_voderberg, "14. VODERBERG (stylizowany)", "spirala wygietych klinow (dziewieciokat)"),
     ("cairo", gen_cairo, "15. CAIRO (bruk kairski)", "pieciokaty koszykowe, 4 orientacje"),
     ("floret", gen_floret, "16. FLORET (dual snub hex)", "kwiaty: 6 pieciokatnych platkow, chiralny"),
-    ("poincare", gen_poincare, "17. POINCARE {7,3}", "dysk hiperboliczny (Escher Circle Limit)"),
+    ("poincare", gen_poincare, "17. POINCARE {7,3}", "wycinek dysku (Moebius), przyciety do ramki"),
     ("escher_lizard", gen_escher, "18. ESCHER-STYLE (p1)", "deformacja heksagonu, organiczne stworki"),
     ("gosper", gen_gosper, "19. GOSPER ISLAND", "fraktalne wyspy (hexflake), granica Gospera"),
     ("weave", gen_weave, "20. WEAVE (tkanina)", "wstegi zdjec przeplatane nad/pod"),
