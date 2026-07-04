@@ -1,3 +1,58 @@
+## ═══ Sesja zarchiwizowana [2026-07-04 21:58] ═══
+
+# last_session.md
+
+**Sesja:** 2026-07-04 · (sesja poprawek kształtów, Fable 5)
+**Status:** ✓ Zakończona poprawnie
+**Punkt odniesienia (git):** 75bf7df @ main (2 commity kodu: cedb2ce fix engine + 75bf7df feat shapes; NIE wypchnięte — push do decyzji)
+
+---
+
+## ▸ NASTĘPNY KROK (zacznij tutaj)
+
+**Ostatni element ETAP A: przerobić `gen_hirotaka` w `src/tools/gen_extra_shape_schemes.py` na Penrose P2 (kites & darts) przez deflację trójkątów Robinsona** — usunąć `_bg_grid` (ostatni kształt z tłem). UWAGA: `kepler_ty` to już rhombic Penrose z pentagridu (P3-podobny), więc hirotaka musi być odróżnialny — właśnie latawce+strzałki (P2), kolorowane tak, by wyszły gwiazdy/słońca 5-krotne. Po nim: user robi selekcję finalną z 16 paneli montażu → potem Sprint 2 (wiring `_polygon_sector`/`SHAPE_MODES` w `_do_render`).
+
+Kontekst: cała reszta rewizji kształtów jest DOMKNIĘTA (9 poprawek usera + 4 nowe kształty, wszystko zweryfikowane wizualnie i zacommitowane). Hirotaka to jedyny pozostały `[ETAP A]` placeholder.
+
+---
+
+## Co zrobiono w tej sesji
+
+- ✓ **Pakiet 9 poprawek usera (/goal) — wszystkie:** bloom→Voronoi phyllotaxis (21 ramion, bez tła); dragon→twindragon rep-tile order 8 (zero nakładania); gereh→same czworokąty (gwiazda-8 z 8 rombów, r_in=0.60·apotema); kepler_ty→pentagrid de Bruijna N=5 (romby Penrose'a); koch_snowflake→teselacja 2-rozmiarowa (małe 1/√3, obrót 30°, bilans pól dokładny); sierpinski→cegiełkowy rozkład dziur (rzędy ±S/2, depth 3) + plan foto (dziury poziomów = coraz większe zdjęcia); poincare→kontynuacja inwersyjna poza okrąg + Möbius, bez tła; rodzina radialna→sam nautilus (biegun poza kadrem, mandala/vortex/shatter USUNIĘTE); **kites: FIX W SILNIKU** (okno `r` centrowane na `-q//2`, oba miejsca engine_smart.py) — golden 8/8 bez zmian hashy, 181 testów zielonych.
+- ✓ **4 nowe kształty na życzenie usera (w trakcie sesji):** `rosette` = 12-krotna rozeta zellij Fez (partycja 3.12.12; 2 fixy: trójkąty dziur po WSZYSTKICH centrach + filtr BOX); `scales` = rybie łuski (pokrycie dokładne, kopuła+2 łuki); `pebbles` = Voronoi zmiennej gęstości (obrazek usera); `rosette_fractal` = aloes spiralny (log-polarny pas trójkątów ze skrętem).
+- ✓ **Nowy commitowany tool** `src/tools/gen_kites_scheme.py` (generator schematu kites — stary przepadł ze scratchpadem Opusa).
+- ✓ `_clip_rect` przeniesiony do `gen_fable_shape_schemes.py` (gen_extra importuje — bez cyklu importów).
+- ✓ Montaż extra = 16 paneli 4×4 (`proposals_extra_15_shapes.png`, nazwa historyczna); montaż Fable przeliczony (nowy poincare, girih seedy w tle).
+- ✓ Weryfikacja: **181/181 pytest + golden 8/8**; wizualna weryfikacja każdego panelu.
+- ✓ Commity: `cedb2ce` fix(engine) kites + `75bf7df` feat(shapes) rewizja.
+
+## Co zostało (backlog sesji)
+
+- ⟳ **hirotaka → Penrose P2 deflacja** (NASTĘPNY KROK, ostatni [ETAP A]).
+- ⟳ **Push** cedb2ce+75bf7df (+commit stanu) na origin/main — do decyzji usera.
+- ⟳ **Selekcja finalna kształtów** przez usera (16 paneli extra + 10 Fable + 10 Opus) → które wdrażamy w silniku.
+- ⟳ **Sprint 2 (`_do_render` refaktor)** — wiring `_polygon_sector` + `SHAPE_MODES` (golden gotowe, szkielet dodany addytywnie; ryzyko bbox spectre opisane w MEMORY [2026-07-02]).
+- ⟳ **Standing:** galeria 16K triangle+hexagon (czeka na pliki usera); test_dzi + pasek postępu DZI ([[project_dzi_gui_polish_todo]]).
+
+## Aktywne pliki
+
+- `src/tools/gen_extra_shape_schemes.py` (przepisany — 16 kształtów, w tym 4 nowe; hirotaka = jedyny z `_bg_grid`)
+- `src/tools/gen_fable_shape_schemes.py` (M — poincare inwersja+Möbius, `_clip_rect`)
+- `src/tools/gen_kites_scheme.py` (NOWY)
+- `src/engine_smart.py` (M — fix okna pętli r w kites, 2 miejsca)
+- `assets/shape_schemes/*.png` (16 zmienionych/nowych; mandala/vortex/shatter usunięte)
+
+## Otwarte pytania
+
+- Push na origin — nie wykonany (user kończył sesję limitem tokenów).
+- Czy `rosette_fractal` ma trafić do puli selekcji, czy to eksperyment? (user nie doprecyzował)
+- Sub-pikselowy pierścień w poincare przy |w|=1 — w realnym renderze silnik i tak będzie potrzebował min-rozmiaru kafla; zaakceptowane w schemacie jako „horyzont".
+
+## Do MEMORY.md (przeniesiono)
+
+- Repo MEMORY.md: NOWY wpis [2026-07-04] — fix kites (-q//2, golden nietknięte), techniki: twindragon rep-tile (kasowanie krawędzi + skręt w lewo), inwersja poincare (okno w dysku NIE działa), teselacja 2-size Kocha (bilans pól), rozeta 3.12.12 (pułapki: dziury po wszystkich centrach, filtr BOX), scales (pokrycie dokładne), redukcja rodziny radialnej.
+- Auto-memory: `project_extra_15_shapes` rozbudowane o pełną rewizję 2026-07-04 + zaindeksowane w MEMORY.md (wcześniej brakowało w indeksie).
+
 ## ═══ Sesja zarchiwizowana [2026-07-04 11:30] ═══
 
 # last_session.md
@@ -194,51 +249,3 @@ Kontekst: User chce zaimplementować wszystkie 10 nowych kształtów (plan 7 spr
 - [Aktywne TODO] NOWY [2026-06-30] „Tryb kite→kites ZROBIONE (NIEZACOMMITOWANE)" + „PLAN: 10 nowych kształtów wow + schemat na podglądzie GUI (7 sprintów)".
 - [.claude] `project_kites_mode.md`, `project_10_shapes_plan.md`.
 
-## ═══ Sesja zarchiwizowana [2026-06-30 22:16] ═══
-
-# last_session.md
-
-**Sesja:** 2026-06-28 · 22:05-22:30
-**Status:** ✓ Zakończona poprawnie
-**Punkt odniesienia (git):** 26c5d0a @ main (origin ZSYNCHRONIZOWANY — `26c5d0a` wypchnięty, branch == origin/main)
-
----
-
-## ▸ NASTĘPNY KROK (zacznij tutaj)
-
-**Podmiana triangle + hexagon w galerii na prawdziwe 16K — CZEKA NA PLIKI OD USERA.** User sam wygeneruje 16K triangle+hexagon i napisze, że gotowe. Wtedy: (1) wstaw nowe `.dzi` + foldery `*_files/` do `docs/tiles/`, (2) usuń stare `showcase_triangle_20260502_101900*` i `hexagon_jump_16K*`, (3) zaktualizuj `tileSources` **oraz** etykiety w `docs/index.html` (8K→16K, nowe wymiary/MP, przyciski btn4/btn5). Pułapki: `Format="jpg"` w XML (nie `"jpeg"` → czarny ekran OpenSeadragon, [[project_dzi_format_bug]]); sprawdź budżet GitHub Pages (piramidy obecnie ~165 MB).
-
-Kontekst: galeria miała „3×16K + 2×8K"; user chce 5×16K. Akcja jest zablokowana do momentu, aż user dostarczy pliki — jeśli na /start ich jeszcze nie ma, w międzyczasie zrób **Krok 6 portfolio** (audyt twierdzeń README, patrz backlog).
-
----
-
-## Co zrobiono w tej sesji
-
-- ✓ **README hero podmienione na magnifier papugi 4×4** (commit `26c5d0a`, na origin/main): stare `spectre_full.jpg` nie pokazywało kafelków nawet po zoomie → nowy `assets/examples/spectre_hero_magnifier.jpg` (1600×900, wariant „e" z 5 propozycji). Styl jak social_preview: żółty box na lewej krawędzi dzioba (przejście kolor→białe tło), linie łączące, inset ~4×4 kafelki, podpis „every tile is a separate photograph". Podmieniono w `README.md`+`README.pl.md` (linia 17); `spectre_full.jpg` ZOSTAJE w tabeli progressive-zoom (linia 103).
-- ✓ **Audyt rozdzielczości galerii:** potwierdzono że tylko **photo/symbol/spectre = 16K**; **triangle (8192×4612) i hexagon (8192×6144) = 8K**. Etykiety w `docs/index.html` są uczciwe („8K"); plik hexagona myląco nazwany `hexagon_jump_16K.dzi` (realnie 8K) — kosmetyka, niewidoczna dla zwiedzających.
-- ✓ Commit `26c5d0a` wypchnięty na origin; branch == origin/main.
-
-## Co zostało (backlog sesji)
-
-- ⟳ **Galeria 5×16K (NASTĘPNY KROK):** swap triangle+hexagon na 16K — czeka na pliki od usera.
-- ⟳ **Krok 6 portfolio (standing):** adwersarialny audyt twierdzeń README.md/README.pl.md (każda liczba/feature/flaga/ścieżka pokryta kodem) → poprawki jednym commitem `docs(readme): fix unverified claims`. Nieaktualny w tej sesji, nadal otwarty.
-- ⟳ **Krok 5 portfolio:** PyInstaller `.exe` (model-free) — wysiłek wysoki, ROI średni; osobny projekt.
-- ⟳ **TODO odłożony:** pasek postępu „Export Deep Zoom" + `test_dzi` ([[project_dzi_gui_polish_todo]]).
-- ⟳ Świadomie ODŁOŻONE: Wariant C (A1/A2), ML/CLIP, Docker/plugin.
-
-## Aktywne pliki
-
-- `docs/index.html`, `docs/tiles/{showcase_triangle_*,hexagon_jump_16K}*` (cel swapu 16K)
-- `README.md` + `README.pl.md` (hero zmienione; cel Kroku 6)
-- `assets/examples/spectre_hero_magnifier.jpg` (nowe hero)
-- Generator (scratchpad, nie w repo): `gen_parrot_magnifier.py` (źródło: `output/github_readme/spectre_parrot_16K.jpg`, tile pitch ~140 px w 16K)
-
-## Otwarte pytania
-
-- Galeria: czy 5×16K zmieści się w budżecie GitHub Pages (obecnie ~165 MB piramid + 2×16K dojdzie ~70-100 MB)? Sprawdzić przy swapie.
-- Przy swapie: zmienić też mylącą nazwę `hexagon_jump_16K.dzi` na coś bez „16K" w starej wersji / nadać sensowny slug nowym plikom.
-
-## Do MEMORY.md (przeniesiono/zaktualizowano w tej sesji)
-
-- [Aktywne TODO] NOWY wpis [2026-06-28] „Galeria — podmiana triangle+hexagon na 16K (CZEKA NA USERA)" — audyt rozdzielczości + plan swapu + pułapki.
-- [Aktywne TODO] NOWY wpis [2026-06-28] „README hero = magnifier papugi 4×4" (commit `26c5d0a`) — co, dlaczego, generator, że `spectre_full.jpg` zostaje w tabeli zoom.
