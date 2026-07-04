@@ -16,6 +16,8 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
+from scipy.ndimage import label as _nd_label
+from scipy.spatial import ConvexHull, QhullError
 
 ASSETS_DIR = Path("assets/shape_schemes")
 OUT_DIR = Path("output/kite_schemes")
@@ -334,19 +336,20 @@ def _edge_arc(z1, z2, n=10):
 
 
 def gen_poincare():
-    """{7,3} continued OUTWARD by inversion, clipped to the frame (no bg).
+    """{7,3} in the BAND model - TOTAL redesign (user 2026-07-04b: the disk
+    version was impractical, 'remove the circle entirely').
 
-    User requirements (2026-07-04): NO background cells - the tiling itself
-    must reach every corner; iterate tiles outward; shrink the dominant central
-    heptagon; keep tile sizes closer together. A hyperbolic tiling only lives
-    inside the unit disk, so the corners are covered by its INVERSIVE
-    continuation: every tile is mirrored through the circle (v -> 1/conj(v)),
-    which makes the pattern grow outward again toward the corners - the
-    Escher-consistent way to 'stretch the elements to the rectangle edge and
-    clip'. A mild Moebius shift de-centres and slightly shrinks the central
-    heptagon; sizes now run big centre -> small rim -> big corners instead of
-    one giant tile plus dust.
-    """
+    The Poincare disk maps conformally onto an infinite horizontal strip by
+    w = (2/pi) * log((1+z)/(1-z))   (|Im w| < 1),
+    so the SAME hyperbolic {7,3} tiling runs left-right forever with no
+    circular horizon anywhere. Cell size depends only on the distance from
+    the strip's midline (factor ~cos(pi*y/2)); capping the window at
+    |y| <= W = 0.80 bounds the smallest cells at ~1/3 of the centre-row
+    cells - no singularity, no dust ring, yet the heptagons stay visibly
+    hyperbolic (three meet at every vertex, edges gently bowed). The window
+    needs disk tiles only up to |z| ~ 0.9, so the reflection BFS stops at a
+    LARGE diameter cutoff - orders of magnitude fewer tiles than the disk
+    version."""
     p, q = 7, 3
     # hyperbolic circumradius from the characteristic right triangle
     # (angles pi/p at centre, pi/q at vertex): cosh R = cot(pi/p) * cot(pi/q)
@@ -354,23 +357,22 @@ def gen_poincare():
     r0 = math.tanh(math.acosh(coshR) / 2)
     central = [r0 * cmath.exp(1j * (math.pi / 2 + 2 * math.pi * k / p)) for k in range(p)]
 
+    rng = np.random.default_rng(17)
     seen = set()
     result = []
-    queue = deque([(central, 0)])
-    while queue and len(result) < 30000:
-        poly, depth = queue.popleft()
+    queue = deque([(central, 0j, 0)])   # (heptagon, its hyperbolic centre, depth)
+    while queue and len(result) < 20000:
+        poly, hc, depth = queue.popleft()
         ctr = sum(poly) / p
-        # key granularity: fine enough not to merge genuinely distinct rim
-        # tiles (diam ~0.004), coarse enough to absorb reflection drift
         key = (round(ctr.real, 4), round(ctr.imag, 4))
         if key in seen:
             continue
         seen.add(key)
         diam = max(abs(a - b) for a in poly[:3] for b in poly[3:6])
-        if diam < 0.004:
+        if diam < 0.02:            # window uses |z| <= ~0.9 only: rim dust never needed
             continue
-        result.append((poly, depth))
-        if depth >= 12 or diam < 0.009:
+        result.append((poly, hc, depth))
+        if depth >= 14:
             continue
         for k in range(p):
             z1, z2 = poly[k], poly[(k + 1) % p]
@@ -378,59 +380,42 @@ def gen_poincare():
             if circ is None:
                 u = (z2 - z1) / abs(z2 - z1)
                 newp = [z1 + ((z - z1) / u).conjugate() * u for z in poly]
+                newc = z1 + ((hc - z1) / u).conjugate() * u
             else:
                 newp = [_reflect(z, circ) for z in poly]
-            queue.append((newp, depth + 1))
+                newc = _reflect(hc, circ)
+            queue.append((newp, newc, depth + 1))
 
     ring_pal = [(220, 170, 70), (170, 90, 80), (90, 120, 160),
                 (120, 160, 110), (150, 110, 160), (200, 130, 90), (100, 140, 150)]
-    # Mild Moebius shift: nudges the giant central heptagon off-centre (and
-    # shrinks it a little) without cramming everything against the rim - a
-    # window inside the disk cannot work, hyperbolic tiles there are FEW and
-    # huge (tested: W=0.52 leaves 15 visible tiles).
-    a = complex(0.26, 0.11)
-    W = 1.30                    # half-window: rim circle at ~77% of half-width
+    W = 0.80
 
-    def moeb(z):
-        return (z - a) / (1 - a.conjugate() * z)
+    def band(z):
+        return (2 / math.pi) * cmath.log((1 + z) / (1 - z))
 
-    def contains_origin(pts):
-        wn = 0
-        n = len(pts)
-        for i in range(n):
-            x0, y0 = pts[i]
-            x1, y1 = pts[(i + 1) % n]
-            if (y0 <= 0 < y1) or (y1 <= 0 < y0):
-                t = -y0 / (y1 - y0)
-                if x0 + t * (x1 - x0) > 0:
-                    wn += 1
-        return wn % 2 == 1
-
-    # thin dark disk under everything: hides the sub-pixel annulus at |w|=1
-    # where tiles below the diameter cutoff were dropped (reads as the shared
-    # outline between the disk and its inverted continuation, not as bg)
-    rim = [(1.02 * math.cos(2 * math.pi * t / 90), 1.02 * math.sin(2 * math.pi * t / 90))
-           for t in range(90)]
-    polys = [(rim, (10, 10, 12))]
-    for poly, depth in result:
-        pts = []
+    # whole heptagons are far too big for mosaic cells (33 in frame): split
+    # each into 7 kites [centre, edge-mid k-1, vertex k, edge-mid k] - the
+    # same khatam split as the girih decagons. The hyperbolic centre is
+    # carried through the reflections; edge mids come from the SAMPLED
+    # geodesic arcs, so both neighbouring cells share identical polylines
+    # (exact partition). Kites inherit the heptagon's ring colour with a
+    # per-kite variation -> 7-petal flowers.
+    polys = []
+    for poly, hc, depth in result:
+        arcs = [_edge_arc(poly[k], poly[(k + 1) % p], 6) for k in range(p)]
+        wc = band(hc)
+        base = ring_pal[depth % 7]
         for k in range(p):
-            pts += _edge_arc(poly[k], poly[(k + 1) % p], 6)
-        w = [(v.real, v.imag) for v in (moeb(z) for z in pts)]
-        cl = _clip_rect(w, W)
-        if len(cl) >= 3:
-            polys.append((cl, ring_pal[depth % 7]))
-        # ITERATE OUTWARD (user request): continue the pattern past the unit
-        # circle by inversion v -> 1/conj(v); tiles grow again toward the
-        # corners and get clipped by the rectangle. Skip the tile containing
-        # the origin (its inverted image is unbounded and lies beyond the
-        # frame corners anyway).
-        if contains_origin(w):
-            continue
-        inv = [(x / (x * x + y * y), y / (x * x + y * y)) for x, y in w]
-        cl = _clip_rect(inv, W)
-        if len(cl) >= 3:
-            polys.append((cl, ring_pal[depth % 7]))
+            half_prev = arcs[(k - 1) % p][3:]
+            half_next = arcs[k][:4]
+            kite = [wc] + [band(z) for z in half_prev + half_next]
+            xs = [v.real for v in kite]
+            ys = [v.imag for v in kite]
+            if min(xs) > W or max(xs) < -W or min(ys) > W or max(ys) < -W:
+                continue
+            cl = _clip_rect([(v.real, v.imag) for v in kite], W)
+            if len(cl) >= 3:
+                polys.append((cl, vary(rng, base, 12)))
     return polys, (-W, -W, W, W)
 
 
@@ -438,35 +423,47 @@ def gen_poincare():
 # 14. VODERBERG (stylised spiral of bent slivers)
 # ==========================================
 def gen_voderberg():
+    """Rev 2026-07-04b (user): the fixed 30-wedge count made the inner slivers
+    collapse toward the cap - impractical centre. Solved like sunburst/bloom:
+    every ring now gets its OWN wedge count ~ 2*pi*r_mid/target, so the bent
+    slivers keep a near-constant tangential size at every radius; the pole is
+    a plain cap of the same cell scale. Ring boundaries are circles, so
+    differing counts across rings only create T-junctions on the shared arcs
+    (fine for a mosaic partition - same as sierpinski row boundaries)."""
     rng = np.random.default_rng(14)
-    NWEDGE = 30
-    step = 360.0 / NWEDGE          # 12 deg
-    twist = step / 2               # spiral shear per ring
     bend = 5.0                     # radial edge bow (deg)
-    # rings run past the far corner (world R=0.92 -> corner ~1.30) so every angle
-    # is covered out to the rectangle edge; a solid centre cap replaces the
-    # spiral singularity (otherwise 30 sub-pixel slivers collide at r=0)
-    radii = [0.06, 0.20, 0.36, 0.55, 0.78, 1.05, 1.38, 1.75]
+    # rings run past the far corner (world R=0.92 -> corner ~1.30) so every
+    # angle is covered out to the rectangle edge
+    radii = [0.14, 0.30, 0.50, 0.74, 1.02, 1.36, 1.75]
+    target = 0.115                 # tangential cell size at ring mid-radius
     pal = [(205, 140, 60), (120, 130, 160), (180, 90, 70), (140, 160, 100)]
-
-    def radial(theta_deg, rin, rout, nseg=14):
-        pts = []
-        for i in range(nseg + 1):
-            t = i / nseg
-            r = rin + (rout - rin) * t
-            th = math.radians(theta_deg + twist * t + bend * math.sin(math.pi * t))
-            pts.append((r * math.cos(th), r * math.sin(th)))
-        return pts
-
     polys = []
+    # centre cap FIRST (rings paint over its rim, hiding chord mismatch)
+    ncap = 20
+    cap = [(0.148 * math.cos(2 * math.pi * t / ncap), 0.148 * math.sin(2 * math.pi * t / ncap))
+           for t in range(ncap)]
+    polys.append((cap, vary(rng, pal[0], 8)))
+    base_off = 0.0
     for m in range(len(radii) - 1):
         rin, rout = radii[m], radii[m + 1]
-        base_off = m * twist
-        for k in range(NWEDGE):
+        nw = max(8, int(round(2 * math.pi * ((rin + rout) / 2) / target)))
+        step = 360.0 / nw
+        twist = step / 2           # spiral shear per ring (in own step units)
+
+        def radial(theta_deg, nseg=14):
+            pts = []
+            for i in range(nseg + 1):
+                t = i / nseg
+                r = rin + (rout - rin) * t
+                th = math.radians(theta_deg + twist * t + bend * math.sin(math.pi * t))
+                pts.append((r * math.cos(th), r * math.sin(th)))
+            return pts
+
+        for k in range(nw):
             th0 = k * step + base_off
             th1 = th0 + step
-            e_left = radial(th0, rin, rout)
-            e_right = radial(th1, rin, rout)
+            e_left = radial(th0)
+            e_right = radial(th1)
             arc_out = [(rout * math.cos(math.radians(th0 + twist + (th1 - th0) * i / 6)),
                         rout * math.sin(math.radians(th0 + twist + (th1 - th0) * i / 6)))
                        for i in range(1, 6)]
@@ -476,11 +473,7 @@ def gen_voderberg():
             poly = e_left + arc_out + list(reversed(e_right)) + arc_in
             col = vary(rng, pal[(k + 2 * m) % 2 + 2 * (m % 2)], 14)
             polys.append((poly, col))
-    # solid centre cap (drawn last, on top of the innermost slivers)
-    ncap = 24
-    cap = [(0.075 * math.cos(2 * math.pi * t / ncap), 0.075 * math.sin(2 * math.pi * t / ncap))
-           for t in range(ncap)]
-    polys.append((cap, vary(rng, pal[0], 8)))
+        base_off += twist          # spiral shear keeps accumulating ring-to-ring
     R = 0.92
     return polys, (-R, -R, R, R)
 
@@ -688,19 +681,61 @@ def _girih_attempt(seed):
     # coverage: filled fraction of the central window (for best-of-seeds pick)
     box = int((RAD - 6.2) * RES), int((RAD + 6.2) * RES)
     coverage = occ_np[box[0]:box[1], box[0]:box[1]].mean()
-    polys = [(c2t(p), vary(rng, cols[nm], 8)) for p, nm in placed]
+    # Rev 2026-07-04b (user): a whole decagon is several times larger than any
+    # other cell (impractical, like the pre-fix radial centres). Partition
+    # every decagon into 10 congruent kites [centre, mid(k-1), vertex k,
+    # mid(k)] - the classic khatam split; each kite is comparable to a
+    # pentagon/rhomb cell and the 10-petal rosette look is a girih signature.
+    kite_pal = [(206, 162, 78), (186, 138, 64)]
+    polys = []
+    for p_, nm in placed:
+        if nm == "decagon":
+            c = sum(p_) / len(p_)
+            n = len(p_)
+            mids = [(p_[i] + p_[(i + 1) % n]) / 2 for i in range(n)]
+            for i in range(n):
+                kite = [c, mids[(i - 1) % n], p_[i], mids[i]]
+                polys.append((c2t(kite), vary(rng, kite_pal[i % 2], 8)))
+        else:
+            polys.append((c2t(p_), vary(rng, cols[nm], 8)))
+    # Hole fill (2026-07-04b, user): greedy growth tops out at ~94-99% - the
+    # leftover slivers read as BLACK HOLES in the frame. Label the empty
+    # raster components (the outside region touches the border and is
+    # skipped), emit each interior hole's convex hull as an extra cell,
+    # slightly inflated and painted LAST so any overlap with neighbours is
+    # sub-pixel and invisible under the outlines.
+    lab, nlab = _nd_label(~occ_np)
+    border = set(lab[0]) | set(lab[-1]) | set(lab[:, 0]) | set(lab[:, -1])
+    for l in range(1, nlab + 1):
+        if l in border:
+            continue
+        ys, xs = np.nonzero(lab == l)
+        if len(xs) < 8:
+            continue
+        pts = np.column_stack([xs, ys]).astype(float)
+        try:
+            hull = ConvexHull(pts)
+        except QhullError:
+            continue
+        hp = pts[hull.vertices]
+        c = hp.mean(axis=0)
+        hp = c + (hp - c) * 1.10
+        poly = [(x / RES - RAD, y / RES - RAD) for x, y in hp]
+        polys.append((poly, vary(rng, (150, 110, 150), 10)))
     return polys, coverage
 
 
 def gen_girih():
-    """Greedy girih growth is seed-sensitive; keep the best-covering attempt."""
+    """Greedy girih growth is seed-sensitive; keep the best-covering attempt.
+    Wider seed sweep + stricter early-out since 2026-07-04b: uncovered slivers
+    read as black holes in the frame (user report)."""
     best, best_cov = None, -1.0
-    for seed in range(11, 31):
+    for seed in range(11, 47):
         polys, cov = _girih_attempt(seed)
         print(f"      girih seed {seed}: coverage {cov:.3f}, {len(polys)} tiles")
         if cov > best_cov:
             best, best_cov = polys, cov
-        if cov > 0.985:
+        if cov > 0.997:
             break
     R = 6.0
     return best, (-R, -R, R, R)
@@ -710,13 +745,13 @@ def gen_girih():
 # MONTAGE
 # ==========================================
 SHAPES = [
-    ("girih", gen_girih, "11. GIRIH (perskie/Alhambra)", "dekagon + bowtie + pentagon + heksagon"),
+    ("girih", gen_girih, "11. GIRIH (perskie/Alhambra)", "dekagony=rozety 10 latawcow + bowtie/pentagon/hex"),
     ("ammann_beenker", gen_ammann_beenker, "12. AMMANN-BEENKER", "aperiodyczny 8-krotny: kwadraty + romby 45 st."),
     ("pinwheel", gen_pinwheel, "13. PINWHEEL (Conway-Radin)", "trojkaty 1:2:sqrt5, nieskonczenie wiele orientacji"),
-    ("voderberg", gen_voderberg, "14. VODERBERG (stylizowany)", "spirala wygietych klinow (dziewieciokat)"),
+    ("voderberg", gen_voderberg, "14. VODERBERG (stylizowany)", "spirala wygietych klinow, sektory rosna z promieniem"),
     ("cairo", gen_cairo, "15. CAIRO (bruk kairski)", "pieciokaty koszykowe, 4 orientacje"),
     ("floret", gen_floret, "16. FLORET (dual snub hex)", "kwiaty: 6 pieciokatnych platkow, chiralny"),
-    ("poincare", gen_poincare, "17. POINCARE {7,3}", "wycinek dysku (Moebius), przyciety do ramki"),
+    ("poincare", gen_poincare, "17. POINCARE {7,3} PAS", "model pasmowy - bez okregu, heptagony 3-w-wierzcholku"),
     ("escher_lizard", gen_escher, "18. ESCHER-STYLE (p1)", "deformacja heksagonu, organiczne stworki"),
     ("gosper", gen_gosper, "19. GOSPER ISLAND", "fraktalne wyspy (hexflake), granica Gospera"),
     ("weave", gen_weave, "20. WEAVE (tkanina)", "wstegi zdjec przeplatane nad/pod"),
