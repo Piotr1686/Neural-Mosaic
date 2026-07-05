@@ -99,7 +99,7 @@ Filtr Estety (lekcje z rewizji kształtów): motyw musi przetrwać podmianę na 
 
 Kolejność wdrażania (uzasadnienie synergii): **hilbert_flow → quadtree_detail → fractal_crossfade → zoom_movie**. Najpierw edycje rdzenia dopasowania (hilbert i quadtree dzielą pętlę `_do_render` — jeden kontekst edycji), potem funkcje kompozycyjne (crossfade, zoom) traktujące silnik jak czarną skrzynkę. Hilbert idzie pierwszy, bo podnosi jakość *każdego* renderu — także kafli używanych potem w quadtree/crossfade/zoom.
 
-> **Zależność od PLAN_SHAPES:** spec quadtree zakłada rejestr `SHAPE_MODES` z refaktoru PLAN_SHAPES Sprint 2. Jeśli wdrożenie fraktali wyprzedzi tamten refaktor, `quadtree` wchodzi jako zwykła gałąź `shape_mode` i migruje do rejestru razem z resztą.
+> **Stan kodu (zweryfikowany 2026-07-05):** rejestr `SHAPE_MODES` + `ShapeSpec` już istnieją (`engine_smart.py:156`, kinds `grid`/`polygon`) — quadtree wchodzi jako nowy `kind`. Golden testy SHA-256 czterech reprezentatywnych kształtów też istnieją (`tests/test_golden_shapes.py`) — to gotowa siatka bezpieczeństwa dla refaktoru pętli w F1a.
 
 ## A. `hilbert_flow` — cichy tryb doboru (fundament)
 
@@ -236,3 +236,104 @@ Kolejność wdrażania (uzasadnienie synergii): **hilbert_flow → quadtree_deta
 1. **Determinizm** — test bit-w-bit dla każdej nowej ścieżki.
 2. **Brak regresji baseline'u przy trybach OFF** — `--flow none` i istniejące kształty identyczne bit-w-bit z obecnym zachowaniem.
 3. **Jawne seedowanie każdego nowego RNG** — fBm w crossfade to pierwsze RNG w ścieżce renderu portfolio (silnik jest dziś RNG-free).
+
+---
+
+# Plan wykonawczy — krótkie sprinty (dla Opus/Sonnet po `/start`)
+
+## Kontekst dla wykonawcy (przeczytaj PRZED pierwszym sprintem)
+
+**Jak korzystać z tego planu:** po `/start` znajdź pierwszy nieodhaczony sprint poniżej i wykonaj go. Po KAŻDYM sprincie: (1) pełne testy zielone (`pytest tests/`), (2) commit (conventional, typ podany przy sprincie), (3) odhacz checkbox `[x]` w tym pliku i dopisz hash commitu, (4) pokaż userowi wynik do werdyktu — **nie zaczynaj następnego sprintu bez werdyktu**. Specyfikacje merytoryczne (zakres/przepływ/testy/ryzyka) są w sekcjach A-D wyżej — sprinty poniżej tylko tną je na kroki i dodają kotwice w kodzie; przy sprzeczności specyfikacja A-D wygrywa.
+
+**Stan kodu (zweryfikowany 2026-07-05, HEAD `e4061d9`, 209 testów zielonych):**
+- `SHAPE_MODES` + `ShapeSpec` — `engine_smart.py:156` (kinds `grid`/`polygon`; `shape_names()` = single source of truth dla GUI dropdown, CLI choices, showcase, benchmark).
+- **Pętla dopasowania jest chunkowana i SKLEJONA z kompozycją** (`engine_smart.py:819-903`): per chunk GEMM `_euclid_f32` → `argpartition` top_k=200 → sekwencyjne przypisanie (forbidden z `neighbors_map`, `freq_penalty` z `used_counts**2`, l. 839-867) → **natychmiastowy** `alpha_composite` (l. 869-896). Rozdzielenie przypisania od kompozycji to sedno F1a.
+- `search_radius = base_s * 1.5` (l. 769) → `_get_neighbors_map` (l. 210, cache po `_nkey`). `allow_mirror` → `reshape(-1, 5, 5, 3)` (l. 798), mutex z `edge_aware`.
+- Golden testy: `tests/test_golden_shapes.py` — słownik `GOLDEN` (SHA-256, 4 kształty × border), deterministyczna biblioteka 32 kafli + gradient analityczny. Wzorzec do rozszerzania.
+- `make_zoom_gif.py`: `_easing` (l. 41), `_crop_box` (l. 45), `_render_frame` (l. 89), `make_zoom_gif` (l. 97), zapis GIF `loop=0` (l. 157).
+- CLI: `src/cli.py`, grupa „Smart engine options" (l. 82), `--shape` czyta `_SMART_SHAPES`.
+
+**Twarde zasady projektu (z MEMORY.md — nie łam):** silnik jest dziś RNG-free — każdy nowy RNG z jawnym seedem; EDGE_WEIGHT identyczne indexer↔engine; allow_mirror ↔ edge_aware mutex; Pillow przyjmuje ujemne `px,py` — NIE clampuj (kliny krawędziowe); ASCII-only w print() w `src/tools/*` i `tests/*` (terminal CP1250); interpreter: `C:/Users/plazo/miniconda3/envs/mosaic/python.exe` (nie `conda run`); żadnego CLIP/semantyki.
+
+**Routing modeli:** sprinty dotykające `_do_render` (F1a, F1b, F2a, O3b) = **HIGH (Opus)**; nowe narzędzia i GUI (F2b, F3, F4a, F4b, O1, O2a, O2b, O3a, O3c) = **LOW (Sonnet) z eskalacją do HIGH** po pierwszej nieudanej próbie naprawy.
+
+## Faza I — finaliści
+
+### F1a — refaktor pętli na trzy fazy (bez zmiany zachowania) — `refactor(engine)` ~1 dzień [HIGH]
+- [ ] Rozdziel `engine_smart.py:819-903` na: **(1)** przebieg kandydatów — GEMM po chunkach, zapis `cand_idx[N,k]`, `cand_dist[N,k]` (+ warianty flip przy mirror); **(2)** przebieg przypisań — obecna logika forbidden/freq_penalty/used_counts, iteracja w porządku rastrowym (jak dziś); **(3)** przebieg kompozycji — paste z gotowych `sector_assignments` (przenieś l. 869-896 w całości, razem z tint i `_LazyMask.render()`).
+- Uwaga na RAM: kandydaci dla WSZYSTKICH sektorów naraz — ogranicz zapis do `top_k=200` par (idx, dist) jak dziś; `progress_cb` przenieś do fazy kompozycji (to ona jest wolna).
+- **DoD:** wszystkie 209 testów + `test_golden_shapes.py` bit-w-bit BEZ zmiany hashy (to jest cały sens sprintu). Zero nowych flag, zero zmian sygnatur publicznych.
+
+### F1b — hilbert_flow właściwy — `feat(engine)` ~1-2 dni [HIGH]
+- [ ] Helper `_hilbert_order(cols, rows)` (xy2d, potęga 2 ≥ max(cols,rows); sektory spoza kwadratu na końcu rastrowo). Nowy parametr `flow_mode` przez `create_mosaic`/`render_preview` → `_do_render` (`auto`→hilbert dla `square`, `none` wpp). W fazie przypisań: porządek Hilberta + okno ostatnich K (deque, stała w kodzie, start K=8) + kara `smooth_w * ||LAB_kand − LAB_poprz||` (stała, start mała — waliduj wizualnie). W fazie flow zawęź kandydatów do 64 z 200.
+- [ ] GUI: checkbox „Flow (smooth ordering)" aktywny tylko dla `square`; CLI: `--flow {auto,hilbert,none}`.
+- **DoD:** testy z sekcji A (determinizm; `--flow none` = golden baseline; inwariant okna K; fallback hexagon) + render porównawczy square z/bez flow dla usera (side-by-side — to na nim zapadnie werdykt o wartościach K/kary).
+
+### F2a — quadtree_detail: rdzeń + CLI — `feat(engine)` ~2 dni [HIGH]
+- [ ] `_build_quadtree(target, min_leaf, thresh, max_depth)` (mapa wariancji/energii krawędzi raz, kolejka węzłów, liście-kwadraty). Nowy `kind="quadtree"` w `ShapeSpec` + wpis `"quadtree"` w `SHAPE_MODES` + gałąź w `_do_render` budująca `sectors_data` z liści (reuse ścieżki bbox → `_compute_sector_feature`; composite prostokątny bez maski). Anti-repeat sąsiedzki WYŁĄCZONY (pomiń `_get_neighbors_map`), freq_penalty zostaje. Flow=none dla quadtree (wymusić).
+- [ ] CLI: `--qt-sensitivity FLOAT`, `--qt-max-depth INT` (`--shape quadtree` wejdzie samo przez `shape_names()`).
+- **DoD:** testy z sekcji B (determinizm podziału; cap min/max liścia; monotoniczność liczby liści względem czułości; sanity cechy 75-dim) + render CLI na portrecie dla usera.
+
+### F2b — quadtree_detail: GUI + schemat — `feat(gui)` ~1 dzień [LOW]
+- [ ] 2 suwaki („Detail sensitivity", „Max subdivisions" 0-3) widoczne tylko dla `quadtree`; wyszarz „Flow" gdy quadtree. Schemat `assets/shape_schemes/quadtree.png` do podglądu GUI (adaptuj panel z `gen_fractal_feature_schemes.py` do konwencji shape_schemes).
+- **DoD:** GUI odpala render quadtree bez wyjątków; schemat pokazuje się po wyborze kształtu; werdykt wizualny usera na portrecie (domyślne wartości suwaków).
+
+### F3 — fractal_crossfade (MVP = 1 klatka) — `feat(tools)` ~2-3 dni [LOW]
+- [ ] Nowy `src/tools/make_crossfade.py` wg sekcji C: dwa `create_mosaic` (czarna skrzynka, twarda walidacja identycznych parametrów), pole fBm w rozdzielczości siatki (`np.random.default_rng(seed)` — jawny seed w CLI), wybór A/B per komórka + pas ε blend 50/50, kompozycja z dwóch gotowych rastrów + maska pikselowa. CLI jak w sekcji C.
+- **DoD:** testy z sekcji C (determinizm bit-w-bit; walidacja geometrii → czytelny błąd; t=0/t=1 → czyste B/A; reprodukowalność pola fBm) + klatka 8K z seed-sweep (kilka seedów) do wyboru przez usera.
+
+### F4a — zoom_movie: przygotowanie — `refactor(tools)` ~1 dzień [LOW]
+- [ ] Wydziel `_easing`/`_crop_box`/`_render_frame` z `make_zoom_gif.py` jako publiczne (`easing`/`crop_box`/`render_frame`, stare nazwy jako aliasy dla zgodności). Helper doboru kafla-portalu: cecha 5×5 LAB miniatury obrazu docelowego vs cechy sektorów renderu → argmin.
+- **DoD:** istniejące testy zielone; test jednostkowy doboru portalu (znana para → oczekiwany argmin, bez renderu GIF).
+
+### F4b — zoom_movie: orkiestracja — `feat(tools)` ~2-3 dni [LOW, eskaluj przy szwie przejścia]
+- [ ] Nowy `src/tools/make_zoom_movie.py` wg sekcji D: łańcuch ~4 obrazów w pętli, nurkowanie w kafel-portal (easing log, centrowanie `cx_frac/cy_frac` na środku kafla), crossfade kilku klatek w punkcie maksymalnego zbliżenia, zapętlony GIF 640×360 (`loop=0`), bez ffmpeg.
+- **DoD:** testy z sekcji D (determinizm hashy klatek; ciągłość pętli; brak ffmpeg) + GIF z realnego łańcucha 4 obrazów usera — werdykt na płynności przejścia (najtrudniejszy moment całego planu; jeśli szew skali widoczny po 2 podejściach → eskalacja HIGH).
+
+> **CHECKPOINT po F4b:** user ocenia komplet 4 finalistów. Decyzje: (1) czy komplet jest dość „zoomowy" — jeśli NIE → bramka O2 otwarta; (2) który artefakt idzie do galerii/README (PLAN_PORTFOLIO.md).
+
+## Faza II — odłożeni (każdy za bramką; nie zaczynaj bez spełnienia warunku)
+
+### O1 — dla_growth_timelapse „Reveal" — `feat(tools)` ~1-2 dni [LOW] — **bramka: automatyczna po F1-F4** (tani dodatek)
+- [ ] DLA na kracie komórek z ograniczonym błądzeniem (jawny seed; naiwna DLA mieli — walker startuje z pierścienia wokół klastra). Porządek ujawniania = kolejność agregacji; klatki co N kafli w rozdzielczości podglądu z gotowych `sector_assignments` (reuse trójfazowej pętli z F1a — faza kompozycji z permutowanym porządkiem); GIF.
+- [ ] CLI-first: `--reveal {instant,dla}` przy renderze (GUI backlog).
+- **DoD:** determinizm dla seeda; finał bit-w-bit identyczny ze zwykłym renderem (to tylko permutacja kolejności wklejania); GIF demo dla usera.
+
+### O2a — lsystem_veins: maska + recolor-LAB — `feat(engine)` ~2 dni [LOW] — **bramka: werdykt usera z CHECKPOINTU („za mało zoomowy")**
+- [ ] Generator maski: L-system (2-3 predefiniowane gramatyki + jawny seed), żółw na bitmapie w rozdzielczości siatki, grubość maleje z głębokością rekursji. Komórki pod maską → transformacja recolor-LAB przypisanego kafla (wariant M ze specyfikacji; NIE glify Typo — to L, osobna decyzja). CLI: `--overlay {none,veins}` + `--veins-seed`, `--veins-grammar`.
+- **DoD:** determinizm; `--overlay none` = baseline bit-w-bit; renders 2-3 gramatyk dla usera (werdykt: „ornament, nie uszkodzenie").
+
+### O2b — lsystem_veins: GUI + strojenie — `feat(gui)` ~1 dzień [LOW] — **bramka: akcept O2a**
+- [ ] Dropdown „Overlay: none / veins" + seed/gramatyka w zakładce Smart; strojenie siły recoloru wg werdyktu z O2a.
+- **DoD:** GUI działa bez wyjątków; werdykt wizualny usera.
+
+### O3a — pifs_self_collage: spike GO/NO-GO — `feat(tools)` ~2 dni [LOW] — **bramka: user ogłasza koniec fazy portfolio**
+- [ ] Prototyp offline `src/tools/proto_pifs.py` (NIE silnik): bloki range 75 px, pula domain 150→75 px × 8 izometrii, cechy 5×5 LAB + cKDTree, least-squares kontrast/jasność domain→range. Cel: zweryfikować JEDYNE ryzyko dyskwalifikujące — czy wynik kolapsuje do „rozmytego oryginału".
+- **DoD:** 3 obrazy testowe (portret/krajobraz/tekstura) + metryka dystansu wynik↔oryginał + werdykt usera **GO/NO-GO**. NO-GO = koniec tematu (wpis do „Odrzuconych" w MEMORY.md); nie budować silnika na zapas.
+
+### O3b — pifs: silnik — `feat(engine)` ~3-4 dni [HIGH] — **bramka: GO z O3a**
+- [ ] `src/engine_pifs.py` strukturą lustrzany do `engine_smart` (ta sama architektura co obecne silniki); cache indeksu domain per obraz (hash pliku → pkl w `data/`), by nie łamać modelu „indeks raz, render szybko" przy powtórnych renderach.
+- **DoD:** testy jednostkowe (izometrie, least-squares, determinizm); render 8K bez OOM (RAM 32 GB, profil jak A1).
+
+### O3c — pifs: GUI/CLI — `feat(gui)` ~2 dni [LOW] — **bramka: akcept O3b**
+- [ ] Trzecia zakładka obok Smart/Typo + `--engine pifs` w CLI; podpis eksponatu (WOW intelektualny wymaga wyjaśnienia — tekst do galerii).
+- **DoD:** pełny przepływ GUI→render→DZI; testy CLI; werdykt usera.
+
+## Tablica postępu
+
+| Sprint | Status | Commit | Werdykt usera |
+|---|---|---|---|
+| F1a trójfazowa pętla | ☐ | — | — |
+| F1b hilbert_flow | ☐ | — | — |
+| F2a quadtree rdzeń | ☐ | — | — |
+| F2b quadtree GUI | ☐ | — | — |
+| F3 crossfade | ☐ | — | — |
+| F4a zoom przygotowanie | ☐ | — | — |
+| F4b zoom orkiestracja | ☐ | — | — |
+| **CHECKPOINT** | ☐ | — | decyzja: bramka O2 + wybór artefaktu |
+| O1 reveal DLA | ☐ | — | — |
+| O2a veins rdzeń | ☐ | — | — |
+| O2b veins GUI | ☐ | — | — |
+| O3a pifs spike | ☐ | — | GO / NO-GO |
+| O3b pifs silnik | ☐ | — | — |
+| O3c pifs GUI | ☐ | — | — |
