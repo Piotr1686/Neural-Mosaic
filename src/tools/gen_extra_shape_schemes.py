@@ -28,6 +28,14 @@ kept shapes; every cell is part of the tessellation itself:
 
 ETAP A fully resolved - no shape uses a background grid any more.
 
+Rev 2026-07-04b #2 (user verdicts after the montage review):
+  - sierpinski_b / sierpinski_c REJECTED and removed -> sierpinski_d
+    (checkerboard carriers: every 2nd triangle in a row, +1 shift per row)
+  - sierpinski_carpet: solids recurse 1 level deeper than holes (smallest
+    hole always 3x the background cell)
+  - rosette_fractal / voderberg / girih: radial centres rebuilt from cells
+    of the SAME shape as the rest of each tessellation (no separate cap)
+
 Run:
   C:/Users/plazo/miniconda3/envs/mosaic/python.exe -m src.tools.gen_extra_shape_schemes
 """
@@ -123,10 +131,15 @@ def _sierp4(A, B, C, depth, cells):
 
 def _gen_sierpinski_variant(seed, carrier):
     """Shared frame for the interleaved-hole Sierpinski variants (user request
-    2026-07-04: the LARGEST holes must alternate with plain triangles every
-    other position, i.e. be evenly distributed instead of clustering).
-    `carrier(r, c, up)` decides which triangles get the full depth-3 gasket
-    (big central hole); the rest get the capped `_sierp4` treatment."""
+    2026-07-04: the LARGEST holes must be evenly distributed instead of
+    clustering). Unlike the base `sierpinski` the triangle grid is NOT
+    row-staggered here - aligned rows are what lets the carrier pattern offset
+    the big holes row to row (with the stagger, per-row carrier picks land in
+    the same columns again: the variant-C failure). `carrier(r, t)` decides
+    from the row index r and the SEQUENTIAL position t within the row
+    (counting BOTH up and down triangles) which triangles get the full
+    depth-3 gasket (big central hole); the rest get the capped `_sierp4`
+    treatment."""
     rng = np.random.default_rng(seed)
     R = 1.0
     S = 0.95
@@ -138,15 +151,14 @@ def _gen_sierpinski_variant(seed, carrier):
     cols = int(2 * R / S) + 3
     for r in range(-1, rows):
         y0 = -R + r * H
-        xoff = (S / 2) if (r % 2) else 0.0
         for c in range(-2, cols):
-            x0 = -R + c * S + xoff
+            x0 = -R + c * S
             BL, BR, TOP = complex(x0, y0), complex(x0 + S, y0), complex(x0 + S / 2, y0 + H)
             TL, TR, BOT = complex(x0 + S / 2, y0 + H), complex(x0 + 1.5 * S, y0 + H), complex(x0 + S, y0)
-            for tri, up, par in [((BL, BR, TOP), True, (r + c) % 2),
-                                 ((TL, TR, BOT), False, (r + c + 1) % 2)]:
+            for tri, t, par in [((BL, BR, TOP), 2 * c, (r + c) % 2),
+                                ((TL, TR, BOT), 2 * c + 1, (r + c + 1) % 2)]:
                 cells = []
-                if carrier(r, c, up):
+                if carrier(r, t):
                     _sierpinski_cells(tri[0], tri[1], tri[2], 3, cells)
                 else:
                     _sierp4(tri[0], tri[1], tri[2], 2, cells)
@@ -159,18 +171,16 @@ def _gen_sierpinski_variant(seed, carrier):
     return polys, (-R, -R, R, R)
 
 
-def gen_sierpinski_b():
-    """Variant B: carriers = UP triangles only, i.e. every second triangle
-    along each strip. With the S/2 row stagger the big holes form a uniform
-    triangular (hex) lattice - all pointing down, evenly spaced."""
-    return _gen_sierpinski_variant(212, lambda r, c, up: up)
-
-
-def gen_sierpinski_c():
-    """Variant C: checkerboard carriers alternating per row (even rows: UP
-    triangles, odd rows: DOWN triangles), so the big holes alternate
-    orientation row by row and interleave into an even rhombic lattice."""
-    return _gen_sierpinski_variant(213, lambda r, c, up: up == (r % 2 == 0))
+def gen_sierpinski_d():
+    """Variant D - CHECKERBOARD (user verdict 2026-07-04b; variants B 'up
+    only' and C 'row interleave' REJECTED and removed): carriers alternate
+    with filled triangles every second triangle SEQUENTIALLY within each row
+    (regardless of up/down orientation), and the pattern shifts by ONE
+    TRIANGLE on every next row - carrier = (t + r) % 2. On the non-staggered
+    grid this offsets the big holes by half a period row to row (and flips
+    their orientation), so they weave an even checkerboard instead of
+    stacking into columns."""
+    return _gen_sierpinski_variant(214, lambda r, t: (t + r) % 2 == 0)
 
 
 # ==========================================
@@ -178,10 +188,14 @@ def gen_sierpinski_c():
 # ==========================================
 def _carpet_cells(x, y, s, depth, cells):
     """Classic Sierpinski carpet recursion: the 8 ring sub-squares recurse,
-    the centre sub-square is a 'hole' cell tagged with its level. Every
-    square (solid AND hole) is a cell - no actual gaps; the fractal reads
-    through the level-based colouring (holes = progressively larger photos,
-    same plan as the Sierpinski triangle)."""
+    the centre sub-square is a 'hole' cell tagged with its level - EXCEPT at
+    depth 1 (rev 2026-07-04b, user): a level-1 hole has the SAME size as the
+    solid background cells, so it becomes indistinguishable once photos
+    replace the colours. The depth-1 centre square is emitted as a plain
+    solid cell instead, which makes the smallest real hole (level 2) always
+    3x the background cell. Every square (solid AND hole) is a cell - no
+    actual gaps; the fractal reads through the level-based colouring (holes =
+    progressively larger photos, same plan as the Sierpinski triangle)."""
     if depth == 0:
         cells.append(((x, y, s), 0))
         return
@@ -189,20 +203,23 @@ def _carpet_cells(x, y, s, depth, cells):
     for a in range(3):
         for b in range(3):
             if a == 1 and b == 1:
-                cells.append(((x + t, y + t, t), depth))
+                cells.append(((x + t, y + t, t), depth if depth >= 2 else 0))
             else:
                 _carpet_cells(x + a * t, y + b * t, t, depth - 1, cells)
 
 
 def gen_sierpinski_carpet():
-    """Sierpinski carpet (user request 2026-07-04): one depth-3 carpet spans
-    the whole square frame - a true partition into axis-aligned squares
-    (512 solid cells of side 1/27 + holes of side 1/3, 1/9, 1/27 by level).
-    The carpet is a rep-tile, so the frame itself repeats seamlessly."""
+    """Sierpinski carpet (user request 2026-07-04): one carpet spans the
+    whole square frame - a true partition into axis-aligned squares. Rev
+    2026-07-04b (user): solids recurse one level DEEPER than the holes
+    (depth 4, holes only from level 2 up), so the background texture is a
+    uniform 1/81 grid and the smallest hole (1/27) stays 3x bigger than any
+    background cell - distinguishable after photo substitution. The carpet
+    is a rep-tile, so the frame itself repeats seamlessly."""
     rng = np.random.default_rng(40)
     cells = []
-    _carpet_cells(-1.0, -1.0, 2.0, 3, cells)
-    unit = 2.0 / 27.0
+    _carpet_cells(-1.0, -1.0, 2.0, 4, cells)
+    unit = 2.0 / 81.0
     pal_solid = [(224, 170, 92), (214, 148, 70)]
     pal_hole = [(44, 48, 62), (58, 50, 66), (48, 62, 58)]
     polys = []
@@ -977,8 +994,10 @@ def gen_rosette_fractal():
     NOTHING at the pole - impractical centre. Solved like sunburst/bloom
     (cells ~constant size at every radius): the sector count DOUBLES every m
     rings and the ring ratio is g = 2^(1/m), so tangential cell size resets
-    each doubling instead of vanishing inward; the pole is capped by a plain
-    N0-gon of the same cell scale. A doubling strip fans each coarse sector
+    each doubling instead of vanishing inward. Rev 2026-07-04b #2 (user): the
+    plain N0-gon cap is gone too - the pole is a fan of N0 leaf/gap triangles
+    of the SAME shape as the rings, converging tip-first at the centre (no
+    separate 'circle'). A doubling strip fans each coarse sector
     into 3 triangles; every edge is still sampled identically by both cells
     (true partition, T-junction-free within strips)."""
     rng = np.random.default_rng(39)
@@ -1023,9 +1042,18 @@ def gen_rosette_fractal():
             polys.append((pts, col))
 
     polys = []
-    cap = [(radii[0] * math.cos(vang(0, k)), radii[0] * math.sin(vang(0, k)))
-           for k in range(N0)]
-    emit(cap, vary(rng, pal_leaf[0], 8))
+    # centre fan: N0 triangles converging tip-first at the pole; the outer
+    # edge reuses edge(), so the fan meets ring 0 with identical sampling
+    # (exact seams). Leaf/gap alternation continues the ring motif inward.
+    for k in range(N0):
+        a1 = vang(0, k + 1)
+        fan = ([(0.0, 0.0)] + edge(0, k, 0, k + 1)
+               + [(radii[0] * math.cos(a1), radii[0] * math.sin(a1))])
+        if k % 2 == 0:
+            col = vary(rng, pal_leaf[(k // 2) % len(pal_leaf)], 10)
+        else:
+            col = vary(rng, pal_gap[(k // 2) % 2], 8)
+        emit(fan, col)
     for i in range(len(radii) - 1):
         Ni, Nj = Ns[i], Ns[i + 1]
         if Nj == Ni:
@@ -1058,8 +1086,7 @@ def gen_rosette_fractal():
 # ==========================================
 SHAPES = [
     ("sierpinski", gen_sierpinski, "21. TROJKAT SIERPINSKIEGO", "[B] cegielkowy rozklad dziur, kazdy trojkat=foto"),
-    ("sierpinski_b", gen_sierpinski_b, "21b. SIERPINSKI B (co drugi)", "[B] duze dziury tylko w trojkatach 'gora' - siatka hex"),
-    ("sierpinski_c", gen_sierpinski_c, "21c. SIERPINSKI C (przeplot)", "[B] duze dziury gora/dol naprzemiennie co rzad"),
+    ("sierpinski_d", gen_sierpinski_d, "21d. SIERPINSKI SZACHOWNICA", "[B] dziury co drugi trojkat w rzedzie, +1 co rzad"),
     ("kepler_ty", gen_kepler_ty, "22. KEPLER 'Ty' (Penrose)", "[B] pentagrid de Bruijna, romby 5-krotne"),
     ("gereh", gen_gereh, "23. GEREH (partycja)", "[B] same czworokaty: 8 rombow gwiazdy + latawce"),
     ("dragon", gen_dragon, "24. TWINDRAGON (reptile)", "[B] smoki kafelkuja plaszczyzne, zero nakladania"),
@@ -1074,8 +1101,8 @@ SHAPES = [
     ("stagger_tri", gen_stagger_tri, "36. TROJKATY PRZESUNIETE", "[B] przesuniete warstwy (b. sierpinski)"),
     ("scales", gen_scales, "37. LUSKI (scales)", "[B] rybie luski: kopula + 2 luki, partycja"),
     ("pebbles", gen_pebbles, "38. PEBBLES (kamyki)", "[B] Voronoi o zmiennej gestosci ziaren"),
-    ("rosette_fractal", gen_rosette_fractal, "39. ROZETA SPIRALNA (aloes)", "[B] log-polarne liscie, sektory x2 co 3 pierscienie"),
-    ("sierpinski_carpet", gen_sierpinski_carpet, "40. DYWAN SIERPINSKIEGO", "[B] rekurencja 3x3, dziury = wieksze zdjecia"),
+    ("rosette_fractal", gen_rosette_fractal, "39. ROZETA SPIRALNA (aloes)", "[B] liscie x2 co 3 pierscienie, srodek=wachlarz lisci"),
+    ("sierpinski_carpet", gen_sierpinski_carpet, "40. DYWAN SIERPINSKIEGO", "[B] tlo 1/81, najmniejsza dziura 3x wieksza od tla"),
 ]
 
 

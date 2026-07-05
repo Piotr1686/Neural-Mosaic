@@ -426,23 +426,21 @@ def gen_voderberg():
     """Rev 2026-07-04b (user): the fixed 30-wedge count made the inner slivers
     collapse toward the cap - impractical centre. Solved like sunburst/bloom:
     every ring now gets its OWN wedge count ~ 2*pi*r_mid/target, so the bent
-    slivers keep a near-constant tangential size at every radius; the pole is
-    a plain cap of the same cell scale. Ring boundaries are circles, so
-    differing counts across rings only create T-junctions on the shared arcs
-    (fine for a mosaic partition - same as sierpinski row boundaries)."""
+    slivers keep a near-constant tangential size at every radius. Rev
+    2026-07-04b #2 (user): the plain cap disk is gone too - the innermost
+    ring starts AT r = 0, so the centre is a ring of bent slivers of the
+    SAME shape as the rest, converging vertex-first at the pole (no separate
+    'circle'). Ring boundaries are circles, so differing counts across rings
+    only create T-junctions on the shared arcs (fine for a mosaic partition -
+    same as sierpinski row boundaries)."""
     rng = np.random.default_rng(14)
     bend = 5.0                     # radial edge bow (deg)
     # rings run past the far corner (world R=0.92 -> corner ~1.30) so every
-    # angle is covered out to the rectangle edge
-    radii = [0.14, 0.30, 0.50, 0.74, 1.02, 1.36, 1.75]
+    # angle is covered out to the rectangle edge; first ring starts at the pole
+    radii = [0.0, 0.14, 0.30, 0.50, 0.74, 1.02, 1.36, 1.75]
     target = 0.115                 # tangential cell size at ring mid-radius
     pal = [(205, 140, 60), (120, 130, 160), (180, 90, 70), (140, 160, 100)]
     polys = []
-    # centre cap FIRST (rings paint over its rim, hiding chord mismatch)
-    ncap = 20
-    cap = [(0.148 * math.cos(2 * math.pi * t / ncap), 0.148 * math.sin(2 * math.pi * t / ncap))
-           for t in range(ncap)]
-    polys.append((cap, vary(rng, pal[0], 8)))
     base_off = 0.0
     for m in range(len(radii) - 1):
         rin, rout = radii[m], radii[m + 1]
@@ -467,9 +465,10 @@ def gen_voderberg():
             arc_out = [(rout * math.cos(math.radians(th0 + twist + (th1 - th0) * i / 6)),
                         rout * math.sin(math.radians(th0 + twist + (th1 - th0) * i / 6)))
                        for i in range(1, 6)]
-            arc_in = [(rin * math.cos(math.radians(th1 - (th1 - th0) * i / 6)),
-                       rin * math.sin(math.radians(th1 - (th1 - th0) * i / 6)))
-                      for i in range(1, 6)]
+            arc_in = ([] if rin == 0.0 else
+                      [(rin * math.cos(math.radians(th1 - (th1 - th0) * i / 6)),
+                        rin * math.sin(math.radians(th1 - (th1 - th0) * i / 6)))
+                       for i in range(1, 6)])
             poly = e_left + arc_out + list(reversed(e_right)) + arc_in
             col = vary(rng, pal[(k + 2 * m) % 2 + 2 * (m % 2)], 14)
             polys.append((poly, col))
@@ -685,8 +684,10 @@ def _girih_attempt(seed):
     # other cell (impractical, like the pre-fix radial centres). Partition
     # every decagon into 10 congruent kites [centre, mid(k-1), vertex k,
     # mid(k)] - the classic khatam split; each kite is comparable to a
-    # pentagon/rhomb cell and the 10-petal rosette look is a girih signature.
-    kite_pal = [(206, 162, 78), (186, 138, 64)]
+    # pentagon/rhomb cell. Rev 2026-07-04b #2 (user): the kites STAY, but the
+    # 2-tone wheel colouring is dropped - one decagon-gold base with the same
+    # per-tile vary as every other cell, so the rosettes read as ordinary
+    # tiles of the tessellation (coherent with the rest).
     polys = []
     for p_, nm in placed:
         if nm == "decagon":
@@ -695,7 +696,7 @@ def _girih_attempt(seed):
             mids = [(p_[i] + p_[(i + 1) % n]) / 2 for i in range(n)]
             for i in range(n):
                 kite = [c, mids[(i - 1) % n], p_[i], mids[i]]
-                polys.append((c2t(kite), vary(rng, kite_pal[i % 2], 8)))
+                polys.append((c2t(kite), vary(rng, cols["decagon"], 8)))
         else:
             polys.append((c2t(p_), vary(rng, cols[nm], 8)))
     # Hole fill (2026-07-04b, user): greedy growth tops out at ~94-99% - the
@@ -748,7 +749,7 @@ SHAPES = [
     ("girih", gen_girih, "11. GIRIH (perskie/Alhambra)", "dekagony=rozety 10 latawcow + bowtie/pentagon/hex"),
     ("ammann_beenker", gen_ammann_beenker, "12. AMMANN-BEENKER", "aperiodyczny 8-krotny: kwadraty + romby 45 st."),
     ("pinwheel", gen_pinwheel, "13. PINWHEEL (Conway-Radin)", "trojkaty 1:2:sqrt5, nieskonczenie wiele orientacji"),
-    ("voderberg", gen_voderberg, "14. VODERBERG (stylizowany)", "spirala wygietych klinow, sektory rosna z promieniem"),
+    ("voderberg", gen_voderberg, "14. VODERBERG (stylizowany)", "spirala wygietych klinow, srodek=kliny w biegunie"),
     ("cairo", gen_cairo, "15. CAIRO (bruk kairski)", "pieciokaty koszykowe, 4 orientacje"),
     ("floret", gen_floret, "16. FLORET (dual snub hex)", "kwiaty: 6 pieciokatnych platkow, chiralny"),
     ("poincare", gen_poincare, "17. POINCARE {7,3} PAS", "model pasmowy - bez okregu, heptagony 3-w-wierzcholku"),
