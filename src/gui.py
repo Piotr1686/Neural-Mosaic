@@ -30,6 +30,7 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from .engine_smart import SmartEngine
 from .engine_typo import TypoEngine
+from .render_control import RenderCancelled
 from .preview import PreviewRenderer
 from .indexer_smart import SmartIndexer, LIBRARY_DIRS
 from .font_groups import GROUP_LABELS
@@ -480,6 +481,17 @@ class App(ctk.CTk):
         self.progress_render_p.grid(row=4, column=0, pady=(0, 10))
         self.progress_render_p.grid_remove()
 
+        # Cancel is only visible while a render thread is running; it sets the
+        # threading.Event polled by SmartEngine._do_render at loop boundaries.
+        self.cancel_event_p = None
+        self.btn_cancel_p = ctk.CTkButton(
+            prev_frame, text="Cancel render", width=140, height=28,
+            fg_color="#8a2a2a", hover_color="#a83232",
+            command=self._cancel_render_p,
+        )
+        self.btn_cancel_p.grid(row=5, column=0, pady=(0, 10))
+        self.btn_cancel_p.grid_remove()
+
         self.btn_run_p = ctk.CTkButton(
             outer,
             text="RENDER SMART MOSAIC",
@@ -628,6 +640,15 @@ class App(ctk.CTk):
         self.progress_render_t.set(0)
         self.progress_render_t.grid(row=4, column=0, pady=(0, 10))
         self.progress_render_t.grid_remove()
+
+        self.cancel_event_t = None
+        self.btn_cancel_t = ctk.CTkButton(
+            prev_frame, text="Cancel render", width=140, height=28,
+            fg_color="#8a2a2a", hover_color="#a83232",
+            command=self._cancel_render_t,
+        )
+        self.btn_cancel_t.grid(row=5, column=0, pady=(0, 10))
+        self.btn_cancel_t.grid_remove()
 
         self.btn_run_t = ctk.CTkButton(
             outer,
@@ -1026,10 +1047,15 @@ class App(ctk.CTk):
         self.btn_run_p.configure(state="disabled")
         self.progress_render_p.set(0)
         self.progress_render_p.grid()
+        self.cancel_event_p = threading.Event()
+        self.btn_cancel_p.configure(state="normal")
+        self.btn_cancel_p.grid()
 
         def _progress(done, total):
             frac = done / total if total else 0
             self.after(0, lambda f=frac: self.progress_render_p.set(f))
+
+        cancel_event = self.cancel_event_p
 
         def _run():
             try:
@@ -1037,9 +1063,11 @@ class App(ctk.CTk):
                     self.path_p, out, res, shape,
                     tile_scale=scale, border_mode=border_mode,
                     blend_strength=blend_strength, tint_strength=tint_strength,
-                    progress_cb=_progress,
+                    progress_cb=_progress, cancel_event=cancel_event,
                 )
                 self.log("DONE! Smart Mosaic saved.")
+            except RenderCancelled:
+                self.log("Render cancelled - no output file written.")
             except Exception as e:
                 self.log(f"Error: {e}")
                 import traceback
@@ -1048,8 +1076,16 @@ class App(ctk.CTk):
                 self.after(0, self._finish_render_p)
         threading.Thread(target=_run, daemon=True).start()
 
+    def _cancel_render_p(self):
+        if self.cancel_event_p is not None:
+            self.cancel_event_p.set()
+            self.btn_cancel_p.configure(state="disabled")
+            self.log("Cancelling render...")
+
     def _finish_render_p(self):
         self.progress_render_p.grid_remove()
+        self.btn_cancel_p.grid_remove()
+        self.cancel_event_p = None
         self.btn_run_p.configure(state="normal")
 
     def export_dzi(self):
@@ -1110,10 +1146,15 @@ class App(ctk.CTk):
         self.btn_run_t.configure(state="disabled")
         self.progress_render_t.set(0)
         self.progress_render_t.grid()
+        self.cancel_event_t = threading.Event()
+        self.btn_cancel_t.configure(state="normal")
+        self.btn_cancel_t.grid()
 
         def _progress(done, total):
             frac = done / total if total else 0
             self.after(0, lambda f=frac: self.progress_render_t.set(f))
+
+        cancel_event = self.cancel_event_t
 
         def _run():
             self.log(f"Starting Multi-Font Render...")
@@ -1123,9 +1164,11 @@ class App(ctk.CTk):
                     self.path_t, out, res, mode,
                     scale=scale,
                     variation=variation,
-                    progress_cb=_progress,
+                    progress_cb=_progress, cancel_event=cancel_event,
                 )
                 self.log("DONE! Symbol Mosaic saved.")
+            except RenderCancelled:
+                self.log("Render cancelled - no output file written.")
             except Exception as e:
                 self.log(f"Error: {e}")
                 import traceback
@@ -1134,8 +1177,16 @@ class App(ctk.CTk):
                 self.after(0, self._finish_render_t)
         threading.Thread(target=_run, daemon=True).start()
 
+    def _cancel_render_t(self):
+        if self.cancel_event_t is not None:
+            self.cancel_event_t.set()
+            self.btn_cancel_t.configure(state="disabled")
+            self.log("Cancelling render...")
+
     def _finish_render_t(self):
         self.progress_render_t.grid_remove()
+        self.btn_cancel_t.grid_remove()
+        self.cancel_event_t = None
         self.btn_run_t.configure(state="normal")
 
     # ------------------------------------------------------------------ #

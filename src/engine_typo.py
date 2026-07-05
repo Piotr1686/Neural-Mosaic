@@ -15,6 +15,7 @@ import os
 import random
 
 from .font_groups import get_fonts_for_groups, get_font_group, GROUP_LABELS
+from .render_control import RenderCancelled
 
 # Font groups rendered with Latin/ASCII glyphs. For these we keep a curated
 # ASCII subset (high-legibility, smooth density ramp). Every other group is an
@@ -101,7 +102,7 @@ class TypoEngine:
         return img
 
     def process(self, input_path, output_path, res_key="4K", mode="black_on_white",
-                scale=1.0, variation=20, progress_cb=None):
+                scale=1.0, variation=20, progress_cb=None, cancel_event=None):
         """Public API — resolves res_key and delegates to _do_render."""
         if not self.library:
             return
@@ -117,7 +118,7 @@ class TypoEngine:
         w, h = original.size
         out_w = target_res
         out_h = int(target_res * h / w)
-        result = self._do_render(original, out_w, out_h, cell_w, cell_h, mode, variation, progress_cb=progress_cb)
+        result = self._do_render(original, out_w, out_h, cell_w, cell_h, mode, variation, progress_cb=progress_cb, cancel_event=cancel_event)
         result.save(output_path, dpi=(300, 300))
 
     def render_preview(self, input_path, short_edge=512, mode="black_on_white",
@@ -134,12 +135,15 @@ class TypoEngine:
         cell_h = int(cell_w * 1.6)
         return self._do_render(original, out_w, out_h, cell_w, cell_h, mode, variation)
 
-    def _do_render(self, original, out_w, out_h, cell_w, cell_h, mode, variation, progress_cb=None):
+    def _do_render(self, original, out_w, out_h, cell_w, cell_h, mode, variation, progress_cb=None, cancel_event=None):
         """Core rendering kernel — accepts a pre-opened PIL Image, returns PIL Image.
 
         ``progress_cb``, if given, is called ``progress_cb(done, total)`` every 50 rows
         (and once at completion), where ``total`` is the row count. Used by the GUI to
         drive a progress bar.
+
+        ``cancel_event`` (``threading.Event``), if given, is polled once per row;
+        when set, the render aborts by raising RenderCancelled (no output file).
         """
         font_size = int(cell_h * 0.9)
         cols = out_w // cell_w
@@ -165,6 +169,8 @@ class TypoEngine:
         print(f"Grid: {cols}x{rows} | Cell: {cell_w}x{cell_h}px | Rendering...")
 
         for r in range(rows):
+            if cancel_event is not None and cancel_event.is_set():
+                raise RenderCancelled("Render cancelled by user.")
             pos_y = r * cell_h
             for c in range(cols):
                 pos_x = c * cell_w

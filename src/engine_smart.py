@@ -25,6 +25,7 @@ from scipy.spatial import cKDTree
 import skimage.color
 
 from .spectre_tiling import generate_spectre_tiling
+from .render_control import RenderCancelled
 
 # Must match EDGE_WEIGHT in indexer_smart.py.
 EDGE_WEIGHT = 2.0
@@ -352,7 +353,7 @@ class SmartEngine:
             box = (0, offset, src_w, offset + new_h)
         return img.crop(box).resize((target_w, target_h), Image.Resampling.LANCZOS)
 
-    def create_mosaic(self, target_path, output_path, resolution_key, shape_mode, tile_scale, border_mode=False, blend_strength=0.0, tint_strength=0.0, progress_cb=None):
+    def create_mosaic(self, target_path, output_path, resolution_key, shape_mode, tile_scale, border_mode=False, blend_strength=0.0, tint_strength=0.0, progress_cb=None, cancel_event=None):
         """Public API — resolves resolution_key and delegates to _do_render."""
         if not self.paths:
             print("ERROR: Index not loaded.")
@@ -363,7 +364,7 @@ class SmartEngine:
         img_w, img_h = target.size
         scale_res = target_long / max(img_w, img_h)
         target = target.resize((int(img_w * scale_res), int(img_h * scale_res)), Image.Resampling.LANCZOS)
-        result = self._do_render(target, shape_mode, tile_scale, border_mode, blend_strength, tint_strength, progress_cb=progress_cb)
+        result = self._do_render(target, shape_mode, tile_scale, border_mode, blend_strength, tint_strength, progress_cb=progress_cb, cancel_event=cancel_event)
         result.save(output_path, quality=95)
 
     def render_preview(self, target_path, short_edge=512, shape_mode="hexagon_romb",
@@ -488,13 +489,21 @@ class SmartEngine:
             "feature": self._compute_sector_feature(feat_img, edge_aware),
         }
 
-    def _do_render(self, target, shape_mode, tile_scale, border_mode=False, blend_strength=0.0, tint_strength=0.0, progress_cb=None):
+    def _do_render(self, target, shape_mode, tile_scale, border_mode=False, blend_strength=0.0, tint_strength=0.0, progress_cb=None, cancel_event=None):
         """Core rendering kernel — accepts a pre-scaled PIL Image, returns PIL Image.
 
         ``progress_cb``, if given, is called ``progress_cb(done, total)`` after each
         matching chunk during the final assembly loop (the dominant cost), where
         ``total`` is the number of sectors. Used by the GUI to drive a progress bar.
+
+        ``cancel_event`` (``threading.Event``), if given, is polled at loop
+        boundaries in both the sector-building and matching passes; when set,
+        the render aborts by raising RenderCancelled (no partial output).
         """
+        def _check_cancel():
+            if cancel_event is not None and cancel_event.is_set():
+                raise RenderCancelled("Render cancelled by user.")
+
         edge_aware, allow_mirror = self._resolve_matching_modes()
 
         target_w, target_h = target.size
@@ -527,6 +536,7 @@ class SmartEngine:
             print("Building kite grid...")
             target_kites = []
             for q in range(-range_q, range_q):
+                _check_cancel()
                 # centre the r-window on -q/2 (same fix as _gen_kites): the shear
                 # term q/2 in cy displaced the scanned band at large |q|, leaving
                 # the bottom-right corner without kites (fixed 2026-07-04)
@@ -546,6 +556,8 @@ class SmartEngine:
 
             print(f"Rendering {len(target_kites)} kites...")
             for i_kite, (cx, cy, k) in enumerate(tqdm(target_kites, desc="Sampling kite sectors")):
+                if i_kite % 256 == 0:
+                    _check_cancel()
                 poly = self._get_kite_poly(cx, cy, s, k)
                 kite_cx = sum(p[0] for p in poly) / 4
                 kite_cy = sum(p[1] for p in poly) / 4
@@ -605,6 +617,8 @@ class SmartEngine:
 
             scale_aa = 4
             for i_spec, spec in enumerate(tqdm(spectres, desc="Sampling spectre sectors")):
+                if i_spec % 256 == 0:
+                    _check_cancel()
                 spec_cx = sum(p[0] for p in spec.points) / len(spec.points)
                 spec_cy = sum(p[1] for p in spec.points) / len(spec.points)
                 padded_poly = [
@@ -704,6 +718,7 @@ class SmartEngine:
             # 11.1 accepts negative dest in alpha_composite, so the partially
             # visible edge tiles composite correctly.
             for r in range(-1, rows):
+                _check_cancel()
                 for c in range(-1, cols):
                     pos_x = c * step_x
                     pos_y = r * step_y
@@ -819,6 +834,7 @@ class SmartEngine:
         top_k = min(len(self.paths), 200)
 
         for i in tqdm(range(0, len(sectors_data), chunk_size)):
+            _check_cancel()
             end = min(i + chunk_size, len(sectors_data))
             chunk_tgt = tgt32[i:end]
 
