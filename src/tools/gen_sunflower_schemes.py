@@ -1,33 +1,40 @@
-"""Generate 5 PROPOSAL schemes for the SUNFLOWER SEEDS tile pattern.
+"""Generate PROPOSAL schemes for the SUNFLOWER SEEDS tile pattern.
 
 User request 2026-07-05 (reference photos: golden sunflower-head mosaics).
 Seeds follow Vogel's phyllotaxis: point n sits at r = c*sqrt(n),
-theta = n * golden angle (137.508 deg). Five different takes for the user to
-choose from; every variant is a TRUE tessellation (cells abut exactly):
+theta = n * golden angle (137.508 deg). Every variant is a TRUE tessellation
+(cells abut exactly): Voronoi = partition by construction, the rhombs mesh is
+verified numerically (raster gap/overlap report).
 
-  A. sunflower_classic - Voronoi of the Vogel lattice, pole centred, golden
-     seed palette (closest to reference photo 1). Differs from the existing
-     `bloom` shape (multicolour 21-arm palette) by density + gold tones.
-  B. sunflower_corner  - same Voronoi but the pole sits in the bottom-left
-     corner: parastichy arcs sweep across the whole frame.
-  C. sunflower_rhombs  - parastichy quad mesh, fixed family pair (13, 21):
-     quad n = seeds (n, n+13, n+34, n+21). Every interior seed joins exactly
-     4 quads, so the mesh is a genuine quadrilateral tiling; rhombi grow and
-     shear outward exactly like reference photo 3. The central hole is closed
-     by a fan of triangles converging at the pole (pole + each inner-boundary
-     edge) - the approved "same-shape centre" pattern.
-  D. sunflower_grande  - Voronoi of a growth-graded lattice r = c*n^0.66:
-     seeds enlarge toward the rim like a real ripening flower head.
-  E. sunflower_field   - one Voronoi over the union of THREE Vogel heads:
-     flower heads press into each other like a sunflower field.
+Verdict rev 2 (user, 2026-07-05): `sunflower_classic` dropped - too close to
+the existing `bloom` shape; `sunflower_corner` and `sunflower_field` REJECTED
+outright (generators removed; git history keeps them). Current pool of 8:
 
-Coverage of variant C is verified numerically (raster overlap/gap report)
-because the quad mesh is hand-built; Voronoi variants are partitions by
-construction. Pure PIL + numpy + scipy, deterministic. ASCII-only prints.
+  classic-family (uniform seeds, structurally distinct from bloom):
+  1. sunflower_soft   - Vogel Voronoi after 2 Lloyd relaxations: rounder,
+                        more even "pebble" seeds, spiral arms preserved
+  2. sunflower_disc   - two-zone head like a real flower: fine dark disc
+                        florets in the centre, coarser golden seeds outside
+  3. sunflower_rings  - seed radii softly snapped to concentric rows: seeds
+                        line up in circular courses (reference photo 1)
+  4. sunflower_rhombs - log-spiral parastichy quad mesh (21/34); centre
+                        rebuilt per verdict: two rings of quasi-rhombs
+                        continuing the mesh inward + small petals at the pole
+                        (previous single long petals looked alien)
+
+  grande-family (growth-graded; grande itself kept unchanged for verdict):
+  5. sunflower_grande - Voronoi of r = c*n^0.66 (user pick - do not touch)
+  6. grande_xl        - steeper growth r = c*n^0.75: tiny centre, huge rim
+  7. grande_soft      - grande geometry + 1 Lloyd pass: rounder cells,
+                        gentler size ramp
+  8. grande_inverse   - reversed gradient r = c*n^0.40: large seeds in the
+                        centre shrinking toward a fine rim
+
+Pure PIL + numpy + scipy, deterministic. ASCII-only prints.
 
 Outputs:
   output/sunflower_proposals/<name>.png            (720x720 panels)
-  output/sunflower_proposals/proposals_sunflower.png (montage 2x3)
+  output/sunflower_proposals/proposals_sunflower.png (montage 4x2)
 
 Run:
   C:/Users/plazo/miniconda3/envs/mosaic/python.exe -m src.tools.gen_sunflower_schemes
@@ -87,17 +94,51 @@ def _radial_mix(base, far, t):
     return tuple(int(b + (f - b) * t) for b, f in zip(base, far))
 
 
+def _poly_centroid(cl):
+    a = cx = cy = 0.0
+    for (x1, y1), (x2, y2) in zip(cl, cl[1:] + cl[:1]):
+        cr = x1 * y2 - x2 * y1
+        a += cr
+        cx += (x1 + x2) * cr
+        cy += (y1 + y2) * cr
+    if abs(a) < 1e-12:
+        return None
+    return (cx / (3 * a), cy / (3 * a))
+
+
+def lloyd_relax(pts, iters=1, clip=1.6):
+    """Move each generator to its Voronoi-cell centroid (unbounded cells stay
+    put). Rounds the seeds toward even 'pebbles' while the spiral arms of the
+    underlying phyllotaxis survive the relaxation."""
+    pts = np.array(pts, dtype=float)
+    for _ in range(iters):
+        vor = Voronoi(pts)
+        new = pts.copy()
+        for i in range(len(pts)):
+            reg = vor.regions[vor.point_region[i]]
+            if not reg or -1 in reg:
+                continue
+            poly = [tuple(vor.vertices[v]) for v in reg]
+            cl = _clip_rect(poly, clip)
+            if len(cl) < 3:
+                continue
+            cen = _poly_centroid(cl)
+            if cen is not None:
+                new[i] = cen
+        pts = new
+    return pts
+
+
 # ---------------------------------------------------------------------------
-# A. classic centred head
+# 1. soft: Lloyd-relaxed classic head
 # ---------------------------------------------------------------------------
-def gen_sunflower_classic():
+def gen_sunflower_soft():
     rng = np.random.default_rng(51)
     N = 1400
     c = (math.sqrt(2.0) + 0.45) / math.sqrt(N)
-    pts = vogel_points(N, c)
+    pts = lloyd_relax(vogel_points(N, c), iters=2)
     polys = []
     for i, cl in voronoi_cells(pts):
-        # subtle 21-arm shading keeps the spiral readable but stays golden
         arm = (i + 1) % 21
         base = HONEY if arm % 3 == 0 else GOLD
         polys.append((cl, vary(rng, base, 12)))
@@ -105,21 +146,57 @@ def gen_sunflower_classic():
 
 
 # ---------------------------------------------------------------------------
-# B. pole in the corner
+# 2. disc: fine dark centre florets, coarser golden rim (real head anatomy)
 # ---------------------------------------------------------------------------
-def gen_sunflower_corner():
+def gen_sunflower_disc():
     rng = np.random.default_rng(52)
-    N = 2600
-    diag = 2 * math.sqrt(2.0)
-    c = (diag + 0.45) / math.sqrt(N)
-    pole = (-R, -R)
-    pts = vogel_points(N, c, pole=pole)
+    K = 380                                # florets in the central disc
+    disc_r = 0.42
+    c1 = disc_r / math.sqrt(K)
+    c2 = 1.7 * c1
+    reach = math.sqrt(2.0) + 0.45
+    N = K + int((reach ** 2 - disc_r ** 2) / (c2 ** 2))
+    pts = np.empty((N, 2))
+    for n in range(1, N + 1):
+        if n <= K:
+            rr = c1 * math.sqrt(n)
+        else:                              # continue area growth, coarser
+            rr = math.sqrt(disc_r ** 2 + (c2 ** 2) * (n - K))
+        aa = n * GOLDEN
+        pts[n - 1] = (rr * math.cos(aa), rr * math.sin(aa))
+    dark = (104, 70, 34)
     polys = []
     for i, cl in voronoi_cells(pts):
-        cx = sum(p[0] for p in cl) / len(cl)
-        cy = sum(p[1] for p in cl) / len(cl)
-        t = min(1.0, math.hypot(cx - pole[0], cy - pole[1]) / diag)
-        polys.append((cl, vary(rng, _radial_mix(HONEY, RUST, t), 10)))
+        if i < K:
+            polys.append((cl, vary(rng, dark, 10)))
+        else:
+            polys.append((cl, vary(rng, GOLD, 12)))
+    return polys, (-R, -R, R, R)
+
+
+# ---------------------------------------------------------------------------
+# 3. rings: seed radii softly snapped into concentric courses
+# ---------------------------------------------------------------------------
+def gen_sunflower_rings():
+    rng = np.random.default_rng(56)
+    N = 1400
+    c = (math.sqrt(2.0) + 0.45) / math.sqrt(N)
+    d = 1.9 * c                            # course (row) spacing
+    pts = np.empty((N, 2))
+    rows = np.empty(N, dtype=int)
+    for n in range(1, N + 1):
+        rr = c * math.sqrt(n)
+        row = int(rr / d)
+        rows[n - 1] = row
+        # 70% snap toward the row centre keeps courses visible without
+        # making the generators exactly co-circular (Voronoi stays stable)
+        rr = 0.7 * (d * (row + 0.5)) + 0.3 * rr
+        aa = n * GOLDEN
+        pts[n - 1] = (rr * math.cos(aa), rr * math.sin(aa))
+    polys = []
+    for i, cl in voronoi_cells(pts):
+        base = HONEY if rows[i] % 2 == 0 else OCHRE
+        polys.append((cl, vary(rng, base, 10)))
     return polys, (-R, -R, R, R)
 
 
@@ -155,10 +232,11 @@ def gen_sunflower_rhombs():
         quads.append((n, [P(n), P(n + F1), P(n + F1 + F2), P(n + F2)]))
 
     # Inner boundary edges (used by exactly one quad, near the pole) form a
-    # closed 55-edge loop. 55 pole triangles would be 9:1 slivers (the exact
-    # defect the user rejected in earlier shapes), so consecutive edges are
-    # grouped into ~11 broad petals - polygons [pole, v0..v5] converging at
-    # the pole (approved same-shape-centre pattern) with a sane ~2:1 aspect.
+    # closed 55-edge loop. Verdict rev 2: the centre must RESEMBLE the
+    # surrounding rhombi, so the mesh is continued inward by two concentric
+    # rings of quasi-rhombs (loop scaled toward the pole at 0.70 and 0.42 -
+    # one quad per boundary edge, same size progression as the log mesh) and
+    # only the innermost disc becomes 11 small petals converging at the pole.
     edge_count = {}
     for n, q in quads:
         for a, b in zip(q, q[1:] + q[:1]):
@@ -179,17 +257,41 @@ def gen_sunflower_rhombs():
             break
         loop.append(nxt)
         prev, cur = cur, nxt
-    per_petal = 5
-    fans = []
-    for s in range(0, len(loop), per_petal):
-        seg = loop[s:s + per_petal + 1]
-        if s + per_petal >= len(loop):
-            seg = loop[s:] + [loop[0]]     # close the last petal on the seam
-        fans.append([(0.0, 0.0)] + seg)
 
+    def scaled(v, s):
+        return (v[0] * s, v[1] * s)
+
+    # The 55-edge loop is denser than the mesh itself (~34 quads per ring of
+    # circumference), so per-edge rings degenerate into a sunburst of slivers
+    # (two earlier drafts). Instead ONE transition ring whose cells each span
+    # TWO loop edges (~28 cells = mesh-quad width) lands on a smooth circle,
+    # and the circle splits into 14 petals converging at the pole (~2:1).
+    L = len(loop)
+    r_mean = sum(math.hypot(*v) for v in loop) / L
+    ring_r = 0.80 * r_mean
+
+    def on_circle(v, radius):
+        vr = math.hypot(*v)
+        return (v[0] / vr * radius, v[1] / vr * radius)
+
+    pairs = [(i, min(i + 2, L)) for i in range(0, L - 1, 2)]
+    if pairs[-1][1] != L:
+        pairs[-1] = (pairs[-1][0], L)      # odd L: last cell spans the seam
+    circle = []
     polys = []
-    for petal in fans:
-        polys.append((petal, vary(rng, OCHRE, 10)))
+    for j, (a, b) in enumerate(pairs):
+        w0 = on_circle(loop[a], ring_r)
+        w1 = on_circle(loop[b % L], ring_r)
+        circle.append(w0)
+        outer = [loop[k % L] for k in range(b, a - 1, -1)]   # reversed arc
+        base = HONEY if j % 2 == 0 else GOLD
+        polys.append(([w0, w1] + outer, vary(rng, base, 10)))
+    M = len(circle)                        # ~28 circle vertices
+    for s in range(0, M, 2):
+        seg = circle[s:s + 3]
+        if s + 2 >= M:
+            seg = circle[s:] + [circle[0]]  # close on the seam
+        polys.append(([(0.0, 0.0)] + seg, vary(rng, OCHRE, 10)))
     for n, q in quads:
         cl = _clip_rect(q, R)
         if len(cl) < 3:
@@ -219,38 +321,42 @@ def gen_sunflower_grande():
 
 
 # ---------------------------------------------------------------------------
-# E. field of three heads
+# grande variants (grande itself above stays untouched per verdict)
 # ---------------------------------------------------------------------------
-def gen_sunflower_field():
-    rng = np.random.default_rng(55)
-    dark = (96, 62, 30)                    # disc centre of a real flower head
-    # One big head whose lattice reaches past every corner (it owns the
-    # background), plus two smaller heads pressed into it. Equal-radius heads
-    # interleave everywhere and the spirals dissolve into noise - verified on
-    # the first draft; big+small keeps every head's spiral readable.
-    # (pole, radius, cell size, base colour): one big head owns the frame,
-    # one denser medium head presses into it - two heads read cleanly, three
-    # equal ones dissolved into noise at their triple boundary.
-    heads = [((-0.45, -0.40), 2.70, 0.052, (216, 170, 70)),
-             ((0.52, 0.48), 1.00, 0.038, (196, 138, 58))]
-    all_pts, owner = [], []
-    for hid, (pole, radius, cell, _) in enumerate(heads):
-        n = int((radius / cell) ** 2)
-        all_pts.append(vogel_points(n, radius / math.sqrt(n), pole=pole))
-        owner.append(np.full(n, hid))
-    all_pts = np.vstack(all_pts)
-    owner = np.concatenate(owner)
+def _graded_head(rng, seed_pts, dark_to_gold=True):
+    """Shared body for the grande family: Voronoi of a graded lattice with the
+    grande radial palette (dark centre -> gold rim, or reversed)."""
     polys = []
-    for i, cl in voronoi_cells(all_pts):
-        pole, radius, _, base = heads[owner[i]]
-        cx = sum(x for x, _ in cl) / len(cl)
-        cy = sum(y for _, y in cl) / len(cl)
-        # dark disc centre fading to the head's own gold at its rim, so the
-        # three heads read as flowers instead of undifferentiated noise
-        t = min(1.0, math.hypot(cx - pole[0], cy - pole[1]) / radius)
-        # soften: dark disc only in the innermost ~quarter of each head
-        polys.append((cl, vary(rng, _radial_mix(dark, base, 0.3 + 0.7 * t), 10)))
+    for i, cl in voronoi_cells(seed_pts):
+        cen = _poly_centroid(cl)
+        if cen is None:
+            continue
+        t = min(1.0, math.hypot(*cen) / math.sqrt(2.0))
+        if not dark_to_gold:
+            t = 1.0 - t
+        polys.append((cl, vary(rng, _radial_mix(RUST, HONEY, t), 10)))
     return polys, (-R, -R, R, R)
+
+
+def gen_grande_xl():
+    rng = np.random.default_rng(57)
+    N, p = 550, 0.75
+    c = (math.sqrt(2.0) + 0.45) / (N ** p)
+    return _graded_head(rng, vogel_points(N, c, power=p))
+
+
+def gen_grande_soft():
+    rng = np.random.default_rng(58)
+    N, p = 1500, 0.66
+    c = (math.sqrt(2.0) + 0.45) / (N ** p)
+    return _graded_head(rng, lloyd_relax(vogel_points(N, c, power=p), iters=1))
+
+
+def gen_grande_inverse():
+    rng = np.random.default_rng(59)
+    N, p = 1100, 0.40
+    c = (math.sqrt(2.0) + 0.45) / (N ** p)
+    return _graded_head(rng, vogel_points(N, c, power=p), dark_to_gold=False)
 
 
 # ---------------------------------------------------------------------------
@@ -278,16 +384,22 @@ def coverage_report(polys, world, res=600):
 
 
 PROPOSALS = [
-    ("sunflower_classic", gen_sunflower_classic,
-     "A. KLASYCZNY (Voronoi Vogela)", "biegun w srodku, zlote ziarna", False),
-    ("sunflower_corner", gen_sunflower_corner,
-     "B. NAROZNY", "biegun w rogu, luki przez caly kadr", False),
+    ("sunflower_soft", gen_sunflower_soft,
+     "1. SOFT (Lloyd x2)", "wygladzone, rowniejsze ziarna; spirale zostaja", False),
+    ("sunflower_disc", gen_sunflower_disc,
+     "2. DISC (dwie strefy)", "drobne ciemne kwiatki w srodku, grubsze zloto wokol", False),
+    ("sunflower_rings", gen_sunflower_rings,
+     "3. RINGS (rzedy koncentryczne)", "ziarna dosniete do okregow, rzedy jak na fot. 1", False),
     ("sunflower_rhombs", gen_sunflower_rhombs,
-     "C. ROMBY SPIRALNE (log, 21/34)", "samopodobne romby rosna od srodka, wachlarz w biegunie", True),
+     "4. ROMBY SPIRALNE v2", "srodek: 2 pierscienie quasi-rombow + male platki", True),
     ("sunflower_grande", gen_sunflower_grande,
-     "D. WZROST ZIAREN (r=c*n^0.66)", "ziarna rosna ku obwodowi", False),
-    ("sunflower_field", gen_sunflower_field,
-     "E. POLE SLONECZNIKOW (2 glowy)", "duza glowa + gestsza mniejsza, scisniete Voronoiem", False),
+     "5. GRANDE (r=c*n^0.66)", "faworyt - bez zmian, do werdyktu", False),
+    ("grande_xl", gen_grande_xl,
+     "6. GRANDE XL (n^0.75)", "mocniejszy gradient: male centrum, wielki obwod", False),
+    ("grande_soft", gen_grande_soft,
+     "7. GRANDE SOFT (Lloyd x1)", "grande wygladzone, lagodniejsza rampa", False),
+    ("grande_inverse", gen_grande_inverse,
+     "8. GRANDE INVERSE (n^0.40)", "odwrotnie: wielkie centrum, drobny obwod", False),
 ]
 
 
@@ -305,8 +417,8 @@ def main():
         panels[name] = img
         print(f"            {len(polys)} cells -> {name}.png")
 
-    PW, TH = 640, 58
-    cols_n, rows_n = 3, 2
+    PW, TH = 560, 58
+    cols_n, rows_n = 4, 2
     mont = Image.new("RGB", (PW * cols_n, (PW + TH) * rows_n), (10, 10, 12))
     draw = ImageDraw.Draw(mont)
     try:
