@@ -159,9 +159,20 @@
 - Pula: **43 nazwy / 19 paneli extra** (montaż 4×5) + 10 Fable. Selekcja finalna (w tym wybór wariantu sierpińskiego) → user; potem Sprint 2 wiring.
 - **Werdykty usera (koniec sesji 2026-07-04b):** `sierpinski_b` i `sierpinski_c` ODRZUCONE — chce SZACHOWNICY: duże trójkąty naprzemiennie z wypełnionymi w rzędzie, każdy kolejny rząd przesunięty o jeden. `sierpinski_carpet` — wada: najmniejsze „puste" kwadraty (1/27) mają ten sam rozmiar co wypełnione ⇒ po podmianie na zdjęcia nieodróżnialne. Czapki/wypełniacze środka w `rosette_fractal`/`voderberg`/`girih` — NIE osobny kształt: środek ma być z kafelków TEGO SAMEGO kształtu co reszta teselacji, co najwyżej delikatnie zmodyfikowanych (np. zbiegających się wierzchołkami w centrum).
 
+[2026-07-05] **KSZTAŁTY: pakiet 3 poprawek WDROŻONY + proces adwersarialny „fraktale jako funkcjonalność" (Sprinty 1-3 z 4)** (commit kodu 49e0874 — NIE wypchnięty; 209 testów zielonych)
+- **Pakiet poprawek (werdykty 04b):** `sierpinski_d` SZACHOWNICA — carrier=(t+r)%2 po pozycji SEKWENCYJNEJ t w rzędzie (licząc oba typy trójkątów), siatka BEZ staggera (⚠ to stagger ustawiał dziury z powrotem w kolumny — przyczyna porażki wariantu C); b/c usunięte (kod+PNG). `sierpinski_carpet` — depth 4 z dziurami tylko od poziomu ≥2 (tło = jednolita siatka 1/81, najmniejsza dziura 1/27 = 3× tła). Środki z kafli tego samego kształtu: `rosette_fractal` = wachlarz 12 trójkątów liść/przerwa zbiegających się w biegunie (zewn. krawędź przez edge() ⇒ szwy dokładne), `voderberg` = pierścienie od r=0 (8 wygiętych klinów w biegunie; arc_in=[] gdy rin==0), `girih` = latawce khatam zostają, kolor jedną bazą złota + vary (bez 2-tonowego koła).
+- **Proces adwersarialny (4 role: Wizjoner → Inżynier+Esteta NIEZALEŻNIE → Arbiter; user werdyktuje po każdym sprincie):** 10 pomysłów → **FINALIŚCI:** `quadtree_detail` (nowy tryb kształtu), `hilbert_flow` (always-on dobór; `--flow none` = baseline bit-w-bit), `fractal_crossfade` (narzędzie, MVP=1 klatka z maską fBm), `zoom_movie` (GIF bez ffmpeg, reuse make_zoom_gif). **ODŁOŻENI:** pifs_self_collage (trzeci silnik — po fazie portfolio), lsystem_veins (pierwszy alternat, wariant recolor-LAB), dla_growth_timelapse (tani dodatek „Reveal" do dowolnego renderu).
+- **KOLEJNOŚĆ WDROŻENIA (specyfikacje Inżyniera po lekturze kodu; ~11-15 dni):** hilbert_flow (2-3d, dwufazowa pętla dopasowania) → quadtree_detail (3-4d, nowy kind w SHAPE_MODES, cap głębokości, anti-repeat OFF w v1) → fractal_crossfade (2-3d, nowy src/tools/make_crossfade.py, zero zmian silnika) → zoom_movie (4-5d, nowy make_zoom_movie.py). Inwarianty każdego PR: determinizm bit-w-bit, brak regresji przy trybach OFF, jawne seedowanie każdego nowego RNG.
+- **Materiały procesu** (pomysły, obie krytyki, synteza Arbitra, SWOT 10 pomysłów, specyfikacje MVP) + 4 wizualizacje + montaż: `output/fractal_proposals/` (⚠ gitignored — przenieść treść do PLAN_FRACTAL.md w Sprincie 4, zanim się zgubi); skrypt `src/tools/gen_fractal_feature_schemes.py` NIEZACOMMITOWANY (celowo — user chce zaległe commity na starcie następnej sesji).
+
 ---
 
 ## Odrzucone podejścia
+
+[2026-07-05] **Fraktale — 3 pomysły SKREŚLONE przez usera po procesie adwersarialnym** (nie proponować ponownie):
+- `droste_infinite_zoom` (doklejane poziomy piramidy DZI poniżej natywnej rozdzielczości): make_dzi ładuje jeden raster i resizuje w dół — wymagałoby proceduralnego generatora kafli + custom TileSource w JS; oś „nieskończonego zanurzenia" przejęta przez zoom_movie
+- `julia_field_mod` (pole Julii/Mandelbrota moduluje rotację/nasycenie PO doborze kafla): motyw nie przetrwa podmiany kolorów zdjęciami — czyta się jako brud renderu; wróciłby tylko jako sterowanie DOBOREM (inny pomysł)
+- `fractal_dimension_match` (wymiar fraktalny box-counting jako cecha dopasowania): na kafelku 75 px fit log-log z 2-3 punktów = szum; plus reindeks ~455k kafli i trzeci duplikowany inwariant wagi obok EDGE_WEIGHT
 
 [2026-06-14] **Refaktory świadomie odłożone po code-review (Fala 4)** — niski zysk / wysokie ryzyko / nieweryfikowalne headless:
 - Dedup ~8 handlerów preview smart/typo w `gui.py` (GUI bez testów)
