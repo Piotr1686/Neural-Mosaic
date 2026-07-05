@@ -26,11 +26,16 @@ Edge classification: every cell edge is keyed by its rounded endpoints; an
 edge drawn at the width of the HIGHEST level whose group ids differ across it
 (frame-boundary edges use their cell's highest level).
 
+User verdict 2026-07-05: grout thickness must be USER-SELECTABLE. Each shape
+is therefore rendered in three width presets (cienki / sredni / gruby); in the
+engine implementation the preset becomes a GUI/CLI parameter (one "Grout
+width" control scaling all levels, level ratios kept from the chosen preset).
+
 Pure PIL + numpy, deterministic (seeded RNG only). ASCII-only prints (CP1250).
 
 Outputs:
-  output/grout_proposals/<shape>_grout.png   (720x720 panels)
-  output/grout_proposals/grout_proposals.png (2x2 montage)
+  output/grout_proposals/<shape>_grout_<preset>.png  (720x720 panels)
+  output/grout_proposals/grout_proposals.png         (montage: shapes x presets)
 
 Run:
   C:/Users/plazo/miniconda3/envs/mosaic/python.exe -m src.tools.gen_grout_proposals
@@ -46,8 +51,12 @@ SIZE = 720
 SS = 2                       # supersample factor for crisp grout lines
 BG = (16, 16, 20)
 GROUT = (0, 0, 0)
-# Line widths per level at supersampled scale (final: 1.5 / 4 / 8 px).
-LEVEL_W = {1: 3, 2: 8, 3: 16}
+# Width presets per level at supersampled scale (final px = half of these).
+PRESETS = [
+    ("cienki", {1: 2, 2: 5, 3: 10}),
+    ("sredni", {1: 3, 2: 8, 3: 16}),
+    ("gruby",  {1: 5, 2: 12, 3: 24}),
+]
 
 
 def vary(rng, base, amount=14):
@@ -200,7 +209,7 @@ def _vkey(p):
     return (round(p[0] * 4), round(p[1] * 4))
 
 
-def render_panel(cells, base_col, seed):
+def render_panel(cells, base_col, seed, level_w):
     rng = np.random.default_rng(seed)
     dim = SIZE * SS
     img = Image.new("RGB", (dim, dim), BG)
@@ -232,7 +241,7 @@ def render_panel(cells, base_col, seed):
         by_level[level].append((a, b))
 
     for level in (1, 2, 3):
-        wd = LEVEL_W[level]
+        wd = level_w[level]
         for a, b in by_level[level]:
             draw.line([a, b], fill=GROUT, width=wd)
             # round joints so thick grout lines meet without notches
@@ -263,26 +272,34 @@ def main():
     for name, fn, col, desc in PANELS:
         print(f"[grout] {name} ...")
         cells = fn()
-        img = render_panel(cells, col, seed=hash(name) % 2**31)
-        img.save(OUT_DIR / f"{name}_grout.png")
-        panels[name] = img
-        print(f"        {len(cells)} cells -> {name}_grout.png")
+        for preset, level_w in PRESETS:
+            img = render_panel(cells, col, seed=hash(name) % 2**31,
+                               level_w=level_w)
+            img.save(OUT_DIR / f"{name}_grout_{preset}.png")
+            panels[(name, preset)] = img
+        print(f"        {len(cells)} cells x {len(PRESETS)} presets")
 
-    PW, TH = 640, 58
-    mont = Image.new("RGB", (PW * 2, (PW + TH) * 2), (10, 10, 12))
+    # montage: one row per shape, one column per width preset
+    PW, TH = 475, 56
+    cols_n, rows_n = len(PRESETS), len(PANELS)
+    mont = Image.new("RGB", (PW * cols_n, (PW + TH) * rows_n), (10, 10, 12))
     draw = ImageDraw.Draw(mont)
     try:
-        f1 = ImageFont.truetype("arial.ttf", 22)
-        f2 = ImageFont.truetype("arial.ttf", 15)
+        f1 = ImageFont.truetype("arial.ttf", 20)
+        f2 = ImageFont.truetype("arial.ttf", 14)
     except OSError:
         f1 = f2 = ImageFont.load_default()
-    for i, (name, _, _, desc) in enumerate(PANELS):
-        gx, gy = (i % 2) * PW, (i // 2) * (PW + TH)
-        mont.paste(panels[name].resize((PW, PW), Image.Resampling.LANCZOS),
-                   (gx, gy))
-        draw.text((gx + 12, gy + PW + 6), f"{name.upper()} - grout 3 poziomy",
-                  fill=(235, 235, 235), font=f1)
-        draw.text((gx + 12, gy + PW + 34), desc, fill=(160, 160, 160), font=f2)
+    for row, (name, _, _, desc) in enumerate(PANELS):
+        for col_i, (preset, _) in enumerate(PRESETS):
+            gx, gy = col_i * PW, row * (PW + TH)
+            mont.paste(panels[(name, preset)].resize(
+                (PW, PW), Image.Resampling.LANCZOS), (gx, gy))
+            draw.text((gx + 12, gy + PW + 4),
+                      f"{name.upper()} - {preset}",
+                      fill=(235, 235, 235), font=f1)
+            if col_i == 0:
+                draw.text((gx + 12, gy + PW + 30), desc,
+                          fill=(160, 160, 160), font=f2)
     mont.save(OUT_DIR / "grout_proposals.png")
     print(f"[grout] montage -> {OUT_DIR / 'grout_proposals.png'}")
 
