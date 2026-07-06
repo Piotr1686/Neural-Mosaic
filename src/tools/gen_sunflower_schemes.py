@@ -1,14 +1,13 @@
-"""Generate PROPOSAL schemes for the SUNFLOWER SEEDS tile pattern.
+"""Generate schemes for the SUNFLOWER SEEDS tile pattern.
 
 User request 2026-07-05 (reference photos: golden sunflower-head mosaics).
-Seeds follow Vogel's phyllotaxis: point n sits at r = c*sqrt(n),
+Seeds follow Vogel's phyllotaxis: point n sits at r = c*n^power,
 theta = n * golden angle (137.508 deg). Every variant is a TRUE tessellation
 (cells abut exactly): Voronoi = partition by construction, the rhombs mesh is
 verified numerically (raster gap/overlap report).
 
-Verdict rev 2 (user, 2026-07-05): `sunflower_classic` dropped - too close to
-the existing `bloom` shape; `sunflower_corner` and `sunflower_field` REJECTED
-outright (generators removed; git history keeps them). Current pool of 8:
+Verdict rev 3 (user, 2026-07-05): 7 schemes ACCEPTED - rendered straight into
+assets/shape_schemes/ like every other shape scheme:
 
   classic-family (uniform seeds, structurally distinct from bloom):
   1. sunflower_soft   - Vogel Voronoi after 2 Lloyd relaxations: rounder,
@@ -17,24 +16,28 @@ outright (generators removed; git history keeps them). Current pool of 8:
                         florets in the centre, coarser golden seeds outside
   3. sunflower_rings  - seed radii softly snapped to concentric rows: seeds
                         line up in circular courses (reference photo 1)
-  4. sunflower_rhombs - log-spiral parastichy quad mesh (21/34); centre
-                        rebuilt per verdict: two rings of quasi-rhombs
-                        continuing the mesh inward + small petals at the pole
-                        (previous single long petals looked alien)
 
-  grande-family (growth-graded; grande itself kept unchanged for verdict):
-  5. sunflower_grande - Voronoi of r = c*n^0.66 (user pick - do not touch)
-  6. grande_xl        - steeper growth r = c*n^0.75: tiny centre, huge rim
-  7. grande_soft      - grande geometry + 1 Lloyd pass: rounder cells,
+  grande-family (growth-graded):
+  4. sunflower_grande - Voronoi of r = c*n^0.66 (user pick - do not touch)
+  5. grande_xl        - steeper growth r = c*n^0.75: tiny centre, huge rim
+  6. grande_soft      - grande geometry + 1 Lloyd pass: rounder cells,
                         gentler size ramp
-  8. grande_inverse   - reversed gradient r = c*n^0.40: large seeds in the
+  7. grande_inverse   - reversed gradient r = c*n^0.40: large seeds in the
                         centre shrinking toward a fine rim
+
+`sunflower_rhombs` (log-spiral parastichy quad mesh 21/34) is the one
+REJECTED-in-part scheme: the mesh itself is fine, but all 3 centre attempts
+(fan of 55 wedges, per-edge rings, scaled loop) failed the rev 3 verdict
+"the centre must not differ IN SHAPE from the surrounding rhombi".
+This script therefore also renders 5 NEW centre proposals (verdict pending):
+nopole / funnel / star / star2 / chunky -> montage in output/.
 
 Pure PIL + numpy + scipy, deterministic. ASCII-only prints.
 
 Outputs:
-  output/sunflower_proposals/<name>.png            (720x720 panels)
-  output/sunflower_proposals/proposals_sunflower.png (montage 4x2)
+  assets/shape_schemes/<name>.png                       (7 accepted schemes)
+  output/sunflower_proposals/rhombs_<variant>.png       (5 centre proposals)
+  output/sunflower_proposals/rhombs_center_proposals.png (montage 3x2)
 
 Run:
   C:/Users/plazo/miniconda3/envs/mosaic/python.exe -m src.tools.gen_sunflower_schemes
@@ -203,52 +206,45 @@ def gen_sunflower_rings():
 # ---------------------------------------------------------------------------
 # C. parastichy rhombs (13, 21) + fan centre
 # ---------------------------------------------------------------------------
-def gen_sunflower_rhombs():
-    """LOG-spiral quad mesh: r = r0*exp(k*n), theta = n*golden angle. With
-    exponential growth every quad is a rotated+scaled copy of its neighbour
-    (self-similar), so the (21, 34) parastichy mesh stays embedded at every
-    radius - this is exactly the growing-rhombi look of reference photo 3.
-    Vogel's sqrt(n) growth (variants A/B/D) makes a fixed pair lose dominance
-    away from its ring and the quads degenerate into overlapping slivers -
-    verified numerically, hence the exponential lattice here."""
-    rng = np.random.default_rng(53)
-    F1, F2 = 21, 34
-    # Cells shrink continuously toward the pole (self-similar mesh), so quads
-    # below ~15 px would drown in their own outlines as a black blob. The fan
-    # takes over from N0 inward: 55 wedges converging at the pole (the
-    # approved same-shape-centre pattern), first quads start at r ~ 0.27.
-    N0 = 380
-    r0 = 0.055
-    k = 0.0042                             # per-seed growth; ~2:1 radial cells
-    N = int(math.log((math.sqrt(2.0) + 0.6) / r0) / k)
-
+# ---------------------------------------------------------------------------
+# rhombs family: log-spiral parastichy quad mesh + 5 centre proposals
+#
+# LOG-spiral lattice r = r0*exp(k*n), theta = n*golden angle: every quad is a
+# rotated+scaled copy of its neighbour (self-similar), so a fixed parastichy
+# pair stays embedded at every radius (Vogel's sqrt(n) growth degenerates a
+# fixed pair into overlapping slivers - verified numerically). The inner hole
+# of the mesh ALWAYS has F1+F2 boundary edges regardless of where the mesh is
+# stopped (self-similarity), so the centre problem cannot be shrunk away -
+# it must be closed with cells. Verdict rev 3 (user): the centre cells must
+# not differ IN SHAPE from the surrounding rhombi -> 5 proposals below, all
+# quad/rhombus-shaped (fans, petals and bare circles are out).
+# ---------------------------------------------------------------------------
+def _log_mesh(F1, F2, r0, k, N0, N, pole=(0.0, 0.0)):
+    """Quads of the self-similar mesh + the ordered inner-boundary loop
+    (F1+F2 vertices, walked around the pole)."""
     def P(n):
         rr = r0 * math.exp(k * n)
         aa = n * GOLDEN
-        return (rr * math.cos(aa), rr * math.sin(aa))
+        return (pole[0] + rr * math.cos(aa), pole[1] + rr * math.sin(aa))
 
-    quads = []
-    for n in range(N0, N + 1):
-        quads.append((n, [P(n), P(n + F1), P(n + F1 + F2), P(n + F2)]))
+    quads = [(n, [P(n), P(n + F1), P(n + F1 + F2), P(n + F2)])
+             for n in range(N0, N + 1)]
 
-    # Inner boundary edges (used by exactly one quad, near the pole) form a
-    # closed 55-edge loop. Verdict rev 2: the centre must RESEMBLE the
-    # surrounding rhombi, so the mesh is continued inward by two concentric
-    # rings of quasi-rhombs (loop scaled toward the pole at 0.70 and 0.42 -
-    # one quad per boundary edge, same size progression as the log mesh) and
-    # only the innermost disc becomes 11 small petals converging at the pole.
     edge_count = {}
     for n, q in quads:
         for a, b in zip(q, q[1:] + q[:1]):
             key = tuple(sorted((a, b)))
             edge_count[key] = edge_count.get(key, 0) + 1
-    r_inner = 0.6                          # inner-rim vertices sit at r<=0.35
+    r_inner = r0 * math.exp(k * (N0 + F1 + F2)) * 1.25
     binner = {}
     for (a, b), cnt in edge_count.items():
-        if cnt == 1 and math.hypot(*a) < r_inner and math.hypot(*b) < r_inner:
+        if cnt != 1:
+            continue
+        da = math.hypot(a[0] - pole[0], a[1] - pole[1])
+        db = math.hypot(b[0] - pole[0], b[1] - pole[1])
+        if da < r_inner and db < r_inner:
             binner.setdefault(a, []).append(b)
             binner.setdefault(b, []).append(a)
-    # walk the closed loop
     start = next(iter(binner))
     loop, prev, cur = [start], None, start
     while True:
@@ -257,48 +253,209 @@ def gen_sunflower_rhombs():
             break
         loop.append(nxt)
         prev, cur = cur, nxt
+    # normalise to counter-clockwise so bridge/rosette windings agree
+    area2 = sum(x1 * y2 - x2 * y1
+                for (x1, y1), (x2, y2) in zip(loop, loop[1:] + loop[:1]))
+    if area2 < 0:
+        loop.reverse()
+    return quads, loop
 
-    def scaled(v, s):
-        return (v[0] * s, v[1] * s)
 
-    # The 55-edge loop is denser than the mesh itself (~34 quads per ring of
-    # circumference), so per-edge rings degenerate into a sunburst of slivers
-    # (two earlier drafts). Instead ONE transition ring whose cells each span
-    # TWO loop edges (~28 cells = mesh-quad width) lands on a smooth circle,
-    # and the circle splits into 14 petals converging at the pole (~2:1).
-    L = len(loop)
-    r_mean = sum(math.hypot(*v) for v in loop) / L
-    ring_r = 0.80 * r_mean
-
-    def on_circle(v, radius):
-        vr = math.hypot(*v)
-        return (v[0] / vr * radius, v[1] / vr * radius)
-
-    pairs = [(i, min(i + 2, L)) for i in range(0, L - 1, 2)]
-    if pairs[-1][1] != L:
-        pairs[-1] = (pairs[-1][0], L)      # odd L: last cell spans the seam
-    circle = []
-    polys = []
-    for j, (a, b) in enumerate(pairs):
-        w0 = on_circle(loop[a], ring_r)
-        w1 = on_circle(loop[b % L], ring_r)
-        circle.append(w0)
-        outer = [loop[k % L] for k in range(b, a - 1, -1)]   # reversed arc
-        base = HONEY if j % 2 == 0 else GOLD
-        polys.append(([w0, w1] + outer, vary(rng, base, 10)))
-    M = len(circle)                        # ~28 circle vertices
-    for s in range(0, M, 2):
-        seg = circle[s:s + 3]
-        if s + 2 >= M:
-            seg = circle[s:] + [circle[0]]  # close on the seam
-        polys.append(([(0.0, 0.0)] + seg, vary(rng, OCHRE, 10)))
+def _paint_mesh(rng, quads, F2):
+    out = []
     for n, q in quads:
         cl = _clip_rect(q, R)
         if len(cl) < 3:
             continue
-        arm = n % F2
-        base = HONEY if arm % 2 == 0 else GOLD
-        polys.append((cl, vary(rng, base, 10)))
+        base = HONEY if (n % F2) % 2 == 0 else GOLD
+        out.append((cl, vary(rng, base, 10)))
+    return out
+
+
+def _group_loop(L, T):
+    """Split L boundary edges into T contiguous groups of ~2 edges each."""
+    sizes = [2] * T
+    extra = L - 2 * T
+    i = 0
+    while extra != 0:
+        step = 1 if extra > 0 else -1
+        sizes[i % T] += step
+        extra -= step
+        i += 1
+    bounds, acc = [], 0
+    for s in sizes:
+        bounds.append((acc, acc + s))
+        acc += s
+    return bounds
+
+
+def _align_rot(anchors, T):
+    """Rotation that best aligns T uniformly spaced vertices with anchors."""
+    step = 2 * math.pi / T
+    sc = ss = 0.0
+    for j, (x, y) in enumerate(anchors):
+        d = math.atan2(y, x) - j * step
+        sc += math.cos(d)
+        ss += math.sin(d)
+    return math.atan2(ss, sc)
+
+
+def _circle_pts(T, radius, rot):
+    step = 2 * math.pi / T
+    return [(radius * math.cos(rot + j * step),
+             radius * math.sin(rot + j * step)) for j in range(T)]
+
+
+def _rosette(m, r_side, rot, layers=1):
+    """Rosette of TRUE rhombi meeting at the pole: m rhombi with apex 2*pi/m
+    and side r_side (layers=2 adds m more rhombi girih-style). Returns
+    (cells, zigzag outer boundary of 2m vertices)."""
+    step = 2 * math.pi / m
+    S = [(r_side * math.cos(rot + j * step),
+          r_side * math.sin(rot + j * step)) for j in range(m)]
+    F = [(S[j][0] + S[(j + 1) % m][0], S[j][1] + S[(j + 1) % m][1])
+         for j in range(m)]
+    cells = [[(0.0, 0.0), S[j], F[j], S[(j + 1) % m]] for j in range(m)]
+    if layers == 1:
+        zig = []
+        for j in range(m):
+            zig.extend((S[j], F[j]))
+        return cells, zig
+    G = [(F[j][0] + F[(j + 1) % m][0] - S[(j + 1) % m][0],
+          F[j][1] + F[(j + 1) % m][1] - S[(j + 1) % m][1]) for j in range(m)]
+    for j in range(m):
+        cells.append([S[(j + 1) % m], F[j], G[j], F[(j + 1) % m]])
+    zig = []
+    for j in range(m):
+        zig.extend((F[j], G[j]))
+    return cells, zig
+
+
+def _bridge(rng, loop, target, bands=1):
+    """Ring cells connecting the jagged mesh boundary to `target` (a polygon
+    with len(target) vertices, e.g. rosette zigzag or a smooth circle). Loop
+    edges are grouped ~2 per target edge; intermediate bands interpolate."""
+    L, T = len(loop), len(target)
+    bounds = _group_loop(L, T)
+    anchors = [loop[a] for a, _ in bounds]
+    levels = []
+    for lev in range(1, bands + 1):
+        t = lev / bands
+        levels.append([(ax + (zx - ax) * t, ay + (zy - ay) * t)
+                       for (ax, ay), (zx, zy) in zip(anchors, target)])
+    cells = []
+    inner = levels[0]
+    for j, (a, b) in enumerate(bounds):
+        outer = [loop[kk % L] for kk in range(b, a - 1, -1)]
+        base = HONEY if j % 2 == 0 else GOLD
+        cells.append(([inner[j], inner[(j + 1) % T]] + outer,
+                      vary(rng, base, 10)))
+    for lev in range(1, bands):
+        out_pts, in_pts = levels[lev - 1], levels[lev]
+        for j in range(T):
+            base = HONEY if (j + lev) % 2 == 0 else GOLD
+            cells.append(([in_pts[j], in_pts[(j + 1) % T],
+                           out_pts[(j + 1) % T], out_pts[j]],
+                          vary(rng, base, 10)))
+    return cells
+
+
+_RH = dict(F1=21, F2=34, r0=0.055, k=0.0042)
+
+
+def _rh_mesh(N0=380, pole=(0.0, 0.0)):
+    N = int(math.log((math.sqrt(2.0) + 0.6) / _RH["r0"]) / _RH["k"])
+    return _log_mesh(_RH["F1"], _RH["F2"], _RH["r0"], _RH["k"], N0, N,
+                     pole=pole)
+
+
+def gen_rhombs_nopole():
+    """Centre proposal 1: NO centre at all - the pole sits outside the frame
+    (nautilus precedent: log-spiral, singularity out of view), so the frame
+    contains nothing but proper mesh rhombi. Denser parastichy pair (34, 55)
+    compensates for the frame sitting far from the pole (cell size grows with
+    radius; with 21/34 the frame caught only ~80 oversized rhombi)."""
+    rng = np.random.default_rng(61)
+    pole = (-1.35, -1.28)
+    # hole radius (~0.35) must stay below the pole-to-frame distance (~0.45);
+    # pole close to the frame corner keeps the spiral swirl visible (curvature
+    # scales with 1/r - a distant pole degrades the mesh into a straight grid)
+    F1, F2, r0, k = 34, 55, 0.055, 0.0015
+    N0 = int(math.log(0.30 / r0) / k) - (F1 + F2)
+    N = int(math.log(3.7 / r0) / k)
+    quads, _ = _log_mesh(F1, F2, r0, k, N0, N, pole=pole)
+    return _paint_mesh(rng, quads, F2), (-R, -R, R, R)
+
+
+def gen_rhombs_funnel():
+    """Centre proposal 2: funnel of quad rings 28 -> 14 -> 7 cells (each ring
+    halves the count, so cells keep the mesh-quad aspect instead of turning
+    into slivers) closed by a single small 7-gon tile at the pole."""
+    rng = np.random.default_rng(62)
+    quads, loop = _rh_mesh()
+    r_mean = sum(math.hypot(*v) for v in loop) / len(loop)
+    polys = _paint_mesh(rng, quads, _RH["F2"])
+    rings = [(28, 0.80), (14, 0.55), (7, 0.28)]
+    cur = loop
+    for T, frac in rings:
+        target = _circle_pts(T, frac * r_mean,
+                             _align_rot([cur[a] for a, _ in
+                                         _group_loop(len(cur), T)], T))
+        polys.extend(_bridge(rng, cur, target, bands=1))
+        cur = target
+    polys.append((cur, vary(rng, OCHRE, 10)))    # single pole tile (7-gon)
+    return polys, (-R, -R, R, R)
+
+
+def gen_rhombs_star():
+    """Centre proposal 3: rosette of 14 TRUE rhombi meeting at the pole,
+    bridged to the mesh by two interpolated quad rings."""
+    rng = np.random.default_rng(63)
+    quads, loop = _rh_mesh()
+    r_mean = sum(math.hypot(*v) for v in loop) / len(loop)
+    polys = _paint_mesh(rng, quads, _RH["F2"])
+    bounds = _group_loop(len(loop), 28)
+    rot = _align_rot([loop[a] for a, _ in bounds], 28)
+    cells, zig = _rosette(14, 0.36 * r_mean, rot, layers=1)
+    polys.extend(_bridge(rng, loop, zig, bands=2))
+    for j, cell in enumerate(cells):
+        polys.append((cell, vary(rng, OCHRE if j % 2 == 0 else RUST, 10)))
+    return polys, (-R, -R, R, R)
+
+
+def gen_rhombs_star2():
+    """Centre proposal 4: double rosette (14 + 14 true rhombi, girih-style
+    star) - richer pole, shorter bridge (one ring)."""
+    rng = np.random.default_rng(64)
+    quads, loop = _rh_mesh()
+    r_mean = sum(math.hypot(*v) for v in loop) / len(loop)
+    polys = _paint_mesh(rng, quads, _RH["F2"])
+    bounds = _group_loop(len(loop), 28)
+    rot = _align_rot([loop[a] for a, _ in bounds], 28)
+    cells, zig = _rosette(14, 0.26 * r_mean, rot, layers=2)
+    polys.extend(_bridge(rng, loop, zig, bands=1))
+    for j, cell in enumerate(cells):
+        polys.append((cell, vary(rng, OCHRE if j % 2 == 0 else RUST, 10)))
+    return polys, (-R, -R, R, R)
+
+
+def gen_rhombs_chunky():
+    """Centre proposal 5: coarser mesh - parastichy pair (13, 21) with faster
+    growth (fewer, fatter rhombi; 34-edge hole) closed by a rosette of 8
+    true rhombi via a two-ring bridge."""
+    rng = np.random.default_rng(65)
+    F1, F2, r0, k = 13, 21, 0.055, 0.0125
+    N0 = int(math.log(0.20 / r0) / k)
+    N = int(math.log((math.sqrt(2.0) + 0.6) / r0) / k)
+    quads, loop = _log_mesh(F1, F2, r0, k, N0, N)
+    r_mean = sum(math.hypot(*v) for v in loop) / len(loop)
+    polys = _paint_mesh(rng, quads, F2)
+    bounds = _group_loop(len(loop), 16)
+    rot = _align_rot([loop[a] for a, _ in bounds], 16)
+    cells, zig = _rosette(8, 0.40 * r_mean, rot, layers=1)
+    polys.extend(_bridge(rng, loop, zig, bands=2))
+    for j, cell in enumerate(cells):
+        polys.append((cell, vary(rng, OCHRE if j % 2 == 0 else RUST, 10)))
     return polys, (-R, -R, R, R)
 
 
@@ -383,42 +540,59 @@ def coverage_report(polys, world, res=600):
     return gaps, overlaps
 
 
-PROPOSALS = [
-    ("sunflower_soft", gen_sunflower_soft,
-     "1. SOFT (Lloyd x2)", "wygladzone, rowniejsze ziarna; spirale zostaja", False),
-    ("sunflower_disc", gen_sunflower_disc,
-     "2. DISC (dwie strefy)", "drobne ciemne kwiatki w srodku, grubsze zloto wokol", False),
-    ("sunflower_rings", gen_sunflower_rings,
-     "3. RINGS (rzedy koncentryczne)", "ziarna dosniete do okregow, rzedy jak na fot. 1", False),
-    ("sunflower_rhombs", gen_sunflower_rhombs,
-     "4. ROMBY SPIRALNE v2", "srodek: 2 pierscienie quasi-rombow + male platki", True),
-    ("sunflower_grande", gen_sunflower_grande,
-     "5. GRANDE (r=c*n^0.66)", "faworyt - bez zmian, do werdyktu", False),
-    ("grande_xl", gen_grande_xl,
-     "6. GRANDE XL (n^0.75)", "mocniejszy gradient: male centrum, wielki obwod", False),
-    ("grande_soft", gen_grande_soft,
-     "7. GRANDE SOFT (Lloyd x1)", "grande wygladzone, lagodniejsza rampa", False),
-    ("grande_inverse", gen_grande_inverse,
-     "8. GRANDE INVERSE (n^0.40)", "odwrotnie: wielkie centrum, drobny obwod", False),
+# Accepted by the user 2026-07-05 (rev 3 verdict) -> rendered straight into
+# assets/shape_schemes/ like every other shape scheme.
+ACCEPTED = [
+    ("sunflower_soft", gen_sunflower_soft),
+    ("sunflower_disc", gen_sunflower_disc),
+    ("sunflower_rings", gen_sunflower_rings),
+    ("sunflower_grande", gen_sunflower_grande),
+    ("grande_xl", gen_grande_xl),
+    ("grande_soft", gen_grande_soft),
+    ("grande_inverse", gen_grande_inverse),
 ]
+
+# rhombs centre proposals (verdict pending) -> output/ montage only.
+RHOMBS_PROPOSALS = [
+    ("rhombs_nopole", gen_rhombs_nopole,
+     "1. BEZ BIEGUNA", "biegun poza kadrem (jak nautilus) - same romby"),
+    ("rhombs_funnel", gen_rhombs_funnel,
+     "2. LEJEK 28-14-7", "pierscienie quadow o malejacej liczbie + 1 kafel"),
+    ("rhombs_star", gen_rhombs_star,
+     "3. ROZETA 14", "14 prawdziwych rombow w biegunie + 2 pierscienie"),
+    ("rhombs_star2", gen_rhombs_star2,
+     "4. PODWOJNA ROZETA 14+14", "gwiazda girih z rombow + 1 pierscien"),
+    ("rhombs_chunky", gen_rhombs_chunky,
+     "5. GRUBSZA SIATKA (13/21)", "mniej, wiekszych rombow + rozeta 8"),
+]
+
+ASSETS_DIR = Path("assets/shape_schemes")
 
 
 def main():
     OUT_DIR.mkdir(parents=True, exist_ok=True)
+    ASSETS_DIR.mkdir(parents=True, exist_ok=True)
+
+    for name, fn in ACCEPTED:
+        print(f"[sunflower] {name} (accepted) ...")
+        polys, world = fn()
+        render(polys, world).save(ASSETS_DIR / f"{name}.png")
+        print(f"            {len(polys)} cells -> assets/shape_schemes/{name}.png")
+
     panels = {}
-    for name, fn, t1, t2, check in PROPOSALS:
+    for name, fn, t1, t2 in RHOMBS_PROPOSALS:
         print(f"[sunflower] {name} ...")
         polys, world = fn()
-        if check:
-            gaps, overlaps = coverage_report(polys, world)
-            print(f"            coverage: gaps {gaps:.2f}% | overlaps {overlaps:.2f}%")
+        gaps, overlaps = coverage_report(polys, world)
+        print(f"            coverage: gaps {gaps:.2f}% | overlaps {overlaps:.2f}%")
         img = render(polys, world)
         img.save(OUT_DIR / f"{name}.png")
         panels[name] = img
         print(f"            {len(polys)} cells -> {name}.png")
 
     PW, TH = 560, 58
-    cols_n, rows_n = 4, 2
+    cols_n = 3
+    rows_n = (len(RHOMBS_PROPOSALS) + cols_n - 1) // cols_n
     mont = Image.new("RGB", (PW * cols_n, (PW + TH) * rows_n), (10, 10, 12))
     draw = ImageDraw.Draw(mont)
     try:
@@ -426,15 +600,15 @@ def main():
         f2 = ImageFont.truetype("arial.ttf", 15)
     except OSError:
         f1 = f2 = ImageFont.load_default()
-    for i, (name, _, t1, t2, _) in enumerate(PROPOSALS):
+    for i, (name, _, t1, t2) in enumerate(RHOMBS_PROPOSALS):
         gx = (i % cols_n) * PW
         gy = (i // cols_n) * (PW + TH)
         mont.paste(panels[name].resize((PW, PW), Image.Resampling.LANCZOS),
                    (gx, gy))
         draw.text((gx + 12, gy + PW + 6), t1, fill=(235, 235, 235), font=f1)
         draw.text((gx + 12, gy + PW + 34), t2, fill=(160, 160, 160), font=f2)
-    mont.save(OUT_DIR / "proposals_sunflower.png")
-    print(f"[sunflower] montage -> {OUT_DIR / 'proposals_sunflower.png'}")
+    mont.save(OUT_DIR / "rhombs_center_proposals.png")
+    print(f"[sunflower] montage -> {OUT_DIR / 'rhombs_center_proposals.png'}")
 
 
 if __name__ == "__main__":
