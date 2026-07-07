@@ -401,10 +401,19 @@ class App(ctk.CTk):
         self.check_mirror.pack(pady=(15, 5))
 
         self.check_border = ctk.CTkCheckBox(
-            frame, text="Black Borders (Grout)",
+            frame, text="Black Borders (uniform gap)",
         )
         self.check_border.deselect()
         self.check_border.pack(pady=5)
+
+        # Hierarchical grout: independent of the uniform-gap border above.
+        # Draws L1/L2/L3 lines whose thickness grows with the group level for
+        # square/hexagon/triangle/kites (other shapes are skipped for now).
+        ctk.CTkLabel(frame, text="Hierarchical Grout").pack(pady=(10, 0))
+        self.combo_grout = ctk.CTkOptionMenu(
+            frame, values=["Off", "cienki", "sredni", "gruby"])
+        self.combo_grout.set("Off")
+        self.combo_grout.pack(pady=5)
 
         self.check_edge_aware = ctk.CTkCheckBox(
             frame, text="Edge-Aware Matching  (large library)",
@@ -665,6 +674,11 @@ class App(ctk.CTk):
 
     _ZOOM_SHORT_EDGE = {"¼": 450, "½": 900, "Full": 1800}
 
+    def _grout_preset(self):
+        """Selected hierarchical-grout preset, or None when 'Off'."""
+        val = self.combo_grout.get()
+        return None if val == "Off" else val
+
     def _on_shape_selected(self, choice):
         """Show the shape's layout scheme in the preview pane and unlock rendering.
 
@@ -706,6 +720,7 @@ class App(ctk.CTk):
             "shape_mode": self.combo_shape.get(),
             "tile_scale": float(self.seg_scale_p.get() or "1.0"),
             "border_mode": bool(self.check_border.get()),
+            "grout_preset": self._grout_preset(),
         }
         short_edge = self._ZOOM_SHORT_EDGE.get(self.seg_zoom_p.get(), 900)
         self.btn_preview_p.configure(state="disabled")
@@ -1037,6 +1052,7 @@ class App(ctk.CTk):
         shape = self.combo_shape.get()
         scale = float(self.seg_scale_p.get() or "1.0")
         border_mode = bool(self.check_border.get())
+        grout_preset = self._grout_preset()
         blend_strength = int((self.seg_blend.get() or "0%").replace("%", "")) / 100.0
         tint_strength = int((self.seg_tint.get() or "0%").replace("%", "")) / 100.0
 
@@ -1063,6 +1079,7 @@ class App(ctk.CTk):
                     self.path_p, out, res, shape,
                     tile_scale=scale, border_mode=border_mode,
                     blend_strength=blend_strength, tint_strength=tint_strength,
+                    grout_preset=grout_preset,
                     progress_cb=_progress, cancel_event=cancel_event,
                 )
                 self.log("DONE! Smart Mosaic saved.")
