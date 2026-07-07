@@ -46,50 +46,23 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
+from src.grout import PRESETS as _PRESET_WIDTHS
+from src.grout import classify_edges, draw_grout, stable_seed, sub7
+
 OUT_DIR = Path("output/grout_proposals")
 SIZE = 720
 SS = 2                       # supersample factor for crisp grout lines
 BG = (16, 16, 20)
 GROUT = (0, 0, 0)
 # Width presets per level at supersampled scale (final px = half of these).
-PRESETS = [
-    ("cienki", {1: 2, 2: 5, 3: 10}),
-    ("sredni", {1: 3, 2: 8, 3: 16}),
-    ("gruby",  {1: 5, 2: 12, 3: 24}),
-]
+# Canonical widths + ratios live in src.grout.PRESETS; kept as (name, dict)
+# pairs here for the montage's row-per-preset ordering.
+PRESETS = [(name, _PRESET_WIDTHS[name]) for name in ("cienki", "sredni", "gruby")]
 
 
 def vary(rng, base, amount=14):
     return tuple(int(np.clip(c + rng.integers(-amount, amount + 1), 0, 255))
                  for c in base)
-
-
-# ---------------------------------------------------------------------------
-# sub-7 flower grouping on the axial hex lattice
-# ---------------------------------------------------------------------------
-_A = (2, 1)
-_B = (-1, 3)
-_UNIT7 = {(0, 0), (1, 0), (0, 1), (-1, 0), (0, -1), (1, -1), (-1, 1)}
-
-
-def sub7(q, r):
-    """Map axial hex (q, r) to the lattice coords (i, j) of its 7-flower.
-
-    Flower centres are i*A + j*B; every hex is either a centre or one of its
-    six unit neighbours, so membership is exact (no metric rounding needed).
-    """
-    # inverse of M = [[2,-1],[1,3]] (det 7): y = (3q + r, -q + 2r) / 7
-    yi = (3 * q + r) / 7.0
-    yj = (-q + 2 * r) / 7.0
-    for di in (0, -1, 1):
-        for dj in (0, -1, 1):
-            i = round(yi) + di
-            j = round(yj) + dj
-            cq = i * _A[0] + j * _B[0]
-            cr = i * _A[1] + j * _B[1]
-            if (q - cq, r - cr) in _UNIT7:
-                return (i, j)
-    raise AssertionError(f"sub7 failed for ({q},{r})")
 
 
 # ---------------------------------------------------------------------------
@@ -204,11 +177,8 @@ def cells_triangle():
 
 # ---------------------------------------------------------------------------
 # rendering: fill cells, then draw edges at the level where group ids change
+# (grouping + edge classification + drawing all live in src.grout)
 # ---------------------------------------------------------------------------
-def _vkey(p):
-    return (round(p[0] * 4), round(p[1] * 4))
-
-
 def render_panel(cells, base_col, seed, level_w):
     rng = np.random.default_rng(seed)
     dim = SIZE * SS
@@ -218,39 +188,7 @@ def render_panel(cells, base_col, seed, level_w):
     for poly, _, _ in cells:
         draw.polygon(poly, fill=vary(rng, base_col))
 
-    # edge -> list of adjacent cell indices
-    edges = {}
-    for idx, (poly, _, _) in enumerate(cells):
-        for a, b in zip(poly, poly[1:] + poly[:1]):
-            key = tuple(sorted((_vkey(a), _vkey(b))))
-            edges.setdefault(key, []).append((idx, a, b))
-
-    by_level = {1: [], 2: [], 3: []}
-    for key, adj in edges.items():
-        idx0, a, b = adj[0]
-        if len(adj) == 1:
-            level = 3                    # frame boundary: close the top group
-        else:
-            _, g2a, g3a = cells[idx0]
-            _, g2b, g3b = cells[adj[1][0]]
-            level = 1
-            if g2a != g2b:
-                level = 2
-            if g3a != g3b:
-                level = 3
-        by_level[level].append((a, b))
-
-    for level in (1, 2, 3):
-        wd = level_w[level]
-        for a, b in by_level[level]:
-            draw.line([a, b], fill=GROUT, width=wd)
-            # round joints so thick grout lines meet without notches
-            if level > 1:
-                rr = wd / 2 - 0.5
-                for p in (a, b):
-                    draw.ellipse([p[0] - rr, p[1] - rr, p[0] + rr, p[1] + rr],
-                                 fill=GROUT)
-
+    draw_grout(draw, classify_edges(cells), level_w, color=GROUT)
     return img.resize((SIZE, SIZE), Image.Resampling.LANCZOS)
 
 
@@ -273,7 +211,7 @@ def main():
         print(f"[grout] {name} ...")
         cells = fn()
         for preset, level_w in PRESETS:
-            img = render_panel(cells, col, seed=hash(name) % 2**31,
+            img = render_panel(cells, col, seed=stable_seed(name),
                                level_w=level_w)
             img.save(OUT_DIR / f"{name}_grout_{preset}.png")
             panels[(name, preset)] = img
