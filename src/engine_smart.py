@@ -26,6 +26,12 @@ import skimage.color
 
 from .spectre_tiling import generate_spectre_tiling
 from .render_control import RenderCancelled
+from .grout import classify_edges, draw_grout, scale_widths, sub7
+
+# Shapes whose sub7/block grouping was reviewed and approved (2026-07-05): the
+# grout pass draws hierarchical L1/L2/L3 lines for these. Other shapes fall
+# back to flat single-level grout (follow-up) or skip the pass.
+GROUT_HIERARCHICAL = ("square", "hexagon", "triangle", "kites")
 
 # Must match EDGE_WEIGHT in indexer_smart.py.
 EDGE_WEIGHT = 2.0
@@ -353,8 +359,14 @@ class SmartEngine:
             box = (0, offset, src_w, offset + new_h)
         return img.crop(box).resize((target_w, target_h), Image.Resampling.LANCZOS)
 
-    def create_mosaic(self, target_path, output_path, resolution_key, shape_mode, tile_scale, border_mode=False, blend_strength=0.0, tint_strength=0.0, progress_cb=None, cancel_event=None):
-        """Public API — resolves resolution_key and delegates to _do_render."""
+    def create_mosaic(self, target_path, output_path, resolution_key, shape_mode, tile_scale, border_mode=False, blend_strength=0.0, tint_strength=0.0, grout_preset=None, progress_cb=None, cancel_event=None):
+        """Public API — resolves resolution_key and delegates to _do_render.
+
+        ``grout_preset`` (None | "cienki"/"sredni"/"gruby") is an independent
+        opt-in border pass: when set, hierarchical grout lines are drawn on the
+        finished mosaic (see _do_render). Orthogonal to ``border_mode`` (the
+        tile-shrink gap), which is left untouched.
+        """
         if not self.paths:
             print("ERROR: Index not loaded.")
             return
@@ -364,11 +376,11 @@ class SmartEngine:
         img_w, img_h = target.size
         scale_res = target_long / max(img_w, img_h)
         target = target.resize((int(img_w * scale_res), int(img_h * scale_res)), Image.Resampling.LANCZOS)
-        result = self._do_render(target, shape_mode, tile_scale, border_mode, blend_strength, tint_strength, progress_cb=progress_cb, cancel_event=cancel_event)
+        result = self._do_render(target, shape_mode, tile_scale, border_mode, blend_strength, tint_strength, grout_preset=grout_preset, progress_cb=progress_cb, cancel_event=cancel_event)
         result.save(output_path, quality=95)
 
     def render_preview(self, target_path, short_edge=512, shape_mode="hexagon_romb",
-                       tile_scale=1.0, border_mode=False):
+                       tile_scale=1.0, border_mode=False, grout_preset=None):
         """Return a PIL Image preview at ~short_edge px short side — no file I/O."""
         if not self.paths:
             raise RuntimeError("Index not loaded.")
@@ -378,7 +390,7 @@ class SmartEngine:
         prev_w = max(1, int(img_w * scale))
         prev_h = max(1, int(img_h * scale))
         target = target.resize((prev_w, prev_h), Image.Resampling.LANCZOS)
-        return self._do_render(target, shape_mode, tile_scale, border_mode, 0.0, 0.0)
+        return self._do_render(target, shape_mode, tile_scale, border_mode, 0.0, 0.0, grout_preset=grout_preset)
 
     def _resolve_matching_modes(self):
         """Resolve edge_aware/allow_mirror, degrading on conflicts (warns on stdout).
@@ -489,7 +501,150 @@ class SmartEngine:
             "feature": self._compute_sector_feature(feat_img, edge_aware),
         }
 
-    def _do_render(self, target, shape_mode, tile_scale, border_mode=False, blend_strength=0.0, tint_strength=0.0, progress_cb=None, cancel_event=None):
+    # ==========================================
+    # GROUT CELLS  (hierarchical border-pass geometry)
+    # ==========================================
+    def _grout_cells(self, shape_mode, target_w, target_h, base_s):
+        """Build ``(poly, g2, g3)`` cells for the grout pass, in image space
+        (y down). Cells reproduce the NOMINAL tile geometry (the same step
+        formulas the composite uses) so grout lines land on the tile seams;
+        the composite's integer mask-truncation differs by <1 px, well inside
+        the grout line width. Returns None for shapes without an approved
+        grouping — the caller then skips the hierarchical pass.
+        """
+        if shape_mode == "square":
+            return self._grout_cells_square(target_w, target_h, base_s)
+        if shape_mode == "triangle":
+            return self._grout_cells_triangle(target_w, target_h, base_s)
+        if shape_mode == "hexagon":
+            return self._grout_cells_hexagon(target_w, target_h, base_s)
+        if shape_mode == "kites":
+            return self._grout_cells_kites(target_w, target_h, base_s)
+        return None
+
+    def _grout_cells_square(self, target_w, target_h, base_s):
+        s = base_s
+        cols = int(target_w / s) + 2
+        rows = int(target_h / s) + 2
+        cells = []
+        for r in range(-1, rows):
+            for c in range(-1, cols):
+                x, y = c * s, r * s
+                poly = [(x, y), (x + s, y), (x + s, y + s), (x, y + s)]
+                cells.append((poly, (c // 3, r // 3), (c // 9, r // 9)))
+        return cells
+
+    def _grout_cells_triangle(self, target_w, target_h, base_s):
+        # Matches the composite's triangle grid exactly (tile_w=base_s,
+        # tile_h=int(base_s*0.866), step_x=base_s/2). The vertex lattice and the
+        # class-0-corner "owner" grouping are the reviewed proposal geometry.
+        w = float(base_s)
+        h = float(int(base_s * 0.866))
+        cols = int(target_w / (w / 2)) + 2
+        rows = int(target_h / h) + 2
+
+        def owner(corners):
+            for (a, b) in corners:
+                if a % 3 == 0:
+                    return (a, b)
+            raise AssertionError("triangle grout: no class-0 corner")
+
+        def hex_axial(a, b):
+            p = a // 3
+            j = (b - ((1 + p) % 2)) // 2
+            return (p, j - (p - (p & 1)) // 2)
+
+        cells = []
+        for r in range(-1, rows):
+            for c in range(-1, cols):
+                if (c + r) % 2 == 0:
+                    corners = [(c, r + 1), (c + 2, r + 1), (c + 1, r)]
+                else:
+                    corners = [(c, r), (c + 2, r), (c + 1, r + 1)]
+                poly = [(a * w / 2, b * h) for (a, b) in corners]
+                own = owner(corners)
+                cells.append((poly, own, sub7(*hex_axial(*own))))
+        return cells
+
+    def _grout_cells_hexagon(self, target_w, target_h, base_s):
+        # Hexes on the composite's offset grid (odd rows shifted +base_s/2).
+        # Offset->axial q = c - (r - (r&1))//2 (r_axial = r) so the sub7 flowers
+        # are spatially contiguous; see test_grout_engine.
+        #
+        # th is the FLOAT regular-hexagon height base_s*2/sqrt(3); the composite
+        # truncates it to int for the mask, but grout needs th*0.75 == step_y
+        # exactly or the diagonal edges of adjacent rows miss each other and
+        # classify_edges finds no shared edges (all become frame boundaries ->
+        # flat grout with black gaps). The <1 px difference from the composite's
+        # int mask is hidden under the line width and the 2% tile overlap.
+        hr3 = math.sqrt(3) / 2
+        tw = base_s
+        th = base_s * 2.0 / math.sqrt(3)
+        step_x = float(tw)
+        step_y = base_s * hr3
+        cols = int(target_w / step_x) + 2
+        rows = int(target_h / step_y) + 2
+        cells = []
+        for r in range(-1, rows):
+            pos_y = r * step_y
+            for c in range(-1, cols):
+                pos_x = c * step_x + (base_s / 2 if r % 2 == 1 else 0.0)
+                poly = [
+                    (pos_x + tw / 2, pos_y),
+                    (pos_x + tw,     pos_y + th * 0.25),
+                    (pos_x + tw,     pos_y + th * 0.75),
+                    (pos_x + tw / 2, pos_y + th),
+                    (pos_x,          pos_y + th * 0.75),
+                    (pos_x,          pos_y + th * 0.25),
+                ]
+                q = c - (r - (r & 1)) // 2
+                g2 = sub7(q, r)
+                cells.append((poly, g2, sub7(*g2)))
+        return cells
+
+    def _grout_cells_kites(self, target_w, target_h, base_s):
+        # Mirrors _gen_kites (same q,r,k iteration and y-flip) so lines sit on
+        # the composited kite edges; L2 = parent hexagon, L3 = its 7-flower.
+        s = base_s
+        r3 = math.sqrt(3)
+        range_q = int(target_w / (1.5 * s)) + 3
+        range_r = int(target_h / (r3 * s)) + 3
+        cells = []
+        for q in range(-range_q, range_q):
+            r_mid = -(q // 2)
+            for r in range(r_mid - range_r, r_mid + range_r):
+                cx = 1.5 * s * q
+                cy = r3 * s * (r + q / 2.0)
+                if -2 * s < cx < target_w + 2 * s and -2 * s < cy < target_h + 2 * s:
+                    g3 = sub7(q, r)
+                    for k in range(6):
+                        poly = self._get_kite_poly(cx, cy, s, k)
+                        cent_x = sum(p[0] for p in poly) / 4
+                        cent_y = sum(p[1] for p in poly) / 4
+                        if 0 <= cent_x < target_w and 0 <= cent_y < target_h:
+                            img_poly = [(px, target_h - py) for px, py in poly]
+                            cells.append((img_poly, (q, r), g3))
+        return cells
+
+    def _apply_grout(self, mosaic_rgb, shape_mode, target_w, target_h, base_s, preset):
+        """Draw the hierarchical grout overlay on the finished RGB mosaic.
+
+        A no-op (with a note) for shapes lacking an approved grouping. Widths
+        scale with base_s from the chosen preset; flat single-level grout for
+        the remaining shapes is a follow-up.
+        """
+        cells = self._grout_cells(shape_mode, target_w, target_h, base_s)
+        if cells is None:
+            print(f"Grout: '{shape_mode}' has no approved grouping yet — "
+                  f"hierarchical grout skipped (flat grout is a follow-up).")
+            return
+        print(f"Grout: drawing hierarchical borders '{preset}' "
+              f"over {len(cells)} cells...")
+        by_level = classify_edges(cells)
+        level_w = scale_widths(preset, base_s)
+        draw_grout(ImageDraw.Draw(mosaic_rgb), by_level, level_w, color=(0, 0, 0))
+
+    def _do_render(self, target, shape_mode, tile_scale, border_mode=False, blend_strength=0.0, tint_strength=0.0, grout_preset=None, progress_cb=None, cancel_event=None):
         """Core rendering kernel — accepts a pre-scaled PIL Image, returns PIL Image.
 
         ``progress_cb``, if given, is called ``progress_cb(done, total)`` after each
@@ -928,4 +1083,11 @@ class SmartEngine:
             print(f"Applying Color Blend: {int(blend_strength * 100)}%...")
             original_resized = target.resize(mosaic_rgb.size, Image.Resampling.LANCZOS)
             mosaic_rgb = Image.blend(mosaic_rgb, original_resized, blend_strength)
+
+        # Grout is drawn last so it sits on top of the blend as a hard overlay
+        # (a colour blend must not wash the lines out).
+        if grout_preset is not None:
+            _check_cancel()
+            self._apply_grout(mosaic_rgb, shape_mode, target_w, target_h, base_s,
+                              grout_preset)
         return mosaic_rgb
