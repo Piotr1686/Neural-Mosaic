@@ -27,6 +27,7 @@ _SMART_SHAPES = [
     "square", "rectangle_3x1", "brick_wall",
     "hexagon", "hexagon_romb", "romb", "triangle", "kites", "spectre",
 ]
+_GROUT_PRESETS = ["cienki", "sredni", "gruby"]   # mirrors src.grout.PRESETS
 _TYPO_MODES = ["black_on_white", "white_on_black"]
 _FONT_GROUPS = [
     "A_cjk", "B_ancient", "C_symbols",
@@ -88,7 +89,13 @@ def _add_smart_args(p: argparse.ArgumentParser) -> None:
         "--scale", type=float, default=1.0, metavar="FLOAT",
         help="Tile size multiplier: 0.5 / 0.75 / 1.0 / 1.75 / 2.0  (default: 1.0)",
     )
-    sg.add_argument("--border", action="store_true", help="Add dark grout lines between tiles")
+    sg.add_argument("--border", action="store_true", help="Shrink tiles to leave a uniform dark gap (simple L1 border)")
+    sg.add_argument(
+        "--grout", default=None, choices=_GROUT_PRESETS, metavar="PRESET",
+        help="Draw hierarchical grout lines (thickness by group level). "
+             "Choices: " + ", ".join(_GROUT_PRESETS) + ". "
+             "Hierarchy for square/hexagon/triangle/kites; other shapes skipped.",
+    )
     sg.add_argument(
         "--blend", type=float, default=0.0, metavar="FLOAT",
         help="Blend original image over mosaic, 0.0-0.3  (default: 0.0)",
@@ -312,6 +319,7 @@ def _render_smart(engine, input_path: Path, output_path: Path, args: argparse.Na
         border_mode=args.border,
         blend_strength=args.blend,
         tint_strength=args.tint,
+        grout_preset=args.grout,
     )
 
 
@@ -338,10 +346,10 @@ def _run_render(args: argparse.Namespace, log: logging.Logger) -> None:
 
     if args.engine == "smart":
         log.info(
-            "  Shape=%s  Scale=%.2f  Border=%s  Blend=%.2f  Tint=%.2f"
+            "  Shape=%s  Scale=%.2f  Border=%s  Grout=%s  Blend=%.2f  Tint=%.2f"
             "  Mirror=%s  EdgeAware=%s",
-            args.shape, args.scale, args.border, args.blend, args.tint,
-            args.mirror, args.edge_aware,
+            args.shape, args.scale, args.border, args.grout or "off",
+            args.blend, args.tint, args.mirror, args.edge_aware,
         )
         engine = _load_smart_engine(args, log)
         log.info("Rendering...")
@@ -365,7 +373,12 @@ def _run_render(args: argparse.Namespace, log: logging.Logger) -> None:
 
 def _batch_output_path(output_dir: Path, stem: str, args: argparse.Namespace) -> Path:
     ext = ".png" if args.engine == "typo" else ".jpg"
-    suffix = f"_{args.shape}" if args.engine == "smart" else f"_{args.mode}"
+    if args.engine == "smart":
+        suffix = f"_{args.shape}"
+        if getattr(args, "grout", None):
+            suffix += f"_grout-{args.grout}"
+    else:
+        suffix = f"_{args.mode}"
     return output_dir / f"{stem}_{args.engine}_{args.res}{suffix}{ext}"
 
 

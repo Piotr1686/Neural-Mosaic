@@ -320,7 +320,7 @@ class TestBatchOutputNaming:
     def _make_args(self, **overrides):
         ns = argparse.Namespace(
             engine="smart", res="8K", shape="square",
-            mode="black_on_white",
+            mode="black_on_white", grout=None,
         )
         for k, v in overrides.items():
             setattr(ns, k, v)
@@ -335,6 +335,19 @@ class TestBatchOutputNaming:
         args = self._make_args(engine="typo", mode="white_on_black", res="8K")
         out = cli._batch_output_path(tmp_path, "photo", args)
         assert out.name == "photo_typo_8K_white_on_black.png"
+
+    def test_grout_preset_is_in_name(self, tmp_path):
+        # keeps grout / no-grout renders distinct for skip-if-exists
+        args = self._make_args(engine="smart", shape="hexagon", res="4K",
+                               grout="sredni")
+        out = cli._batch_output_path(tmp_path, "photo", args)
+        assert out.name == "photo_smart_4K_hexagon_grout-sredni.jpg"
+
+    def test_no_grout_omits_suffix(self, tmp_path):
+        args = self._make_args(engine="smart", shape="hexagon", res="4K",
+                               grout=None)
+        out = cli._batch_output_path(tmp_path, "photo", args)
+        assert out.name == "photo_smart_4K_hexagon.jpg"
 
     def test_naming_is_deterministic(self, tmp_path):
         """No timestamp → batch can re-run and skip already-rendered files."""
