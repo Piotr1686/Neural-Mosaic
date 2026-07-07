@@ -1,54 +1,59 @@
 # last_session.md
 
-**Sesja:** 2026-07-06 · (~10:00-13:30 + domknięcie ~21:00, Fable 5)
-**Status:** ✓ Zakończona poprawnie (sunflower ZAMKNIĘTY; /end domknięty ręcznie 2026-07-07 na starcie kolejnej sesji — pliki stanu były niezacommitowane)
-**Punkt odniesienia (git):** ea4fe49 @ main (zsynchronizowane z origin/main; working tree czysty poza plikami stanu domykanymi tym commitem)
+**Sesja:** 2026-07-07 · (Opus 4.8)
+**Status:** ⟳ W TOKU (checkpoint) — grout wdrożony do silnika + CLI + GUI; follow-up: flat-L1 dla 5 kształtów
+**Punkt odniesienia (git):** f89f159 @ main (working tree czysty poza tym plikiem stanu; commity tej sesji NIE wypchnięte na origin)
 
 ---
 
 ## ▸ NASTĘPNY KROK (zacznij tutaj)
 
-**Sunflower jest zamknięty — wybierz wątek z backlogu.** Rekomendowana kolejność:
+**Grout — flat-L1 dla pozostałych 5 kształtów** (werdykt usera: „4 z hierarchią + reszta płaska L1"; zrobiona tylko hierarchiczna czwórka):
 
-1. **Grout — werdykt presetu + wdrożenie do silnika.** Montaż `output/grout_proposals/grout_proposals.png` gotowy (4 kształty × 3 poziomy × 3 presety grubości); user widział, wybrał tylko „grubość DO WYBORU". Do zrobienia: werdykt który preset domyślny + wdrożenie groutu do `engine_smart`/`engine_typo` jako parametr GUI/CLI + podgląd schematów z borderami przy zaznaczonym checkboxie (JEDEN przebieg). Generator: `src/tools/gen_grout_proposals.py`.
-2. **Wiring nowych kształtów do silnika** — sunflower×7 (soft/disc/rings/grande/xl/g-soft/inverse) + rhombs×3 (nopole/funnel/star) wchodzą do selekcji finalnej z `PLAN_SHAPES` (`_polygon_sector`/`SHAPE_MODES` w `_do_render`). Uwaga na nazewnictwo grande_* (grande_xl vs sunflower_grande_xl) — rozstrzygnąć tu.
-3. **PLAN_FRACTAL wykonawczy — start F1a** (trójfazowa pętla dopasowania, golden bit-w-bit). Kanoniczny plan: `PLAN_FRACTAL.md`, 14 sprintów.
+1. Dodaj `_grout_cells_flat` dla romb / hexagon_romb / rectangle_3x1 / brick_wall / spectre → komórki (poly, g2, g3) z JEDNAKOWYM group-id (wszystkie równe) tak, by `classify_edges` dało tylko krawędzie wewnętrzne + ramkę; rysuj wszystkie jednym poziomem: `level_w={1:w,2:w,3:w}` (albo dedykowany helper flat).
+2. Geometria per kształt: spectre ma już jawne poligony (`spec.points` — trywialne); romb/hexagon_romb/rectangle_3x1/brick_wall wymagają odtworzenia poligonu z pętli composite (`pos_x,pos_y,tile_w,tile_h` + kształt maski z `_get_shape_mask`). UWAGA na tę samą pułapkę co hexagon: geometria groutu musi teselować SAMA ZE SOBĄ (patrz auto-memory [[project_grout_engine]] — float th, nie int).
+3. Podłącz w `_grout_cells` dispatcher (dziś zwraca None dla tych 5) i zdejmij no-op notę. Rozszerz testy w `tests/test_grout_engine.py`.
+4. (Opcjonalnie) bordery na schematach w podglądzie GUI, gdy grout != Off.
+
+Alternatywnie następny wątek z backlogu (jeśli user woli): wiring nowych kształtów sunflower/rhombs do silnika (PLAN_SHAPES), albo PLAN_FRACTAL F1a.
 
 ---
 
 ## Co zrobiono w tej sesji
 
-- ✓ **PLAN_FRACTAL.md — plan wykonawczy** (cecb220): 14 krótkich sprintów z checkboxami/DoD/bramkami dla Opus/Sonnet (F1a→F4b→CHECKPOINT→O1/O2/O3); kotwice w kodzie zweryfikowane (SHAPE_MODES:156 i golden testy JUŻ istnieją); tablica postępu.
-- ✓ **Zaległe commity + push** — na origin/main poszło wszystko do ea4fe49 włącznie.
-- ✓ **Cancel render WDROŻONY** (8a28666): `cancel_event` w obu silnikach (polling w pętlach budowy sektorów i dopasowania), `RenderCancelled` w nowym `src/render_control.py`, przycisk Cancel w obu zakładkach GUI, anulowany render nie zapisuje pliku; +6 testów (`tests/test_render_cancel.py`), 187 zielonych.
-- ✓ **Grout hierarchiczny — propozycje** (7ac8139 + 9f5b55f): 4 kształty × 3 poziomy (wspólna pod-siatka Gospera `sub7`, komponuje się rekurencyjnie) × 3 presety grubości (werdykt usera: grubość DO WYBORU); montaż `output/grout_proposals/grout_proposals.png`.
-- ✓ **Sunflower rev 1→4 — ZAMKNIĘTY** (15100da → db6cee5 → 56590d3 → ea4fe49):
-  - rev 1 (15100da): 5 propozycji; log-spirala zamiast √n (lekcja: √n = nakładające się łuski).
-  - rev 2 (db6cee5): classic/corner/field ODRZUCONE (usunięte); pula 8.
-  - rev 3 (56590d3): 7 głównych ZAAKCEPTOWANYCH → `assets/shape_schemes/` (soft/disc/rings/grande/xl/g-soft/inverse); + 5 propozycji środka rhombs do werdyktu.
-  - rev 4 (ea4fe49): werdykt środka rhombs → **nopole/funnel/star ZAAKCEPTOWANE** do assets; star2/chunky odrzucone i usunięte; `sunflower_disc` uproszczony do jednej złotej palety (kontrast stref niesie geometria, nie kolor).
-- ✓ MEMORY.md (repo + auto-memory `project_sunflower_grout`): sesja werdyktowa + lekcje log-spirali + zamknięcie sunflower na ea4fe49.
+- ✓ **Sprzątanie: przerwany /end domknięty** (c41783f): pliki stanu z 2026-07-06 były niezacommitowane i opisywały sunflower jako urwany WIP — w rzeczywistości domknięty commitami 56590d3+ea4fe49 (sunflower ZAMKNIĘTY). Zaktualizowano last_session.md → ea4fe49, poprawiono wpis w repo MEMORY.md.
+- ✓ **Grout Stage 1 — src/grout.py** (59dd0c7): produkcyjny moduł geometrii (sub7, classify_edges, draw_grout, PRESETS, scale_widths, stable_seed) wydzielony z narzędzia propozycji; narzędzie importuje stąd (usunięta duplikacja); fix determinizmu seeda (crc32 zamiast hash() solonego per-proces). +11 testów.
+- ✓ **Grout Stage 2 — border pass w silniku** (ed23955): param `grout_preset` (osobny opt-in tryb wg werdyktu; border_mode nietknięty), hierarchia dla square/hexagon/triangle/kites. `_grout_cells_*` odtwarzają geometrię kafli; grout rysowany po blendzie. `grout_preset=None` = bit-w-bit baseline. LEKCJA: hexagon th musi być FLOAT base_s*2/√3 (int rozjeżdża przekątne → brak wspólnych krawędzi; bug wykryty wizualnie). +9 testów.
+- ✓ **Grout CLI** (e11abde): `--grout PRESET` obok `--border`; batch name suffix `_grout-{preset}`. +2 testy.
+- ✓ **Grout GUI** (f89f159): `CTkOptionMenu` „Hierarchical Grout" Off/cienki/sredni/gruby w Smart tab; wpięte w podgląd on-demand i render pełny.
+- ✓ **Weryfikacja wizualna:** montaż z geometrii silnika (scratchpad/grout_engine_visual.png) — 4 kształty poprawne. **209 testów zielonych** (było 187; +22 grout).
 
-## Co zostało (backlog sesji)
+## Werdykty usera (2026-07-07)
 
-- ⟳ **Grout — werdykt presetu + wdrożenie do silnika** (NASTĘPNY KROK #1; montaż gotowy).
-- ⟳ **Wiring nowych kształtów** (sunflower×7 + rhombs×3) do silnika → selekcja finalna z PLAN_SHAPES (NASTĘPNY KROK #2).
-- ⟳ **PLAN_FRACTAL wykonawczy** — start F1a (NASTĘPNY KROK #3).
+- Grout = OSOBNY opt-in tryb (kafle się stykają, linie na wierzchu); `border_mode` shrink-gap zostaje niezależny (przemianowany w GUI na „uniform gap").
+- 4 kształty z hierarchią (square/hexagon/triangle/kites) + reszta PŁASKA L1 (reszta = follow-up).
+- Preset domyślny „średni" (i tak wybieralny).
+
+## Co zostało (backlog)
+
+- ⟳ **Grout flat-L1 dla 5 kształtów** (NASTĘPNY KROK).
+- ⟳ **Wiring nowych kształtów** (sunflower×7 + rhombs×3) do silnika → selekcja finalna z PLAN_SHAPES.
+- ⟳ **PLAN_FRACTAL wykonawczy** — start F1a (trójfazowa pętla, golden bit-w-bit).
+- ⟳ **Push:** commity tej sesji (c41783f..f89f159) NIE wypchnięte na origin — do decyzji usera.
 - ⟳ Standing: galeria 16K triangle+hexagon (pliki usera); test_dzi + pasek postępu DZI ([[project_dzi_gui_polish_todo]]).
 
 ## Aktywne pliki
 
-- `src/tools/gen_sunflower_schemes.py` (ZAMKNIĘTY — maszyneria `_log_mesh`/`_bridge`/`_rosette` + gen_rhombs_{nopole,funnel,star}; ACCEPTED→assets)
-- `src/tools/gen_grout_proposals.py` (4 kształty × 3 presety grubości — do wdrożenia w silniku)
-- `src/render_control.py`, `src/engine_smart.py`, `src/engine_typo.py`, `src/gui.py`, `tests/test_render_cancel.py` (cancel render)
-- `PLAN_FRACTAL.md` (plan wykonawczy 14 sprintów), `PLAN_SHAPES.md` (selekcja finalna kształtów)
+- `src/grout.py` (NOWY — geometria groutu), `tests/test_grout.py`, `tests/test_grout_engine.py`
+- `src/engine_smart.py` (border pass + `_grout_cells_*` + param grout_preset)
+- `src/cli.py` (--grout), `src/gui.py` (selektor), `src/tools/gen_grout_proposals.py` (import z src.grout)
 
 ## Otwarte pytania
 
-- Werdykt presetu groutu (cienki/średni/gruby) + które kształty dostają hierarchię grupowania.
-- Nazewnictwo finalne schematów grande_* w assets (grande_xl vs sunflower_grande_xl) — rozstrzygnąć przy wiringu do silnika.
+- Płaski grout — czy ramka kadru też ma być rysowana (dziś L3), czy tylko krawędzie wewnętrzne?
+- Nazewnictwo finalne schematów grande_* w assets (przy wiringu sunflower do silnika).
 
 ## Do MEMORY.md (przeniesiono)
 
-- Repo MEMORY.md: [2026-07-05b] — plan wykonawczy fraktali, cancel render (render_control.py), grout (sub7 Gospera, grubość do wyboru), sunflower ZAMKNIĘTY na ea4fe49 (7 głównych + rhombs nopole/funnel/star; lekcje log-spirali).
-- Auto-memory: `project_sunflower_grout` (werdykty + lekcje + zamknięcie na ea4fe49).
+- Auto-memory: nowy `project_grout_engine` (architektura + lekcja float-th hexagonu + konwersja offset→axial + werdykty + follow-up).
+- Repo MEMORY.md: wpis o wdrożeniu groutu do dodania przy /end.
