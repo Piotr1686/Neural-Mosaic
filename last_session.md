@@ -1,54 +1,54 @@
 # last_session.md
 
-**Sesja:** 2026-07-04 · (druga sesja tego dnia, Fable 5; ~14:00-22:00)
-**Status:** ✓ Zakończona poprawnie
-**Punkt odniesienia (git):** af581e1 @ main (commit kodu; origin/main = 9aa5416 — af581e1 NIE wypchnięty, push do decyzji)
+**Sesja:** 2026-07-06 · (~10:00-13:30 + domknięcie ~21:00, Fable 5)
+**Status:** ✓ Zakończona poprawnie (sunflower ZAMKNIĘTY; /end domknięty ręcznie 2026-07-07 na starcie kolejnej sesji — pliki stanu były niezacommitowane)
+**Punkt odniesienia (git):** ea4fe49 @ main (zsynchronizowane z origin/main; working tree czysty poza plikami stanu domykanymi tym commitem)
 
 ---
 
 ## ▸ NASTĘPNY KROK (zacznij tutaj)
 
-**Pakiet 3 poprawek zleconych przez usera na koniec sesji (wszystkie w `src/tools/gen_extra_shape_schemes.py` + `gen_fable_shape_schemes.py`):**
+**Sunflower jest zamknięty — wybierz wątek z backlogu.** Rekomendowana kolejność:
 
-1. **`sierpinski` — nowy wariant SZACHOWNICA:** duże trójkąty (nośniki pełnego gasketu depth-3) naprzemiennie z wypełnionymi w KAŻDYM rzędzie (co drugi, niezależnie od orientacji góra/dół), a każdy kolejny rząd przesunięty o jeden — układ jak szachownica. Wersje `sierpinski_b` (tylko „góra") i `sierpinski_c` (przeplot co rząd) **ODRZUCONE** — usunąć ich PNG + wpisy SHAPES, próbować dalej. Nośnik: pozycja-w-rzędzie t (licząc oba typy trójkątów) taka, że carrier = (t + r) % 2, ale inaczej niż w c: naprzemienność MA być w obrębie rzędu co drugi trójkąt sekwencyjnie, z przesunięciem +1 na każdy rząd.
-2. **`sierpinski_carpet` — wada do naprawy:** najmniejsze „puste" kwadraty (poziom 1, bok 1/27) mają IDENTYCZNY rozmiar jak wypełnione ⇒ po podmianie na kafelki zdjęciowe nieodróżnialne. Trzeba zróżnicować (np. głębsza rekurencja wypełnionych o 1 poziom, żeby najmniejsza dziura była zawsze ≥3× większa od komórki tła; albo usunąć tag dziury z poziomu 1).
-3. **`rosette_fractal` / `voderberg` / `girih` — środek z kafelków TEGO SAMEGO kształtu:** czapka N-gon (rosette_fractal, voderberg) i rozeta latawców khatam różna od reszty (girih — tam akurat latawce zostają, chodzi o spójność z resztą) mają być zastąpione kafelkami tego samego kształtu co reszta teselacji, co najwyżej delikatnie zmodyfikowanymi — np. wewnętrzny pierścień trójkątów/klinów zbiegających się WIERZCHOŁKAMI w centrum (bez osobnego „koła").
-
-Kontekst: to bezpośrednie werdykty usera po obejrzeniu montaży z 2026-07-04b. Po tych poprawkach zostaje selekcja finalna (19 paneli extra + 10 Fable) → Sprint 2 (wiring `_polygon_sector`/`SHAPE_MODES` w `_do_render`).
+1. **Grout — werdykt presetu + wdrożenie do silnika.** Montaż `output/grout_proposals/grout_proposals.png` gotowy (4 kształty × 3 poziomy × 3 presety grubości); user widział, wybrał tylko „grubość DO WYBORU". Do zrobienia: werdykt który preset domyślny + wdrożenie groutu do `engine_smart`/`engine_typo` jako parametr GUI/CLI + podgląd schematów z borderami przy zaznaczonym checkboxie (JEDEN przebieg). Generator: `src/tools/gen_grout_proposals.py`.
+2. **Wiring nowych kształtów do silnika** — sunflower×7 (soft/disc/rings/grande/xl/g-soft/inverse) + rhombs×3 (nopole/funnel/star) wchodzą do selekcji finalnej z `PLAN_SHAPES` (`_polygon_sector`/`SHAPE_MODES` w `_do_render`). Uwaga na nazewnictwo grande_* (grande_xl vs sunflower_grande_xl) — rozstrzygnąć tu.
+3. **PLAN_FRACTAL wykonawczy — start F1a** (trójfazowa pętla dopasowania, golden bit-w-bit). Kanoniczny plan: `PLAN_FRACTAL.md`, 14 sprintów.
 
 ---
 
 ## Co zrobiono w tej sesji
 
-- ✓ **Push zaległości** (cedb2ce+75bf7df+9aa5416 → origin/main).
-- ✓ **`penrose_p2` — ostatni [ETAP A] DOMKNIĘTY** (zastąpił hirotaka, PNG usunięty): prawdziwe latawce+strzałki P2. Droga: 2 ręczne substytucje Robinsona ZAWIODŁY (T-junctions między rodzicami; 23-87% parowania) → działa **deflacja P3 Preshinga + relacje A/B kafli Robinsona (BS=AL, BL=AL+AS)**, cięcie grubego rombu w U przy |BU|=ramię (kierunek lustrzany: 410 niesparowanych, właściwy: 0), scalanie połówek matchingiem „stopień-1-najpierw" (para = rodzaj + wspólne ramię + wspólny apex; BEZ testu chiralności z etykiet). Weryfikacja numeryczna: kąty kite/dart, proporcja ≈φ, 0 niesparowanych.
-- ✓ **Pakiet „niepraktyczny środek" (zlecenia usera w trakcie):** `rosette_fractal` → sektory ×2 co 3 pierścienie (g=2^(1/3), pas podwajający = wachlarz 3 trójkątów); `voderberg` → liczba klinów ~2πr/target per pierścień; `girih` → dekagony dzielone na 10 latawców khatam + domykanie dziur greedy (convex hull pustych komponentów rastra, scipy label+ConvexHull, inflacja 1.10).
-- ✓ **`poincare` PRZEPROJEKTOWANY** (user: „usunąć okrąg"): model pasmowy w=(2/π)log((1+z)/(1−z)), okno |y|≤0.80, heptagony → 7 latawców (środek hiperboliczny śledzony przez odbicia; środek krawędzi = próbka t=0.5 łuku). Wersja inwersyjna wyrzucona.
-- ✓ **`sierpinski_b`/`sierpinski_c`** (2 warianty równomiernych dużych dziur; helper `_sierp4` capuje dziury nie-nośników na S/4) — na koniec sesji ODRZUCONE przez usera (→ następny krok: szachownica).
-- ✓ **`sierpinski_carpet` (#40)** — dywan 3×3 depth-3 na cały kadr (wada zgłoszona → następny krok).
-- ✓ Regeneracja WSZYSTKICH schematów + oba montaże; **181/181 testów**; commit `af581e1`.
-- ✓ MEMORY.md (repo + auto-memory) zaktualizowane o lekcję P2 i wzorzec „dobrego środka".
+- ✓ **PLAN_FRACTAL.md — plan wykonawczy** (cecb220): 14 krótkich sprintów z checkboxami/DoD/bramkami dla Opus/Sonnet (F1a→F4b→CHECKPOINT→O1/O2/O3); kotwice w kodzie zweryfikowane (SHAPE_MODES:156 i golden testy JUŻ istnieją); tablica postępu.
+- ✓ **Zaległe commity + push** — na origin/main poszło wszystko do ea4fe49 włącznie.
+- ✓ **Cancel render WDROŻONY** (8a28666): `cancel_event` w obu silnikach (polling w pętlach budowy sektorów i dopasowania), `RenderCancelled` w nowym `src/render_control.py`, przycisk Cancel w obu zakładkach GUI, anulowany render nie zapisuje pliku; +6 testów (`tests/test_render_cancel.py`), 187 zielonych.
+- ✓ **Grout hierarchiczny — propozycje** (7ac8139 + 9f5b55f): 4 kształty × 3 poziomy (wspólna pod-siatka Gospera `sub7`, komponuje się rekurencyjnie) × 3 presety grubości (werdykt usera: grubość DO WYBORU); montaż `output/grout_proposals/grout_proposals.png`.
+- ✓ **Sunflower rev 1→4 — ZAMKNIĘTY** (15100da → db6cee5 → 56590d3 → ea4fe49):
+  - rev 1 (15100da): 5 propozycji; log-spirala zamiast √n (lekcja: √n = nakładające się łuski).
+  - rev 2 (db6cee5): classic/corner/field ODRZUCONE (usunięte); pula 8.
+  - rev 3 (56590d3): 7 głównych ZAAKCEPTOWANYCH → `assets/shape_schemes/` (soft/disc/rings/grande/xl/g-soft/inverse); + 5 propozycji środka rhombs do werdyktu.
+  - rev 4 (ea4fe49): werdykt środka rhombs → **nopole/funnel/star ZAAKCEPTOWANE** do assets; star2/chunky odrzucone i usunięte; `sunflower_disc` uproszczony do jednej złotej palety (kontrast stref niesie geometria, nie kolor).
+- ✓ MEMORY.md (repo + auto-memory `project_sunflower_grout`): sesja werdyktowa + lekcje log-spirali + zamknięcie sunflower na ea4fe49.
 
 ## Co zostało (backlog sesji)
 
-- ⟳ **Pakiet 3 poprawek** (NASTĘPNY KROK — werdykty usera).
-- ⟳ **Push af581e1** (+commit stanu) na origin/main — do decyzji usera.
-- ⟳ **Selekcja finalna kształtów** (19 extra + 10 Fable) → Sprint 2 (`_do_render` wiring; ryzyko bbox spectre w MEMORY [2026-07-02]).
-- ⟳ **Standing:** galeria 16K triangle+hexagon (czeka na pliki usera); test_dzi + pasek postępu DZI ([[project_dzi_gui_polish_todo]]).
+- ⟳ **Grout — werdykt presetu + wdrożenie do silnika** (NASTĘPNY KROK #1; montaż gotowy).
+- ⟳ **Wiring nowych kształtów** (sunflower×7 + rhombs×3) do silnika → selekcja finalna z PLAN_SHAPES (NASTĘPNY KROK #2).
+- ⟳ **PLAN_FRACTAL wykonawczy** — start F1a (NASTĘPNY KROK #3).
+- ⟳ Standing: galeria 16K triangle+hexagon (pliki usera); test_dzi + pasek postępu DZI ([[project_dzi_gui_polish_todo]]).
 
 ## Aktywne pliki
 
-- `src/tools/gen_extra_shape_schemes.py` (penrose_p2 przez P3→A/B; rosette_fractal podwajanie; sierpinski_b/c; carpet; SHAPES=19)
-- `src/tools/gen_fable_shape_schemes.py` (voderberg sektory ∝ r; girih kite-split + hole-fill; poincare model pasmowy; import scipy)
-- `assets/shape_schemes/*.png` (penrose_p2/sierpinski_b/sierpinski_c/sierpinski_carpet nowe; hirotaka usunięty; girih/poincare/rosette_fractal/voderberg zmienione)
+- `src/tools/gen_sunflower_schemes.py` (ZAMKNIĘTY — maszyneria `_log_mesh`/`_bridge`/`_rosette` + gen_rhombs_{nopole,funnel,star}; ACCEPTED→assets)
+- `src/tools/gen_grout_proposals.py` (4 kształty × 3 presety grubości — do wdrożenia w silniku)
+- `src/render_control.py`, `src/engine_smart.py`, `src/engine_typo.py`, `src/gui.py`, `tests/test_render_cancel.py` (cancel render)
+- `PLAN_FRACTAL.md` (plan wykonawczy 14 sprintów), `PLAN_SHAPES.md` (selekcja finalna kształtów)
 
 ## Otwarte pytania
 
-- Push af581e1 — nie wykonany (bez decyzji usera).
-- Czy po poprawce szachownicy usunąć też PNG sierpinski_b/c z repo (ODRZUCONE) — zakładam TAK, w ramach następnego kroku.
-- Girih hole-fill: hull może minimalnie zachodzić na sąsiadów (inflacja 1.10) — akceptowalne w schemacie; przy wdrożeniu do silnika wymaga dokładnej geometrii.
+- Werdykt presetu groutu (cienki/średni/gruby) + które kształty dostają hierarchię grupowania.
+- Nazewnictwo finalne schematów grande_* w assets (grande_xl vs sunflower_grande_xl) — rozstrzygnąć przy wiringu do silnika.
 
 ## Do MEMORY.md (przeniesiono)
 
-- Repo MEMORY.md: wpis [2026-07-04b] — lekcja P2 (ręczna substytucja = T-junctions; droga P3→A/B z kierunkiem cięcia i matchingiem), wzorzec „dobrego środka" radialnych, poincare pasmowy, warianty sierpińskiego + dywan, werdykty usera z końca sesji (b/c odrzucone → szachownica; carpet wada najmniejszych dziur; środki z kafelków tego samego kształtu).
-- Auto-memory: `project_extra_15_shapes` rozszerzone o rewizję 04b (pełna technika P2 + pułapki).
+- Repo MEMORY.md: [2026-07-05b] — plan wykonawczy fraktali, cancel render (render_control.py), grout (sub7 Gospera, grubość do wyboru), sunflower ZAMKNIĘTY na ea4fe49 (7 głównych + rhombs nopole/funnel/star; lekcje log-spirali).
+- Auto-memory: `project_sunflower_grout` (werdykty + lekcje + zamknięcie na ea4fe49).

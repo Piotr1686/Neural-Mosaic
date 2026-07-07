@@ -1,3 +1,61 @@
+## ═══ Sesja zarchiwizowana [2026-07-06 20:54] ═══
+
+# last_session.md
+
+**Sesja:** 2026-07-04 · (druga sesja tego dnia, Fable 5; ~14:00-22:00)
+**Status:** ✓ Zakończona poprawnie
+**Punkt odniesienia (git):** af581e1 @ main (commit kodu; origin/main = 9aa5416 — af581e1 NIE wypchnięty, push do decyzji)
+
+---
+
+## ▸ NASTĘPNY KROK (zacznij tutaj)
+
+**Pakiet 3 poprawek zleconych przez usera na koniec sesji (wszystkie w `src/tools/gen_extra_shape_schemes.py` + `gen_fable_shape_schemes.py`):**
+
+1. **`sierpinski` — nowy wariant SZACHOWNICA:** duże trójkąty (nośniki pełnego gasketu depth-3) naprzemiennie z wypełnionymi w KAŻDYM rzędzie (co drugi, niezależnie od orientacji góra/dół), a każdy kolejny rząd przesunięty o jeden — układ jak szachownica. Wersje `sierpinski_b` (tylko „góra") i `sierpinski_c` (przeplot co rząd) **ODRZUCONE** — usunąć ich PNG + wpisy SHAPES, próbować dalej. Nośnik: pozycja-w-rzędzie t (licząc oba typy trójkątów) taka, że carrier = (t + r) % 2, ale inaczej niż w c: naprzemienność MA być w obrębie rzędu co drugi trójkąt sekwencyjnie, z przesunięciem +1 na każdy rząd.
+2. **`sierpinski_carpet` — wada do naprawy:** najmniejsze „puste" kwadraty (poziom 1, bok 1/27) mają IDENTYCZNY rozmiar jak wypełnione ⇒ po podmianie na kafelki zdjęciowe nieodróżnialne. Trzeba zróżnicować (np. głębsza rekurencja wypełnionych o 1 poziom, żeby najmniejsza dziura była zawsze ≥3× większa od komórki tła; albo usunąć tag dziury z poziomu 1).
+3. **`rosette_fractal` / `voderberg` / `girih` — środek z kafelków TEGO SAMEGO kształtu:** czapka N-gon (rosette_fractal, voderberg) i rozeta latawców khatam różna od reszty (girih — tam akurat latawce zostają, chodzi o spójność z resztą) mają być zastąpione kafelkami tego samego kształtu co reszta teselacji, co najwyżej delikatnie zmodyfikowanymi — np. wewnętrzny pierścień trójkątów/klinów zbiegających się WIERZCHOŁKAMI w centrum (bez osobnego „koła").
+
+Kontekst: to bezpośrednie werdykty usera po obejrzeniu montaży z 2026-07-04b. Po tych poprawkach zostaje selekcja finalna (19 paneli extra + 10 Fable) → Sprint 2 (wiring `_polygon_sector`/`SHAPE_MODES` w `_do_render`).
+
+---
+
+## Co zrobiono w tej sesji
+
+- ✓ **Push zaległości** (cedb2ce+75bf7df+9aa5416 → origin/main).
+- ✓ **`penrose_p2` — ostatni [ETAP A] DOMKNIĘTY** (zastąpił hirotaka, PNG usunięty): prawdziwe latawce+strzałki P2. Droga: 2 ręczne substytucje Robinsona ZAWIODŁY (T-junctions między rodzicami; 23-87% parowania) → działa **deflacja P3 Preshinga + relacje A/B kafli Robinsona (BS=AL, BL=AL+AS)**, cięcie grubego rombu w U przy |BU|=ramię (kierunek lustrzany: 410 niesparowanych, właściwy: 0), scalanie połówek matchingiem „stopień-1-najpierw" (para = rodzaj + wspólne ramię + wspólny apex; BEZ testu chiralności z etykiet). Weryfikacja numeryczna: kąty kite/dart, proporcja ≈φ, 0 niesparowanych.
+- ✓ **Pakiet „niepraktyczny środek" (zlecenia usera w trakcie):** `rosette_fractal` → sektory ×2 co 3 pierścienie (g=2^(1/3), pas podwajający = wachlarz 3 trójkątów); `voderberg` → liczba klinów ~2πr/target per pierścień; `girih` → dekagony dzielone na 10 latawców khatam + domykanie dziur greedy (convex hull pustych komponentów rastra, scipy label+ConvexHull, inflacja 1.10).
+- ✓ **`poincare` PRZEPROJEKTOWANY** (user: „usunąć okrąg"): model pasmowy w=(2/π)log((1+z)/(1−z)), okno |y|≤0.80, heptagony → 7 latawców (środek hiperboliczny śledzony przez odbicia; środek krawędzi = próbka t=0.5 łuku). Wersja inwersyjna wyrzucona.
+- ✓ **`sierpinski_b`/`sierpinski_c`** (2 warianty równomiernych dużych dziur; helper `_sierp4` capuje dziury nie-nośników na S/4) — na koniec sesji ODRZUCONE przez usera (→ następny krok: szachownica).
+- ✓ **`sierpinski_carpet` (#40)** — dywan 3×3 depth-3 na cały kadr (wada zgłoszona → następny krok).
+- ✓ Regeneracja WSZYSTKICH schematów + oba montaże; **181/181 testów**; commit `af581e1`.
+- ✓ MEMORY.md (repo + auto-memory) zaktualizowane o lekcję P2 i wzorzec „dobrego środka".
+
+## Co zostało (backlog sesji)
+
+- ⟳ **Pakiet 3 poprawek** (NASTĘPNY KROK — werdykty usera).
+- ⟳ **Push af581e1** (+commit stanu) na origin/main — do decyzji usera.
+- ⟳ **Selekcja finalna kształtów** (19 extra + 10 Fable) → Sprint 2 (`_do_render` wiring; ryzyko bbox spectre w MEMORY [2026-07-02]).
+- ⟳ **Standing:** galeria 16K triangle+hexagon (czeka na pliki usera); test_dzi + pasek postępu DZI ([[project_dzi_gui_polish_todo]]).
+
+## Aktywne pliki
+
+- `src/tools/gen_extra_shape_schemes.py` (penrose_p2 przez P3→A/B; rosette_fractal podwajanie; sierpinski_b/c; carpet; SHAPES=19)
+- `src/tools/gen_fable_shape_schemes.py` (voderberg sektory ∝ r; girih kite-split + hole-fill; poincare model pasmowy; import scipy)
+- `assets/shape_schemes/*.png` (penrose_p2/sierpinski_b/sierpinski_c/sierpinski_carpet nowe; hirotaka usunięty; girih/poincare/rosette_fractal/voderberg zmienione)
+
+## Otwarte pytania
+
+- Push af581e1 — nie wykonany (bez decyzji usera).
+- Czy po poprawce szachownicy usunąć też PNG sierpinski_b/c z repo (ODRZUCONE) — zakładam TAK, w ramach następnego kroku.
+- Girih hole-fill: hull może minimalnie zachodzić na sąsiadów (inflacja 1.10) — akceptowalne w schemacie; przy wdrożeniu do silnika wymaga dokładnej geometrii.
+
+## Do MEMORY.md (przeniesiono)
+
+- Repo MEMORY.md: wpis [2026-07-04b] — lekcja P2 (ręczna substytucja = T-junctions; droga P3→A/B z kierunkiem cięcia i matchingiem), wzorzec „dobrego środka" radialnych, poincare pasmowy, warianty sierpińskiego + dywan, werdykty usera z końca sesji (b/c odrzucone → szachownica; carpet wada najmniejszych dziur; środki z kafelków tego samego kształtu).
+- Auto-memory: `project_extra_15_shapes` rozszerzone o rewizję 04b (pełna technika P2 + pułapki).
+
+
 ## ═══ Sesja zarchiwizowana [2026-07-04 21:58] ═══
 
 # last_session.md
@@ -52,6 +110,7 @@ Kontekst: cała reszta rewizji kształtów jest DOMKNIĘTA (9 poprawek usera + 4
 
 - Repo MEMORY.md: NOWY wpis [2026-07-04] — fix kites (-q//2, golden nietknięte), techniki: twindragon rep-tile (kasowanie krawędzi + skręt w lewo), inwersja poincare (okno w dysku NIE działa), teselacja 2-size Kocha (bilans pól), rozeta 3.12.12 (pułapki: dziury po wszystkich centrach, filtr BOX), scales (pokrycie dokładne), redukcja rodziny radialnej.
 - Auto-memory: `project_extra_15_shapes` rozbudowane o pełną rewizję 2026-07-04 + zaindeksowane w MEMORY.md (wcześniej brakowało w indeksie).
+
 
 ## ═══ Sesja zarchiwizowana [2026-07-04 11:30] ═══
 
@@ -112,6 +171,7 @@ Kontekst: user narzucił iteracyjnie TWARDĄ regułę — KAŻDY kształt musi b
 
 - Repo MEMORY.md: NOWY wpis [2026-07-03] o ETAP B (10 teselacji), regule „prawdziwa teselacja", technikach `_radial_clip_cells`/`_clip_rect`, ETAP A pending.
 - Auto-memory: [[project_extra_15_shapes]] rozbudowane (wymóg teselacji, decyzje B, moire≡square caveat, gereh/koch_island/dragon).
+
 
 ## ═══ Sesja zarchiwizowana [2026-07-03 23:43] ═══
 
@@ -180,6 +240,7 @@ Kontekst: helper `_polygon_sector`, rejestr `SHAPE_MODES`, generatory `_gen_kite
 
 - [Aktywne TODO] NOWY [2026-07-02] „Sprint 2 W TOKU — golden + szkielet gotowe, wiring NIE" (golden 8/8, `_polygon_sector`+`SHAPE_MODES`+generatory addytywnie, dowód równoważności kites, ⚠ ryzyko golden spectre).
 
+
 ## ═══ Sesja zarchiwizowana [2026-07-02 23:30] ═══
 
 # last_session.md
@@ -195,57 +256,4 @@ Kontekst: helper `_polygon_sector`, rejestr `SHAPE_MODES`, generatory `_gen_kite
 - Sprint 1b domknięty (3a186b7); audyt kites vs spectre; 20 kształtów w kolejce (10 Opus + 10 Fable, e6c55f4); PLAN_SHAPES.md kanoniczny; push d67dd08..37af281; model→Opus 4.8; finalizacja e9d52ce.
 
 ---
-
-## ═══ Sesja zarchiwizowana [2026-07-02 22:55] ═══
-
-# last_session.md
-
-**Sesja:** 2026-06-30 · 21:30-22:16
-**Status:** ✓ Zakończona poprawnie
-**Punkt odniesienia (git):** d67dd08 @ main (working tree DIRTY — praca `kites` niezacommitowana, 8 plików)
-
----
-
-## ▸ NASTĘPNY KROK (zacznij tutaj)
-
-**Sprint 1a — uruchom generator schematów.** Plik gotowy: `scratchpad/gen_shape_schemes.py` (ścieżka pełna w sesji, lub odtworzyć z MEMORY/historii) → produkuje 19 PNG do `assets/shape_schemes/<shape_mode>.png` (10 nowych + 9 istniejących z wiernej geometrii silnika). Komenda: `KMP_DUPLICATE_LIB_OK=TRUE C:/Users/plazo/miniconda3/envs/mosaic/python.exe gen_shape_schemes.py`. Po wygenerowaniu obejrzeć kilka (spectre, kites, hexagon_romb) i przejść do Sprint 1b (GUI).
-
-Kontekst: User chce zaimplementować wszystkie 10 nowych kształtów (plan 7 sprintów), ale NAJPIERW funkcję „schemat na podglądzie GUI". Generator był gotowy do uruchomienia — user przerwał TUŻ przed wykonaniem, żeby zamknąć sesję. `assets/shape_schemes/` jeszcze NIE istnieje.
-
----
-
-## Co zrobiono w tej sesji
-
-- ✓ **Tryb `kite` → `kites` (#1 deltoidal per-tile)** — zastąpiono losowe 8-kite „kapelusze" czystym kafelkowaniem: 6 latawców/heksagon, każdy osobnym sektorem. Bez RNG → reprodukowalność preview↔render bit-w-bit (zweryfikowane `np.array_equal`). `is_hat=False` → anty-powtórzenia globalne. Usunięto importy `random`/`defaultdict`. Netto −142/+80 linii w `engine_smart.py`.
-- ✓ **Podmiana nazwy `kite`→`kites`** wszędzie: `gui.py` dropdown, `cli.py`, `make_showcase.py`, `benchmark.py`, README EN+PL (listy opcji + opisy), root `MEMORY.md` (geometria+słownik).
-- ✓ **Weryfikacja:** 201/201 testów, render CLI `kites` działa (`output/kite_schemes/_render_kites_preview.png`).
-- ✓ **Schematy projektowe:** 5 wariantów układu kite (`output/kite_schemes/kite_schemes.png`, `kite_134.png`); 10 propozycji nowych kształtów wow (`output/kite_schemes/proposals_10_shapes.png`).
-- ✓ **Plan 7 sprintów** (M1–M7) na 10 nowych kształtów + decyzja GUI: schemat w panelu podglądu (zastępowany renderem).
-- ✓ **Generatory schematów** napisane w scratchpad (`gen_shape_schemes.py`, `shapes10.py`) — NIE uruchomione.
-- ✓ Pamięć: `project_kites_mode.md`, `project_10_shapes_plan.md` (+ indeks MEMORY.md).
-
-## Co zostało (backlog sesji)
-
-- ⟳ **COMMIT `kites` (NIEZACOMMITOWANY!):** 8 plików gotowych, treść commitu zaproponowana — czeka na akceptację (patrz Otwarte pytania).
-- ⟳ **Sprint 1b (GUI):** dropdown `combo_shape` default→`None`; po wyborze ładować `assets/shape_schemes/<shape>.png` do `lbl_preview_p` przez `_fit_preview`; guard `None` w `_trigger_smart_preview` (gui.py:645) i pełnym renderze (gui.py:985); `None` → blok przycisku preview.
-- ⟳ **Sprint 2:** refaktor `_build_polygon_sectors()` + rejestr `shape_mode→generator` (golden SHA-256 zielone).
-- ⟳ **Sprinty 3–7:** Tier A (penrose, voronoi, phyllotaxis, trunc_square, trunc_hex, rhombitrihex, sunburst, pythagorean) → Tier B (truchet, truchet_hex, `_CurvedMask`) → docs.
-- ⟳ **Standing:** galeria 16K triangle+hexagon (czeka na pliki usera); Krok 6 portfolio (audyt README); test_dzi + pasek postępu DZI ([[project_dzi_gui_polish_todo]]).
-
-## Aktywne pliki
-
-- `src/engine_smart.py` (kites; cel Sprint 2 refaktor), `src/gui.py` (cel Sprint 1b)
-- `assets/shape_schemes/` (DO UTWORZENIA — Sprint 1a)
-- scratchpad: `gen_shape_schemes.py`, `shapes10.py`, `kite_schemes.py`, `kite_134.py`
-- `output/kite_schemes/*` (montaże podglądowe)
-
-## Otwarte pytania
-
-- ⚠ **Czy commitować `kites`?** Working tree dirty (8 plików), zweryfikowane. Proponowany commit: `feat(engine): replace random-hat 'kite' with deterministic per-tile 'kites'`. NIE zrobiony — przerwano przed /end. Do decyzji na starcie następnej sesji.
-- Nazwy kanoniczne nowych `shape_mode` (ustalone): penrose, truchet, truchet_hex, phyllotaxis, sunburst, voronoi, trunc_square, trunc_hex, rhombitrihex, pythagorean.
-
-## Do MEMORY.md (przeniesiono)
-
-- [Aktywne TODO] NOWY [2026-06-30] „Tryb kite→kites ZROBIONE (NIEZACOMMITOWANE)" + „PLAN: 10 nowych kształtów wow + schemat na podglądzie GUI (7 sprintów)".
-- [.claude] `project_kites_mode.md`, `project_10_shapes_plan.md`.
 
