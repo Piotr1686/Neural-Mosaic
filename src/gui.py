@@ -523,7 +523,16 @@ class App(ctk.CTk):
             height=36,
             command=self.export_dzi,
         )
-        self.btn_dzi_p.grid(row=2, column=0, columnspan=2, sticky="ew", padx=20, pady=(0, 15))
+        self.btn_dzi_p.grid(row=2, column=0, columnspan=2, sticky="ew", padx=20, pady=(0, 5))
+
+        # DZI export progress — hidden until an export starts (shown/hidden with
+        # grid()/grid_remove() like the render bars). make_dzi drives it via
+        # progress_cb; a full 16K pyramid is tens of thousands of tiles.
+        self.progress_dzi_p = ctk.CTkProgressBar(outer, width=260)
+        self.progress_dzi_p.set(0)
+        self.progress_dzi_p.grid(row=3, column=0, columnspan=2, sticky="ew",
+                                 padx=20, pady=(0, 15))
+        self.progress_dzi_p.grid_remove()
 
     def _setup_typo_tab(self):
         outer = self.tab_typo
@@ -1121,12 +1130,18 @@ class App(ctk.CTk):
         in_path = Path(in_path)
         out_dir = Path(out_dir)
         self.btn_dzi_p.configure(state="disabled")
+        self.progress_dzi_p.set(0)
+        self.progress_dzi_p.grid()
         self.log(f"Exporting Deep Zoom: {in_path.name} -> {out_dir}  (skip-if-exists)")
+
+        def _progress(done, total):
+            frac = done / total if total else 0
+            self.after(0, lambda f=frac: self.progress_dzi_p.set(f))
 
         def _run():
             try:
                 from .tools.make_dzi import make_dzi
-                make_dzi(in_path, out_dir, skip_existing=True)
+                make_dzi(in_path, out_dir, skip_existing=True, progress_cb=_progress)
                 self.log(f"DONE! Deep Zoom exported to {out_dir}")
             except Exception as e:
                 self.log(f"Error: {e}")
@@ -1134,6 +1149,7 @@ class App(ctk.CTk):
                 traceback.print_exc()
             finally:
                 self.after(0, lambda: self.btn_dzi_p.configure(state="normal"))
+                self.after(0, self.progress_dzi_p.grid_remove)
         threading.Thread(target=_run, daemon=True).start()
 
     def run_typo(self):

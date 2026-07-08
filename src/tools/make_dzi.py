@@ -46,11 +46,18 @@ def make_dzi(
     out_dir: Path,
     max_level_cap: int | None = None,
     skip_existing: bool = True,
+    progress_cb=None,
 ) -> None:
     """Build a DZI pyramid. With ``skip_existing`` (default) any tile already on
     disk with non-zero size is left untouched — re-running on an interrupted or
     partial export only fills the gaps (same idempotency philosophy as the batch
-    CLI). Pass ``skip_existing=False`` to force a full regeneration."""
+    CLI). Pass ``skip_existing=False`` to force a full regeneration.
+
+    ``progress_cb``, if given, is called ``progress_cb(done, total)`` as tiles
+    are processed (``done`` counts both written and skipped tiles, ``total`` is
+    the full tile count across every pyramid level), throttled to ~100 calls.
+    Mirrors the render progress_cb contract so the GUI can drive a progress bar.
+    """
     print(f"Loading {input_path.name} ...")
     img = Image.open(input_path).convert("RGB")
     orig_w, orig_h = img.size
@@ -74,10 +81,19 @@ def make_dzi(
     files_dir = out_dir / f"{stem}_files"
     files_dir.mkdir(parents=True, exist_ok=True)
 
+    # Total tile count across every level, so progress_cb can report a fraction
+    # up front (a pre-pass over sizes only — no image work).
+    total_tiles = sum(
+        math.ceil(_level_size(orig_w, orig_h, max_level, lv)[0] / TILE_SIZE)
+        * math.ceil(_level_size(orig_w, orig_h, max_level, lv)[1] / TILE_SIZE)
+        for lv in range(max_level, -1, -1)
+    )
+    step = max(1, total_tiles // 100)
+
     # Build pyramid level by level (top-down: level 0 = 1x1)
     # We iterate from max_level down to 0
     level_img = img
-    written = skipped = 0
+    written = skipped = processed = 0
     for level in range(max_level, -1, -1):
         lw, lh = _level_size(orig_w, orig_h, max_level, level)
 
@@ -95,14 +111,19 @@ def make_dzi(
                 tile_path = level_dir / f"{col}_{row}.jpg"
                 if skip_existing and tile_path.exists() and tile_path.stat().st_size > 0:
                     skipped += 1
-                    continue
-                x0 = max(0, col * TILE_SIZE - OVERLAP)
-                y0 = max(0, row * TILE_SIZE - OVERLAP)
-                x1 = min(lw, (col + 1) * TILE_SIZE + OVERLAP)
-                y1 = min(lh, (row + 1) * TILE_SIZE + OVERLAP)
-                tile = level_img.crop((x0, y0, x1, y1))
-                tile.save(tile_path, "JPEG", quality=JPEG_QUALITY)
-                written += 1
+                else:
+                    x0 = max(0, col * TILE_SIZE - OVERLAP)
+                    y0 = max(0, row * TILE_SIZE - OVERLAP)
+                    x1 = min(lw, (col + 1) * TILE_SIZE + OVERLAP)
+                    y1 = min(lh, (row + 1) * TILE_SIZE + OVERLAP)
+                    tile = level_img.crop((x0, y0, x1, y1))
+                    tile.save(tile_path, "JPEG", quality=JPEG_QUALITY)
+                    written += 1
+                processed += 1
+                if progress_cb is not None and (
+                    processed % step == 0 or processed == total_tiles
+                ):
+                    progress_cb(processed, total_tiles)
 
         if level % 3 == 0 or level == max_level:
             print(f"  Level {level:2d}  {lw}x{lh}  ({cols}x{rows} tiles)")
