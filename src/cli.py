@@ -92,9 +92,10 @@ def _add_smart_args(p: argparse.ArgumentParser) -> None:
     sg.add_argument("--border", action="store_true", help="Shrink tiles to leave a uniform dark gap (simple L1 border)")
     sg.add_argument(
         "--grout", default=None, choices=_GROUT_PRESETS, metavar="PRESET",
-        help="Draw hierarchical grout lines (thickness by group level). "
+        help="Draw grout lines between tiles. "
              "Choices: " + ", ".join(_GROUT_PRESETS) + ". "
-             "Hierarchy for square/hexagon/triangle/kites; other shapes skipped.",
+             "Hierarchical (thickness by group level) for "
+             "square/hexagon/triangle/kites; flat single-width for other shapes.",
     )
     sg.add_argument(
         "--blend", type=float, default=0.0, metavar="FLOAT",

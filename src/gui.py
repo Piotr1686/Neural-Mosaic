@@ -407,9 +407,10 @@ class App(ctk.CTk):
         self.check_border.pack(pady=5)
 
         # Hierarchical grout: independent of the uniform-gap border above.
-        # Draws L1/L2/L3 lines whose thickness grows with the group level for
-        # square/hexagon/triangle/kites (other shapes are skipped for now).
-        ctk.CTkLabel(frame, text="Hierarchical Grout").pack(pady=(10, 0))
+        # Grout is hierarchical (L1/L2/L3 lines thickening with the group level)
+        # for square/hexagon/triangle/kites; every other grid shape draws flat
+        # single-width grout. _apply_grout picks the mode per shape.
+        ctk.CTkLabel(frame, text="Grout").pack(pady=(10, 0))
         self.combo_grout = ctk.CTkOptionMenu(
             frame, values=["Off", "cienki", "sredni", "gruby"])
         self.combo_grout.set("Off")
