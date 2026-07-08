@@ -522,6 +522,8 @@ class SmartEngine:
             return self._grout_cells_kites(target_w, target_h, base_s)
         if shape_mode == "spectre":
             return self._grout_cells_flat_spectre(target_w, target_h, base_s)
+        if shape_mode == "romb":
+            return self._grout_cells_flat_romb(target_w, target_h, base_s)
         return None
 
     def _grout_cells_square(self, target_w, target_h, base_s):
@@ -638,6 +640,37 @@ class SmartEngine:
         # which segments exist, not their thickness.
         return [(list(spec.points), 0, 0)
                 for spec in generate_spectre_tiling(target_w, target_h, base_s)]
+
+    def _grout_cells_flat_romb(self, target_w, target_h, base_s):
+        # Mirrors the composite's romb grid (tile_w=base_s, step_x=base_s,
+        # step_y=base_s*0.75, odd rows shifted +base_s/2), same -1 start so the
+        # edge wedges are covered. tile_h MUST be the FLOAT base_s*1.5: the
+        # composite truncates it to int for the mask, but grout needs the exact
+        # value so each diamond's side vertices sit exactly step_y (= tile_h/2)
+        # below its top -> adjacent rows share edges. With int() the seam splits
+        # by <1 px and classify_edges finds no shared edges (all become frame
+        # boundaries) -- the same lesson as the hexagon th. Flat: one group id,
+        # so interior seams stay L1 and only the frame boundary is L3.
+        tile_w = float(base_s)
+        tile_h = base_s * 1.5
+        step_x = float(base_s)
+        step_y = base_s * 0.75
+        offset_odd = base_s / 2.0
+        cols = int(target_w / step_x) + 2
+        rows = int(target_h / step_y) + 2
+        cells = []
+        for r in range(-1, rows):
+            pos_y = r * step_y
+            for c in range(-1, cols):
+                pos_x = c * step_x + (offset_odd if r % 2 == 1 else 0.0)
+                poly = [
+                    (pos_x + tile_w / 2, pos_y),
+                    (pos_x + tile_w,     pos_y + tile_h / 2),
+                    (pos_x + tile_w / 2, pos_y + tile_h),
+                    (pos_x,              pos_y + tile_h / 2),
+                ]
+                cells.append((poly, 0, 0))
+        return cells
 
     # Shapes with an approved multi-level grouping get graded widths (thin L1 ->
     # thick L3); every other supported shape draws flat single-width grout.

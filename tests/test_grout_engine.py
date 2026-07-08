@@ -17,6 +17,7 @@ import numpy as np
 from PIL import Image
 
 from src.engine_smart import SmartEngine
+from src.grout import classify_edges
 from tests.test_golden_shapes import _build_library, _make_target
 
 
@@ -84,7 +85,7 @@ def test_kites_level2_is_parent_hexagon_of_six():
 
 def test_unsupported_shapes_return_none():
     e = _engine()
-    for shape in ("romb", "hexagon_romb", "rectangle_3x1", "brick_wall"):
+    for shape in ("hexagon_romb", "rectangle_3x1", "brick_wall"):
         assert e._grout_cells(shape, 400, 300, 100) is None, shape
 
 
@@ -96,6 +97,24 @@ def test_spectre_flat_cells_share_one_group():
     assert cells, "spectre grout cells missing"
     assert all(len(poly) >= 3 for poly, _, _ in cells)
     assert {(g2, g3) for _, g2, g3 in cells} == {(0, 0)}
+
+
+def test_romb_flat_cells_share_one_group():
+    cells = _engine()._grout_cells("romb", 600, 600, 60)
+    assert cells and all(len(poly) == 4 for poly, _, _ in cells)
+    assert {(g2, g3) for _, g2, g3 in cells} == {(0, 0)}
+
+
+def test_romb_adjacent_diamonds_share_edges():
+    # THE float-th check: with tile_h = FLOAT base_s*1.5 the diamonds tessellate
+    # and interior seams are shared -> classify_edges puts them at L1. If tile_h
+    # were int()-truncated the seams would split by <1 px, every edge would be a
+    # frame boundary (L3) and L1 would be nearly empty. Assert L1 dominates.
+    cells = _engine()._grout_cells("romb", 600, 600, 60)
+    by_level = classify_edges(cells)
+    assert len(by_level[1]) > len(by_level[3]), (
+        f"interior seams not shared: L1={len(by_level[1])} L3={len(by_level[3])} "
+        f"(tile_h likely truncated to int)")
 
 
 # ---------------------------------------------------------------------------
@@ -150,8 +169,18 @@ def test_grout_flat_spectre_adds_black_lines(tmp_path):
     assert near_black(grouted) > near_black(base)
 
 
-def test_grout_is_noop_for_unsupported_shape(tmp_path):
+def test_grout_flat_romb_adds_black_lines(tmp_path):
     e = _small_engine(tmp_path)
     base = np.asarray(_preview(e, tmp_path, "romb", grout_preset=None))
-    skipped = np.asarray(_preview(e, tmp_path, "romb", grout_preset="sredni"))
+    grouted = np.asarray(_preview(e, tmp_path, "romb", grout_preset="gruby"))
+    assert base.shape == grouted.shape
+    assert not np.array_equal(base, grouted)
+    near_black = lambda a: int((a.sum(axis=2) < 30).sum())
+    assert near_black(grouted) > near_black(base)
+
+
+def test_grout_is_noop_for_unsupported_shape(tmp_path):
+    e = _small_engine(tmp_path)
+    base = np.asarray(_preview(e, tmp_path, "hexagon_romb", grout_preset=None))
+    skipped = np.asarray(_preview(e, tmp_path, "hexagon_romb", grout_preset="sredni"))
     assert np.array_equal(base, skipped)
