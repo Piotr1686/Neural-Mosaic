@@ -85,9 +85,9 @@ def test_kites_level2_is_parent_hexagon_of_six():
 
 def test_unsupported_shapes_return_none():
     e = _engine()
-    # hexagon_romb still has no grout geometry (composite builds each hexagon
-    # from three romb sub-masks -- an open design decision).
-    for shape in ("hexagon_romb",):
+    # exotic shapes without an approved grout geometry hit the dispatcher's
+    # default None path (the caller then skips the pass).
+    for shape in ("penrose", "voronoi", "girih"):
         assert e._grout_cells(shape, 400, 300, 100) is None, shape
 
 
@@ -139,6 +139,28 @@ def test_brick_wall_flat_cells_share_one_group():
     w = cells[0][0][1][0] - cells[0][0][0][0]
     h = cells[0][0][2][1] - cells[0][0][1][1]
     assert w == 60 and h == 30
+
+
+def test_hexagon_romb_three_rhombi_per_hexagon():
+    # Variant 2: each hexagon becomes three rhombi (its three composite photos)
+    # that share the centre vertex -> an internal "Y". Cells come in triples
+    # whose first vertex is that shared centre.
+    cells = _engine()._grout_cells("hexagon_romb", 600, 600, 60)
+    assert cells and len(cells) % 3 == 0
+    assert all(len(poly) == 4 for poly, _, _ in cells)
+    assert {(g2, g3) for _, g2, g3 in cells} == {(0, 0)}
+    for k in range(0, len(cells), 3):
+        c0 = cells[k][0][0]
+        assert cells[k + 1][0][0] == c0 and cells[k + 2][0][0] == c0
+
+
+def test_hexagon_romb_edges_are_shared():
+    # Internal spokes (shared by two rhombi of one hexagon) and outer edges
+    # (shared by adjacent hexagons) must land at L1; wrong th would split the
+    # outer edges into frame boundaries. Assert L1 dominates.
+    cells = _engine()._grout_cells("hexagon_romb", 600, 600, 60)
+    by_level = classify_edges(cells)
+    assert len(by_level[1]) > len(by_level[3])
 
 
 # ---------------------------------------------------------------------------
@@ -221,8 +243,20 @@ def test_grout_flat_brick_wall_adds_black_lines(tmp_path):
     assert near_black(grouted) > near_black(base)
 
 
-def test_grout_is_noop_for_unsupported_shape(tmp_path):
+def test_grout_flat_hexagon_romb_adds_black_lines(tmp_path):
     e = _small_engine(tmp_path)
     base = np.asarray(_preview(e, tmp_path, "hexagon_romb", grout_preset=None))
-    skipped = np.asarray(_preview(e, tmp_path, "hexagon_romb", grout_preset="sredni"))
-    assert np.array_equal(base, skipped)
+    grouted = np.asarray(_preview(e, tmp_path, "hexagon_romb", grout_preset="gruby"))
+    assert not np.array_equal(base, grouted)
+    near_black = lambda a: int((a.sum(axis=2) < 30).sum())
+    assert near_black(grouted) > near_black(base)
+
+
+def test_grout_is_noop_for_unsupported_shape():
+    # A shape with no grout geometry leaves the mosaic untouched (the None path
+    # in _apply_grout). Checked directly on a blank canvas -- no render needed.
+    e = _engine()
+    img = Image.new("RGB", (200, 150), "white")
+    before = np.asarray(img).copy()
+    e._apply_grout(img, "penrose", 200, 150, 60, "sredni")
+    assert np.array_equal(before, np.asarray(img))

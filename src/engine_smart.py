@@ -533,6 +533,8 @@ class SmartEngine:
             return self._grout_cells_flat_rect(
                 target_w, target_h, base_s, th, float(base_s), float(th),
                 float(base_s // 2))
+        if shape_mode == "hexagon_romb":
+            return self._grout_cells_flat_hexagon_romb(target_w, target_h, base_s)
         return None
 
     def _grout_cells_square(self, target_w, target_h, base_s):
@@ -706,6 +708,41 @@ class SmartEngine:
                     (pos_x, pos_y + tile_h),
                 ]
                 cells.append((poly, 0, 0))
+        return cells
+
+    def _grout_cells_flat_hexagon_romb(self, target_w, target_h, base_s):
+        # Variant 2 of the hexagon_romb grout: the composite builds each hexagon
+        # from three romb sub-masks (mask_top/left/right) -- three separate
+        # photos -- so the grout splits every hexagon into its three rhombi (the
+        # internal "Y" through the centre), not just the outer hexagon outline.
+        # Same hex grid as _grout_cells_hexagon (tw=base_s, step_x=base_s,
+        # step_y=base_s*sqrt3/2, odd rows +base_s/2); th MUST be the FLOAT
+        # base_s*2/sqrt3 so the outer hexagon edges align with neighbours and
+        # the rhombi share edges -- the th lesson again. Flat: one group id, so
+        # the three rhombi of a hexagon share the internal spokes at L1 and
+        # adjacent hexagons share the outer edges at L1; only the frame is L3.
+        hr3 = math.sqrt(3) / 2
+        tw = float(base_s)
+        th = base_s * 2.0 / math.sqrt(3)
+        step_x = float(base_s)
+        step_y = base_s * hr3
+        cols = int(target_w / step_x) + 2
+        rows = int(target_h / step_y) + 2
+        cells = []
+        for r in range(-1, rows):
+            pos_y = r * step_y
+            for c in range(-1, cols):
+                pos_x = c * step_x + (base_s / 2 if r % 2 == 1 else 0.0)
+                C = (pos_x + tw / 2, pos_y + th / 2)          # shared centre
+                T = (pos_x + tw / 2, pos_y)                   # top
+                UR = (pos_x + tw, pos_y + th * 0.25)          # upper-right
+                LR = (pos_x + tw, pos_y + th * 0.75)          # lower-right
+                B = (pos_x + tw / 2, pos_y + th)              # bottom
+                LL = (pos_x, pos_y + th * 0.75)               # lower-left
+                UL = (pos_x, pos_y + th * 0.25)               # upper-left
+                cells.append(([C, UR, T, UL], 0, 0))          # top romb
+                cells.append(([C, UL, LL, B], 0, 0))          # left romb
+                cells.append(([C, B, LR, UR], 0, 0))          # right romb
         return cells
 
     # Shapes with an approved multi-level grouping get graded widths (thin L1 ->
