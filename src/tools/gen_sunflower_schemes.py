@@ -20,12 +20,12 @@ into assets/shape_schemes/ like every other shape scheme:
                         line up in circular courses (reference photo 1)
 
   grande-family (growth-graded):
-  4. sunflower_grande - Voronoi of r = c*n^0.66 (user pick - do not touch)
-  5. grande_xl        - steeper growth r = c*n^0.75: tiny centre, huge rim
-  6. grande_soft      - grande geometry + 1 Lloyd pass: rounder cells,
-                        gentler size ramp
-  7. grande_inverse   - reversed gradient r = c*n^0.40: large seeds in the
-                        centre shrinking toward a fine rim
+  4. sunflower_grande         - Voronoi of r = c*n^0.66 (user pick - do not touch)
+  5. sunflower_grande_xl      - steeper growth r = c*n^0.75: tiny centre, huge rim
+  6. sunflower_grande_soft    - grande geometry + 1 Lloyd pass: rounder cells,
+                               gentler size ramp
+  7. sunflower_grande_inverse - reversed gradient r = c*n^0.40: large seeds in
+                               the centre shrinking toward a fine rim
 
   rhombs-family (log-spiral parastichy quad mesh; centre proposals verdict
   rev 4 - the 3 winners below; star2/chunky REJECTED, generators removed,
@@ -446,21 +446,21 @@ def _graded_head(rng, seed_pts, dark_to_gold=True):
     return polys, (-R, -R, R, R)
 
 
-def gen_grande_xl():
+def gen_sunflower_grande_xl():
     rng = np.random.default_rng(57)
     N, p = 550, 0.75
     c = (math.sqrt(2.0) + 0.45) / (N ** p)
     return _graded_head(rng, vogel_points(N, c, power=p))
 
 
-def gen_grande_soft():
+def gen_sunflower_grande_soft():
     rng = np.random.default_rng(58)
     N, p = 1500, 0.66
     c = (math.sqrt(2.0) + 0.45) / (N ** p)
     return _graded_head(rng, lloyd_relax(vogel_points(N, c, power=p), iters=1))
 
 
-def gen_grande_inverse():
+def gen_sunflower_grande_inverse():
     rng = np.random.default_rng(59)
     N, p = 1100, 0.40
     c = (math.sqrt(2.0) + 0.45) / (N ** p)
@@ -500,9 +500,9 @@ ACCEPTED = [
     ("sunflower_disc", gen_sunflower_disc),
     ("sunflower_rings", gen_sunflower_rings),
     ("sunflower_grande", gen_sunflower_grande),
-    ("grande_xl", gen_grande_xl),
-    ("grande_soft", gen_grande_soft),
-    ("grande_inverse", gen_grande_inverse),
+    ("sunflower_grande_xl", gen_sunflower_grande_xl),
+    ("sunflower_grande_soft", gen_sunflower_grande_soft),
+    ("sunflower_grande_inverse", gen_sunflower_grande_inverse),
     ("rhombs_nopole", gen_rhombs_nopole),
     ("rhombs_funnel", gen_rhombs_funnel),
     ("rhombs_star", gen_rhombs_star),
