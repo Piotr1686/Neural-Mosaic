@@ -22,20 +22,22 @@ from PIL import Image
 from src.engine_smart import SmartEngine
 
 # Golden hashes (env `mosaic`). Keyed by (shape_mode, border_mode).
-# 2026-07-08: square/True + hexagon_romb regenerated after the grid branches
-# gained _mean_fill_outside_mask (deliberate matching improvement — sectors
-# no longer match against neighbouring content outside their mask). square/
-# False is bit-identical (full-canvas mask -> mean-fill is a no-op), as are
-# kites/spectre (already mean-filled before the change).
+# 2026-07-08 (a): square/True + hexagon_romb regenerated after the grid
+# branches gained _mean_fill_outside_mask (deliberate matching improvement).
+# 2026-07-08 (b): all shaped cases regenerated again for masked top-K
+# re-scoring (_mask_cell_weights — out-of-mask cells no longer influence the
+# match). square/False stays bit-identical through BOTH changes: its
+# full-canvas mask makes mean-fill a numeric no-op and yields wmask=None,
+# which skips the weighted re-scoring — the plain GEMM path is untouched.
 GOLDEN = {
     ("square", False): "a1c3eefa031fbee1d02f13dcd53303b6539cab58cab9f1a23934e2565022c599",
-    ("square", True): "12d7b630fc29c2333abb59e2faa518497abc51005011d5717f16930d1ce8b5f0",
-    ("hexagon_romb", False): "844500406175b54629905c8c06c81a3ed3f8f370f085dd2cd4d769b4fd82298e",
-    ("hexagon_romb", True): "6a3a7fe403afd12a0fdf97b35ef6a659be5d3557708085acf6465b302f638c45",
-    ("kites", False): "c4de330c559aa15ac1c8d2a455de33db8c9757f9773389b4c1b7c6873eb0ac28",
-    ("kites", True): "0233840e783e6c1450c410267ed9ac08e2bbd5f979268d1bbb0a9673b3a8de30",
-    ("spectre", False): "f3fb7b078a1d4ef5047528623e805013ee93f8679c465d53dce65923c74db677",
-    ("spectre", True): "c31d75ff863a6fb357c73378ea429bbfd7d043b7e7361e569ddb52de6e9a0049",
+    ("square", True): "dd0806d49fcf2ebdaa6353c50c38f2d709884465cd9be50da027f4eb823a1c46",
+    ("hexagon_romb", False): "eb6b5e97c966b70236626d85c1c4e7911201927fdf96502ec2b514d7d0a5020a",
+    ("hexagon_romb", True): "2877bad908ef6b6b7a167394959c635868e136b7764416d8d2c97ed9f7f4f71b",
+    ("kites", False): "7689265c540dd537b1f3a42ed26354c577ff78a1d02601fe2747543b061b8ed5",
+    ("kites", True): "d9f3c83beb7b4f5be302af04e54016f4cba52ee2838a916031efee8fe95d31ae",
+    ("spectre", False): "ed5ad4f4c582341daba6cb2cf61ec021bac48d9bfa7f0fac9fd41cc4ca5bc5dc",
+    ("spectre", True): "998a645f47ef0d222add0f32fce9276002fdd8505f10944e1b3860ac19a500a8",
 }
 
 

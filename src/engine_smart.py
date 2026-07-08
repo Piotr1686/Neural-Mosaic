@@ -444,6 +444,41 @@ class SmartEngine:
         filled = arr * m + mean_rgb * (1.0 - m)
         return Image.fromarray(np.clip(filled, 0, 255).astype(np.uint8))
 
+    @staticmethod
+    def _mask_cell_weights(mask, edge_aware):
+        """Per-cell matching weights derived from a tile mask, or None.
+
+        Downsamples *mask* to the 5x5 feature grid with BOX — the same kernel
+        `_compute_sector_feature` applies to the image — so each of the 25
+        cells gets its mask coverage in [0, 1], repeated x3 for the LAB
+        channels. Used by the matching loop to re-score the top-K candidates
+        with a weighted Euclidean distance: cells outside the mask are never
+        visible in the render, so they should not contribute to the match.
+
+        Weights are normalised to mean 1.0 so the weighted distance keeps the
+        magnitude of the unweighted one — otherwise a triangle (~50% coverage)
+        would halve its distances and silently double the relative strength of
+        the freq_penalty term.
+
+        Returns None when the mask (almost) fully covers the canvas: the
+        weighted distance would equal the plain GEMM one, and the caller skips
+        the re-scoring entirely, keeping full-mask shapes (square) bit-exact.
+        Edge-aware feature dims (the 4 border-strip means) keep weight 1.0 —
+        they encode cross-tile continuity, not in-mask content.
+        """
+        cov = np.asarray(mask.resize((5, 5), Image.Resampling.BOX),
+                         dtype=np.float32) / 255.0
+        if cov.min() >= 0.999:
+            return None
+        w = np.repeat(cov.flatten(), 3)  # cell-major, one weight per LAB channel
+        total = float(w.sum())
+        if total <= 0.0:
+            return None  # degenerate mask — fall back to unweighted
+        w *= w.size / total
+        if edge_aware:
+            w = np.concatenate([w, np.ones(4, dtype=np.float32)])
+        return w.astype(np.float32)
+
     def _polygon_sector(self, target, poly, render_padding, aa, edge_aware):
         """Build one non-grid (polygon) sector from a single image-space polygon.
 
@@ -505,6 +540,7 @@ class SmartEngine:
         return {
             "meta": (0, int(min_x), int(min_y), lazy_mask, bw, bh, False),
             "feature": self._compute_sector_feature(feat_img, edge_aware),
+            "wmask": self._mask_cell_weights(mask, edge_aware),
         }
 
     # ==========================================
@@ -894,7 +930,8 @@ class SmartEngine:
                 # identically at composite time (see putalpha).
                 sectors_data.append({
                     "meta": (i_kite, int(min_x), int(min_y), lazy_mask, bw, bh, False),
-                    "feature": self._compute_sector_feature(feat_img, edge_aware)
+                    "feature": self._compute_sector_feature(feat_img, edge_aware),
+                    "wmask": self._mask_cell_weights(mask_kite, edge_aware)
                 })
 
         # ==========================================
@@ -955,7 +992,8 @@ class SmartEngine:
                 # identically at composite time — see putalpha).
                 sectors_data.append({
                     "meta": (i_spec, int(min_x), int(min_y), lazy_mask, bw, bh, False),
-                    "feature": self._compute_sector_feature(feat_img, edge_aware)
+                    "feature": self._compute_sector_feature(feat_img, edge_aware),
+                    "wmask": self._mask_cell_weights(mask_spec, edge_aware)
                 })
 
         # ==========================================
@@ -993,9 +1031,15 @@ class SmartEngine:
                 mask_left = self._get_shape_mask("mask_left", tile_w, tile_h, padding=render_padding)
                 mask_right = self._get_shape_mask("mask_right", tile_w, tile_h, padding=render_padding)
                 mask_top = self._get_shape_mask("mask_top", tile_w, tile_h, padding=render_padding)
+                # Matching weights per sub-romb mask (order must match `masks`
+                # in the scan loop below).
+                romb_weights = [self._mask_cell_weights(m, edge_aware)
+                                for m in (mask_left, mask_right, mask_top)]
             else:
                 mask_norm = self._get_shape_mask(shape_mode, tile_w, tile_h, False, padding=render_padding)
                 mask_flip = self._get_shape_mask(shape_mode, tile_w, tile_h, True, padding=render_padding)
+                w_norm_mask = self._mask_cell_weights(mask_norm, edge_aware)
+                w_flip_mask = self._mask_cell_weights(mask_flip, edge_aware)
 
             print("Scanning grid...")
             # Start at -1, not 0: offset/half-step geometries (hexagon,
@@ -1041,7 +1085,8 @@ class SmartEngine:
 
                             sectors_data.append({
                                 "meta": (r, int(pos_x), int(pos_y), masks[k], tile_w, tile_h, False),
-                                "feature": self._compute_sector_feature(feat_img, edge_aware)
+                                "feature": self._compute_sector_feature(feat_img, edge_aware),
+                                "wmask": romb_weights[k]
                             })
                         continue
 
@@ -1062,7 +1107,8 @@ class SmartEngine:
                     feat_img = self._mean_fill_outside_mask(s_img, current_mask)
                     sectors_data.append({
                         "meta": (r, px, py, current_mask, tile_w, tile_h, False),
-                        "feature": self._compute_sector_feature(feat_img, edge_aware)
+                        "feature": self._compute_sector_feature(feat_img, edge_aware),
+                        "wmask": w_flip_mask if is_flipped else w_norm_mask
                     })
 
         # ==========================================
@@ -1154,6 +1200,21 @@ class SmartEngine:
 
                 idx_id, px, py, mask, tw, th, is_hat = meta
 
+                # Masked re-scoring: the GEMM top-K above ranks candidates by
+                # plain Euclidean distance over the full 5x5 grid; for shaped
+                # tiles, re-score those candidates with a weighted distance so
+                # cells outside the mask (never visible in the render) stop
+                # influencing the choice. wmask is None for full-canvas masks
+                # (square) — the plain GEMM distances are used untouched, which
+                # keeps those renders bit-exact. O(top_k x dim) per sector.
+                wmask = sectors_data[global_idx].get("wmask")
+                if wmask is not None:
+                    diff = features_norm[top_k_norm[j]] - chunk_tgt[j]
+                    dists_w_norm = np.einsum("kd,kd->k", diff * wmask, diff)
+                    if allow_mirror:
+                        diff = features_flip[top_k_flip[j]] - chunk_tgt[j]
+                        dists_w_flip = np.einsum("kd,kd->k", diff * wmask, diff)
+
                 forbidden_indices = set()
                 my_neighbors = neighbors_map[global_idx]
                 for n_idx in my_neighbors:
@@ -1167,14 +1228,16 @@ class SmartEngine:
                         if assigned != -1: forbidden_indices.add(assigned)
 
                 candidates = []
-                for idx in top_k_norm[j]:
-                    score = dists_norm[j, idx] + (used_counts[idx]**2 * self.settings["freq_penalty"] * 0.001)
+                for t, idx in enumerate(top_k_norm[j]):
+                    base_d = dists_w_norm[t] if wmask is not None else dists_norm[j, idx]
+                    score = base_d + (used_counts[idx]**2 * self.settings["freq_penalty"] * 0.001)
                     if idx in forbidden_indices: score += 1000000.0
                     candidates.append((score, idx, False))
 
                 if allow_mirror:
-                    for idx in top_k_flip[j]:
-                        score = dists_flip[j, idx] + (used_counts[idx]**2 * self.settings["freq_penalty"] * 0.001)
+                    for t, idx in enumerate(top_k_flip[j]):
+                        base_d = dists_w_flip[t] if wmask is not None else dists_flip[j, idx]
+                        score = base_d + (used_counts[idx]**2 * self.settings["freq_penalty"] * 0.001)
                         if idx in forbidden_indices: score += 1000000.0
                         candidates.append((score, idx, True))
 
