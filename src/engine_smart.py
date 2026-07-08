@@ -377,7 +377,13 @@ class SmartEngine:
         scale_res = target_long / max(img_w, img_h)
         target = target.resize((int(img_w * scale_res), int(img_h * scale_res)), Image.Resampling.LANCZOS)
         result = self._do_render(target, shape_mode, tile_scale, border_mode, blend_strength, tint_strength, grout_preset=grout_preset, progress_cb=progress_cb, cancel_event=cancel_event)
-        result.save(output_path, quality=95)
+        save_kwargs = {"quality": 95}
+        if str(output_path).lower().endswith((".jpg", ".jpeg")):
+            # 4:4:4 chroma (no subsampling): a mosaic is thousands of hard
+            # colour edges between tiles; the default 4:2:0 blurs chroma on
+            # every seam and grout line. Non-JPEG outputs ignore the key.
+            save_kwargs["subsampling"] = 0
+        result.save(output_path, **save_kwargs)
 
     def render_preview(self, target_path, short_edge=512, shape_mode="hexagon_romb",
                        tile_scale=1.0, border_mode=False, grout_preset=None):
@@ -1028,9 +1034,14 @@ class SmartEngine:
                             if s_img.size != (tile_w, tile_h):
                                 tmp = Image.new("RGB", (tile_w, tile_h), (0,0,0)); tmp.paste(s_img, (0,0)); s_img = tmp
 
+                            # Each romb mask covers ~1/3 of the tile canvas;
+                            # mean-fill the rest so neighbouring rombs don't
+                            # pollute the LAB match (same as kites/spectre).
+                            feat_img = self._mean_fill_outside_mask(s_img, masks[k])
+
                             sectors_data.append({
                                 "meta": (r, int(pos_x), int(pos_y), masks[k], tile_w, tile_h, False),
-                                "feature": self._compute_sector_feature(s_img, edge_aware)
+                                "feature": self._compute_sector_feature(feat_img, edge_aware)
                             })
                         continue
 
@@ -1043,9 +1054,15 @@ class SmartEngine:
                         tmp = Image.new("RGB", (tile_w, tile_h), (0,0,0)); tmp.paste(s_img, (0,0)); s_img = tmp
 
                     current_mask = mask_flip if is_flipped else mask_norm
+                    # Non-rectangular grid masks (triangle ~50%, hexagon ~25%,
+                    # romb ~50% of the canvas outside the mask) used to match
+                    # against neighbouring content; mean-fill it away like the
+                    # kites/spectre branches do. For square (full-canvas mask,
+                    # padding>=1.0) this is numerically a no-op.
+                    feat_img = self._mean_fill_outside_mask(s_img, current_mask)
                     sectors_data.append({
                         "meta": (r, px, py, current_mask, tile_w, tile_h, False),
-                        "feature": self._compute_sector_feature(s_img, edge_aware)
+                        "feature": self._compute_sector_feature(feat_img, edge_aware)
                     })
 
         # ==========================================

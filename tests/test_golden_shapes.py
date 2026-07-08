@@ -21,13 +21,17 @@ from PIL import Image
 
 from src.engine_smart import SmartEngine
 
-# PRE-refactor golden hashes (computed 2026-07-02, env `mosaic`).
-# Keyed by (shape_mode, border_mode).
+# Golden hashes (env `mosaic`). Keyed by (shape_mode, border_mode).
+# 2026-07-08: square/True + hexagon_romb regenerated after the grid branches
+# gained _mean_fill_outside_mask (deliberate matching improvement — sectors
+# no longer match against neighbouring content outside their mask). square/
+# False is bit-identical (full-canvas mask -> mean-fill is a no-op), as are
+# kites/spectre (already mean-filled before the change).
 GOLDEN = {
     ("square", False): "a1c3eefa031fbee1d02f13dcd53303b6539cab58cab9f1a23934e2565022c599",
-    ("square", True): "d2b4dda12c4645e11dafb6f2a023390000518173ff0b79c7bb05f6595a03cbda",
-    ("hexagon_romb", False): "9a95034593a7947fa911a2c1ceb12ce433515489e2e03ad9f015a3e4c1b9d9e8",
-    ("hexagon_romb", True): "1ec5b4c99bbb783c6291e4c49d19ae14a62e66148f8e7bfddaa2d6bdffe774c5",
+    ("square", True): "12d7b630fc29c2333abb59e2faa518497abc51005011d5717f16930d1ce8b5f0",
+    ("hexagon_romb", False): "844500406175b54629905c8c06c81a3ed3f8f370f085dd2cd4d769b4fd82298e",
+    ("hexagon_romb", True): "6a3a7fe403afd12a0fdf97b35ef6a659be5d3557708085acf6465b302f638c45",
     ("kites", False): "c4de330c559aa15ac1c8d2a455de33db8c9757f9773389b4c1b7c6873eb0ac28",
     ("kites", True): "0233840e783e6c1450c410267ed9ac08e2bbd5f979268d1bbb0a9673b3a8de30",
     ("spectre", False): "f3fb7b078a1d4ef5047528623e805013ee93f8679c465d53dce65923c74db677",
