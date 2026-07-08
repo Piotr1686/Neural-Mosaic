@@ -1,3 +1,54 @@
+## ═══ Sesja zarchiwizowana [2026-07-08 22:10] ═══
+
+# last_session.md
+
+**Sesja:** 2026-07-07 · (Opus 4.8)
+**Status:** ✓ Zakończona poprawnie
+**Punkt odniesienia (git):** d8e03d6 @ main (zsynchronizowane z origin/main; commit stanu tej sesji dochodzi na górze)
+
+---
+
+## ▸ NASTĘPNY KROK (zacznij tutaj)
+
+**Grout flat-L1 — zacznij od `spectre` (najprostszy).** W `src/engine_smart.py` dodaj `_grout_cells_flat_spectre(target_w, target_h, base_s)`: iteruj `generate_spectre_tiling(...)`, dla każdego `spec` emituj `(list(spec.points), 0, 0)` (jednakowy group-id ⇒ tylko L1 + ramka). Podłącz w dispatcherze `_grout_cells` (dziś `return None` dla spectre). W `_apply_grout` dla kształtów flat użyj jednej grubości na wszystkich poziomach: `level_w = {1: w, 2: w, 3: w}` (dziś `scale_widths` daje L1<L2<L3 — dla flat to niepożądane), więc rozgałęź: hierarchiczne 4 → `scale_widths(preset, base_s)`; flat → `{1:w,2:w,3:w}` gdzie `w = scale_widths(preset, base_s)[1]`. Dodaj test do `tests/test_grout_engine.py` (spectre: cells != None, wszystkie group-id równe, render z grout != baseline). Potem powtórz dla romb/hexagon_romb/rectangle_3x1/brick_wall (poligon z pętli composite; UWAGA na float-th jak w hexagonie — [[project_grout_engine]]).
+
+Kontekst: werdykt usera „4 z hierarchią + reszta płaska L1" zrealizowany tylko w połowie — hierarchiczna czwórka (square/hexagon/triangle/kites) działa, 5 pozostałych kształtów daje dziś no-op z notą. Spectre ma już jawne poligony, więc jest najtańszym pierwszym krokiem domknięcia.
+
+---
+
+## Co zrobiono w tej sesji
+
+- ✓ **Sprzątanie: przerwany /end domknięty** (c41783f): pliki stanu z 2026-07-06 były niezacommitowane i błędnie opisywały sunflower jako urwany WIP — w rzeczywistości domknięty (56590d3+ea4fe49, sunflower ZAMKNIĘTY). last_session.md → ea4fe49, poprawka wpisu w repo MEMORY.md.
+- ✓ **Grout Stage 1 — src/grout.py** (59dd0c7): produkcyjny moduł geometrii (sub7, classify_edges, draw_grout, PRESETS, scale_widths, stable_seed) wydzielony z narzędzia propozycji; usunięta duplikacja; fix determinizmu seeda (crc32 zamiast solonego hash()). +11 testów.
+- ✓ **Grout Stage 2 — border pass w silniku** (ed23955): param `grout_preset` (osobny opt-in tryb; border_mode nietknięty), hierarchia dla square/hexagon/triangle/kites. `grout_preset=None` = bit-w-bit baseline. LEKCJA: hexagon th musi być FLOAT `base_s*2/√3` (int rozjeżdża przekątne → brak wspólnych krawędzi; bug wykryty wizualnie). +9 testów.
+- ✓ **Grout CLI** (e11abde): `--grout PRESET` obok `--border`; batch name suffix `_grout-{preset}`. +2 testy.
+- ✓ **Grout GUI** (f89f159): `CTkOptionMenu` „Hierarchical Grout" w Smart tab; wpięte w podgląd on-demand i render pełny.
+- ✓ **Weryfikacja wizualna** (scratchpad/grout_engine_visual.png) — 4 kształty poprawne. **209 testów zielonych** (było 187; +22). Wszystkie commity WYPCHNIĘTE na origin.
+
+## Co zostało (backlog sesji)
+
+- ⟳ **Grout flat-L1 dla 5 kształtów** (NASTĘPNY KROK; spectre → romb/hexagon_romb/rectangle_3x1/brick_wall).
+- ⟳ **Wiring nowych kształtów** (sunflower×7 + rhombs×3) do silnika → selekcja finalna z PLAN_SHAPES.
+- ⟳ **PLAN_FRACTAL wykonawczy** — start F1a (trójfazowa pętla, golden bit-w-bit).
+- ⟳ Standing: galeria 16K triangle+hexagon (pliki usera); test_dzi + pasek postępu DZI ([[project_dzi_gui_polish_todo]]).
+
+## Aktywne pliki
+
+- `src/grout.py` (NOWY — geometria groutu), `tests/test_grout.py`, `tests/test_grout_engine.py`
+- `src/engine_smart.py` (border pass + `_grout_cells_*` + param grout_preset)
+- `src/cli.py` (--grout), `src/gui.py` (selektor), `src/tools/gen_grout_proposals.py` (import z src.grout)
+
+## Otwarte pytania
+
+- Płaski grout — czy ramka kadru też ma być rysowana (dziś krawędzie ramki = L3), czy tylko krawędzie wewnętrzne? (rozstrzygnąć przy pierwszym flat — spectre).
+- Nazewnictwo finalne schematów grande_* w assets (przy wiringu sunflower do silnika).
+
+## Do MEMORY.md (przeniesiono)
+
+- Repo MEMORY.md: [2026-07-07] — grout WDROŻONY (architektura src/grout.py + border pass 4 kształtów; lekcja float-th hexagonu; offset→axial q=c-(r-(r&1))//2; fix determinizmu crc32); werdykty usera (osobny tryb, 4+flat, follow-up).
+- Auto-memory: nowy `project_grout_engine` (pełna architektura + lekcje + follow-up).
+
+
 ## ═══ Sesja zarchiwizowana [2026-07-07 23:24] ═══
 
 # last_session.md
@@ -233,73 +284,5 @@ Kontekst: user narzucił iteracyjnie TWARDĄ regułę — KAŻDY kształt musi b
 
 - Repo MEMORY.md: NOWY wpis [2026-07-03] o ETAP B (10 teselacji), regule „prawdziwa teselacja", technikach `_radial_clip_cells`/`_clip_rect`, ETAP A pending.
 - Auto-memory: [[project_extra_15_shapes]] rozbudowane (wymóg teselacji, decyzje B, moire≡square caveat, gereh/koch_island/dragon).
-
-
-## ═══ Sesja zarchiwizowana [2026-07-03 23:43] ═══
-
-# last_session.md
-
-**Sesja:** 2026-07-02 · ~23:05-23:35
-**Status:** ✓ Zakończona poprawnie (przerwana na życzenie usera przy ~94% tokenów; stan spójny, 50/50 testów)
-**Punkt odniesienia (git):** e9d52ce @ main (working tree DIRTY — Sprint 2 W TOKU, niezacommitowane; e9d52ce nadal NIEwypchnięty na origin)
-
----
-
-## ▸ NASTĘPNY KROK (zacznij tutaj)
-
-**Dokończ refaktor `_do_render` w `src/engine_smart.py` — podmień 2 gałęzie na 1 polygon.** Konkretnie: zastąp bloki `if shape_mode == "kites": ... elif shape_mode == "spectre": ...` (obecnie ~linie 504-644, kończą się tuż przed `else:` gałęzi grid) JEDNĄ gałęzią:
-```python
-spec = SHAPE_MODES.get(shape_mode)
-if spec is not None and spec.kind == "polygon":
-    print(f"Mode: {shape_mode} (polygon sectors). Borders: {border_mode}")
-    polys = list(spec.generator(self, target_w, target_h, base_s))
-    for i_poly, poly in enumerate(tqdm(polys, desc=f"Sampling {shape_mode} sectors")):
-        sector = self._polygon_sector(target, poly, render_padding, spec.aa, edge_aware)
-        if sector is None:
-            continue
-        m = sector["meta"]
-        sector["meta"] = (i_poly,) + m[1:]   # meta[0] nieużywane gdy is_hat=False
-        sectors_data.append(sector)
-else:
-    # ... istniejąca gałąź grid (zmień `else:` grida tak, by był fallbackiem) ...
-```
-Potem: (a) `pytest tests/test_golden_shapes.py` — **kites MUSI zostać identyczny**; ⚠ **spectre MOŻE paść** (helper=strategia kites/offset, nie spectre/clamp-min→0 — patrz Otwarte pytania); (b) podłącz `shape_names()` w `gui.py:389`, `cli.py:26` (`_SMART_SHAPES`), `make_showcase.py:269` (import z `engine_smart`); (c) pełny `pytest`; (d) commit.
-
-Kontekst: helper `_polygon_sector`, rejestr `SHAPE_MODES`, generatory `_gen_kites`/`_gen_spectre` i `shape_names()` SĄ JUŻ w `engine_smart.py` (dodane addytywnie, przetestowane pośrednio), ale `_do_render` ich jeszcze NIE używa — nadal działają stare, zduplikowane gałęzie. To ostatni krok Sprint 2 przed S3.
-
----
-
-## Co zrobiono w tej sesji
-
-- ✓ **/start + sanity-check:** stan spójny; wykryto że `e9d52ce` (finalizacja poprz. sesji) NIE jest wypchnięty na origin (branch +1).
-- ✓ **Golden testy Sprint 2** (`tests/test_golden_shapes.py`): 8 przypadków (square/hexagon_romb/kites/spectre × border on/off), deterministyczna syntetyczna biblioteka (32 kafle, seed 12345) + gradient 384×288, SHA-256 policzone na silniku PRZED refaktorem (skrypt scratchpad), reprodukowalne 2×. **8/8 zielone.**
-- ✓ **Szkielet refaktoru w `engine_smart.py`** (addytywny, kod nadal działa): helper `_polygon_sector(target, poly, render_padding, aa, edge_aware)` (bbox-strategia kites); dataclass `ShapeSpec` + rejestr `SHAPE_MODES` + `shape_names()`; generatory modułowe `_gen_kites`/`_gen_spectre` (Y-flip przeniesiony do generatora); `from dataclasses import dataclass`.
-- ✓ **Dowód równoważności kites:** Y-flip w generatorze + shrink-do-centroidu w helperze = identyczny `padded_poly` (flip afiniczny komutuje z centroidem).
-- ✓ **Weryfikacja:** `pytest tests/test_golden_shapes.py tests/test_smart_engine.py` → **50/50 zielone** po dodaniu szkieletu.
-
-## Co zostało (backlog sesji)
-
-- ⟳ **Dokończyć Sprint 2** (NASTĘPNY KROK): podmiana gałęzi w `_do_render` + wiring GUI/CLI/showcase do `shape_names()` + golden PO + commit. Potem S3 (multigrid: penrose, ammann_beenker).
-- ⟳ **DIRTY working tree:** `src/engine_smart.py` (M), `tests/test_golden_shapes.py` (??) — NIEzacommitowane (Sprint 2 niedokończony).
-- ⟳ **`e9d52ce` nadal NIEwypchnięty** na origin/main (branch +1). Rozważyć push przy najbliższym commicie.
-- ⟳ **Standing:** galeria 16K triangle+hexagon (czeka na pliki usera); test_dzi + pasek postępu DZI ([[project_dzi_gui_polish_todo]]).
-
-## Aktywne pliki
-
-- `src/engine_smart.py` (szkielet gotowy; do zrobienia: podmiana gałęzi w `_do_render` ~504-644)
-- `tests/test_golden_shapes.py` (bramka golden — nie zmieniać hashy bez powodu)
-- `PLAN_SHAPES.md` (kanoniczny plan S2–S9)
-- `src/gui.py:389`, `src/cli.py:26`, `src/tools/make_showcase.py:269` (do podłączenia `shape_names()`)
-- `src/tools/gen_fable_shape_schemes.py` (referencyjna geometria 10 kształtów Fable — dla S3+)
-
-## Otwarte pytania
-
-- ⚠ **Golden spectre może paść po podmianie gałęzi.** Helper używa strategii bboxa kites (repaste z offsetem, `int(min_x)` może być ujemne), a stara gałąź spectre clampowała `min` do `0.0` i pastowała w `(0,0)`. Dla kafli spectre przecinających GÓRNY/LEWY brzeg zmienia to sub-pikselowe wyrównanie maski. **Decyzja przy wznowieniu:** jeśli padnie → (a) zregenerować golden spectre + udokumentować poprawne edge handling (wg PLAN_SHAPES.md pkt 1 — kites strategia jest zamierzona), albo (b) dodać per-shape flagę strategii bboxa do `ShapeSpec`. Rekomendacja: (a) — plan świadomie unifikuje na strategii kites.
-- **Girih (S7):** greedy ~97% pokrycia → dziury; decyzja z userem na starcie S7.
-- **Truchet (S8):** go/no-go po prototypie 1 kafelka.
-
-## Do MEMORY.md (przeniesiono)
-
-- [Aktywne TODO] NOWY [2026-07-02] „Sprint 2 W TOKU — golden + szkielet gotowe, wiring NIE" (golden 8/8, `_polygon_sector`+`SHAPE_MODES`+generatory addytywnie, dowód równoważności kites, ⚠ ryzyko golden spectre).
 
 

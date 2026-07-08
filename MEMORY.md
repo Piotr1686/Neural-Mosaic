@@ -179,6 +179,13 @@
 - **Konwersja offset→axial (hexagon, dla spójnych kwiatów sub7):** `q = c - (r-(r&1))//2`, `r_ax = r` (zweryfikowane geometrycznie: span kwiatu < 2.5·base_s). Triangle/kites w silniku mają geometrię IDENTYCZNĄ z propozycją — reużyte grupowanie owner-corner/parent-hex.
 - **Fix determinizmu:** `hash(str)` jest solony per-proces (PYTHONHASHSEED) → psuł seed w narzędziu; zastąpiony `zlib.crc32` (`stable_seed`).
 
+[2026-07-08] **Grout flat-L1 DOMKNIĘTY + DZI polish + cleanup** (commity 594a01c, f9732b8, 47642a4, 3ee163c, 18e0b7c, 3fbe101, 22504ba, 7010d36 — wypchnięte; 253 testy zielone; auto-memory [[project_grout_engine]], [[project_dzi_gui_polish_todo]])
+- **Flat-L1 grout — werdykt „4+flat" zrealizowany w 100%** dla 5 pozostałych kształtów. Każdy `_grout_cells_*` zwraca komórki z jednakowym `(g2,g3)=(0,0)` → szwy L1, ramka L3. `_apply_grout` rozgałęzione: `_HIERARCHICAL_GROUT=(square,triangle,hexagon,kites)` → grubości gradowane; reszta → jednolite `{1:w,2:w,3:w}` z `w=scale_widths[1]`. **DECYZJA A (user):** ramka kadru RYSOWANA (L3>0), spójnie z trybem hierarchicznym. hexagon_romb = **wariant 2** (user): 3 romby/hexagon (wewnętrzny „Y"), bo composite składa hex z 3 masek=3 zdjęć.
+- ⚠ **META-LEKCJA th-vs-step:** maski NAKŁADAJĄCE się poza step (hexagon/romb) → grout musi użyć FLOAT wymiaru (int rozjeżdża szwy → brak wspólnych krawędzi, przypomnienie lekcji hexagonu z 07-07). Kształty ABUTUJĄCE dokładnie (rectangle_3x1/brick_wall) → ODWROTNIE, INTEGER step (float otwiera 1-px szczeliny). brick_wall: offset pół-cegły → T-junctions na poziomej fudze, nieszkodliwe przy flat. Test-strażnik dla obu: `len(by_level[1]) > len(by_level[3])`.
+- **Sunflower schematy zunifikowane** pod prefiks `sunflower_*` (grande_{soft,inverse,xl} → sunflower_grande_*); nazwa pliku-schematu = przyszła nazwa trybu, więc rodzina grupuje się w GUI/CLI. [[project_sunflower_grout]].
+- **DZI polish (dług A2 domknięty):** `make_dzi` + `progress_cb(done,total)` (kontrakt jak render, throttle ~100), pasek postępu w GUI (wzorzec pasków renderu), `tests/test_dzi.py` (4 testy). [[project_dzi_gui_polish_todo]].
+- **Cleanup:** etykieta GUI/CLI „Hierarchical Grout" → „Grout" (flat dla 5 czyni „Hierarchical" nieścisłym; logika bez zmian).
+
 ---
 
 ## Odrzucone podejścia
