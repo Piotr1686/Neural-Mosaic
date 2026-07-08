@@ -520,6 +520,8 @@ class SmartEngine:
             return self._grout_cells_hexagon(target_w, target_h, base_s)
         if shape_mode == "kites":
             return self._grout_cells_kites(target_w, target_h, base_s)
+        if shape_mode == "spectre":
+            return self._grout_cells_flat_spectre(target_w, target_h, base_s)
         return None
 
     def _grout_cells_square(self, target_w, target_h, base_s):
@@ -626,22 +628,44 @@ class SmartEngine:
                             cells.append((img_poly, (q, r), g3))
         return cells
 
-    def _apply_grout(self, mosaic_rgb, shape_mode, target_w, target_h, base_s, preset):
-        """Draw the hierarchical grout overlay on the finished RGB mosaic.
+    def _grout_cells_flat_spectre(self, target_w, target_h, base_s):
+        # Flat (non-hierarchical) grout: every spectre monotile shares one group
+        # id, so classify_edges keeps the interior seams at L1 and closes the
+        # frame-boundary edges at L3. generate_spectre_tiling emits nominal
+        # image-space points (the same source _gen_spectre composites from), so
+        # the grout lines land on the seams. _apply_grout draws all three levels
+        # at one uniform width for flat shapes, so the L1/L3 split only decides
+        # which segments exist, not their thickness.
+        return [(list(spec.points), 0, 0)
+                for spec in generate_spectre_tiling(target_w, target_h, base_s)]
 
-        A no-op (with a note) for shapes lacking an approved grouping. Widths
-        scale with base_s from the chosen preset; flat single-level grout for
-        the remaining shapes is a follow-up.
+    # Shapes with an approved multi-level grouping get graded widths (thin L1 ->
+    # thick L3); every other supported shape draws flat single-width grout.
+    _HIERARCHICAL_GROUT = ("square", "triangle", "hexagon", "kites")
+
+    def _apply_grout(self, mosaic_rgb, shape_mode, target_w, target_h, base_s, preset):
+        """Draw the grout overlay on the finished RGB mosaic.
+
+        Hierarchical shapes (``_HIERARCHICAL_GROUT``) get graded widths from the
+        preset (thin L1 -> thick L3). Flat shapes reuse the same classified
+        segments but draw every level at one uniform width (the preset's L1),
+        including the frame-boundary edges (drawn, not suppressed). A no-op (with
+        a note) for shapes still lacking any grouping.
         """
         cells = self._grout_cells(shape_mode, target_w, target_h, base_s)
         if cells is None:
-            print(f"Grout: '{shape_mode}' has no approved grouping yet — "
-                  f"hierarchical grout skipped (flat grout is a follow-up).")
+            print(f"Grout: '{shape_mode}' has no grouping yet — grout skipped.")
             return
-        print(f"Grout: drawing hierarchical borders '{preset}' "
-              f"over {len(cells)} cells...")
+        widths = scale_widths(preset, base_s)
+        if shape_mode in self._HIERARCHICAL_GROUT:
+            level_w = widths
+            kind = "hierarchical"
+        else:
+            w = widths[1]
+            level_w = {1: w, 2: w, 3: w}
+            kind = "flat"
+        print(f"Grout: drawing {kind} borders '{preset}' over {len(cells)} cells...")
         by_level = classify_edges(cells)
-        level_w = scale_widths(preset, base_s)
         draw_grout(ImageDraw.Draw(mosaic_rgb), by_level, level_w, color=(0, 0, 0))
 
     def _do_render(self, target, shape_mode, tile_scale, border_mode=False, blend_strength=0.0, tint_strength=0.0, grout_preset=None, progress_cb=None, cancel_event=None):

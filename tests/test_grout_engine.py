@@ -84,8 +84,18 @@ def test_kites_level2_is_parent_hexagon_of_six():
 
 def test_unsupported_shapes_return_none():
     e = _engine()
-    for shape in ("romb", "hexagon_romb", "rectangle_3x1", "brick_wall", "spectre"):
+    for shape in ("romb", "hexagon_romb", "rectangle_3x1", "brick_wall"):
         assert e._grout_cells(shape, 400, 300, 100) is None, shape
+
+
+def test_spectre_flat_cells_share_one_group():
+    # Flat grout: every spectre monotile carries the SAME (g2, g3) so
+    # classify_edges leaves interior seams at L1 and only the frame boundary at
+    # L3. A per-tile group id here would silently promote every seam to L3.
+    cells = _engine()._grout_cells("spectre", 600, 600, 60)
+    assert cells, "spectre grout cells missing"
+    assert all(len(poly) >= 3 for poly, _, _ in cells)
+    assert {(g2, g3) for _, g2, g3 in cells} == {(0, 0)}
 
 
 # ---------------------------------------------------------------------------
@@ -121,6 +131,19 @@ def test_grout_preset_adds_black_lines(tmp_path):
     e = _small_engine(tmp_path)
     base = np.asarray(_preview(e, tmp_path, "square", grout_preset=None))
     grouted = np.asarray(_preview(e, tmp_path, "square", grout_preset="gruby"))
+    assert base.shape == grouted.shape
+    assert not np.array_equal(base, grouted)
+    near_black = lambda a: int((a.sum(axis=2) < 30).sum())
+    assert near_black(grouted) > near_black(base)
+
+
+def test_grout_flat_spectre_adds_black_lines(tmp_path):
+    # Flat grout on an aperiodic shape: no grouping, but the seams still get a
+    # uniform-width overlay, so the grouted render differs from the baseline and
+    # gains black pixels.
+    e = _small_engine(tmp_path)
+    base = np.asarray(_preview(e, tmp_path, "spectre", grout_preset=None))
+    grouted = np.asarray(_preview(e, tmp_path, "spectre", grout_preset="gruby"))
     assert base.shape == grouted.shape
     assert not np.array_equal(base, grouted)
     near_black = lambda a: int((a.sum(axis=2) < 30).sum())
