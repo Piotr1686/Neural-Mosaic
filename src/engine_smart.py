@@ -524,6 +524,15 @@ class SmartEngine:
             return self._grout_cells_flat_spectre(target_w, target_h, base_s)
         if shape_mode == "romb":
             return self._grout_cells_flat_romb(target_w, target_h, base_s)
+        if shape_mode == "rectangle_3x1":
+            th = base_s // 3
+            return self._grout_cells_flat_rect(
+                target_w, target_h, base_s, th, float(base_s), float(th), 0.0)
+        if shape_mode == "brick_wall":
+            th = base_s // 2
+            return self._grout_cells_flat_rect(
+                target_w, target_h, base_s, th, float(base_s), float(th),
+                float(base_s // 2))
         return None
 
     def _grout_cells_square(self, target_w, target_h, base_s):
@@ -668,6 +677,33 @@ class SmartEngine:
                     (pos_x + tile_w,     pos_y + tile_h / 2),
                     (pos_x + tile_w / 2, pos_y + tile_h),
                     (pos_x,              pos_y + tile_h / 2),
+                ]
+                cells.append((poly, 0, 0))
+        return cells
+
+    def _grout_cells_flat_rect(self, target_w, target_h,
+                               tile_w, tile_h, step_x, step_y, offset_odd):
+        # Shared flat-grout geometry for the rectangular grids (rectangle_3x1,
+        # brick_wall), same -1 start as the composite so the edge wedges are
+        # covered. Rectangles abut EXACTLY, so unlike romb/hexagon the steps
+        # stay at the integer canvas size (tile_h passed already //-truncated);
+        # a float step here would open the 1-px gaps the composite comment
+        # warns about. brick_wall's half-brick offset makes the horizontal
+        # mortar meet vertical edges at T-junctions -- harmless for flat grout:
+        # every level draws one width and the collinear horizontal segments of
+        # adjacent rows paint the same line (no gap, no visible doubling).
+        cols = int(target_w / step_x) + 2
+        rows = int(target_h / step_y) + 2
+        cells = []
+        for r in range(-1, rows):
+            pos_y = r * step_y
+            for c in range(-1, cols):
+                pos_x = c * step_x + (offset_odd if r % 2 == 1 else 0.0)
+                poly = [
+                    (pos_x, pos_y),
+                    (pos_x + tile_w, pos_y),
+                    (pos_x + tile_w, pos_y + tile_h),
+                    (pos_x, pos_y + tile_h),
                 ]
                 cells.append((poly, 0, 0))
         return cells

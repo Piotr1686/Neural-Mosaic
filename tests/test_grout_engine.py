@@ -85,7 +85,9 @@ def test_kites_level2_is_parent_hexagon_of_six():
 
 def test_unsupported_shapes_return_none():
     e = _engine()
-    for shape in ("hexagon_romb", "rectangle_3x1", "brick_wall"):
+    # hexagon_romb still has no grout geometry (composite builds each hexagon
+    # from three romb sub-masks -- an open design decision).
+    for shape in ("hexagon_romb",):
         assert e._grout_cells(shape, 400, 300, 100) is None, shape
 
 
@@ -115,6 +117,28 @@ def test_romb_adjacent_diamonds_share_edges():
     assert len(by_level[1]) > len(by_level[3]), (
         f"interior seams not shared: L1={len(by_level[1])} L3={len(by_level[3])} "
         f"(tile_h likely truncated to int)")
+
+
+def test_rectangle_3x1_flat_cells_share_one_group():
+    cells = _engine()._grout_cells("rectangle_3x1", 600, 600, 60)
+    assert cells and all(len(poly) == 4 for poly, _, _ in cells)
+    assert {(g2, g3) for _, g2, g3 in cells} == {(0, 0)}
+    # clean abutting grid: interior edges shared (L1), only the true frame is L3
+    by_level = classify_edges(cells)
+    assert len(by_level[1]) > len(by_level[3])
+
+
+def test_brick_wall_flat_cells_share_one_group():
+    # brick_wall's half-brick offset means horizontal mortar meets vertical
+    # edges at T-junctions, so those seams are not shared (they land at L3). That
+    # is fine for flat grout -- assert only the uniform group id and that the
+    # bricks are the right 2:1 shape (tile_h = base_s//2).
+    cells = _engine()._grout_cells("brick_wall", 600, 600, 60)
+    assert cells and all(len(poly) == 4 for poly, _, _ in cells)
+    assert {(g2, g3) for _, g2, g3 in cells} == {(0, 0)}
+    w = cells[0][0][1][0] - cells[0][0][0][0]
+    h = cells[0][0][2][1] - cells[0][0][1][1]
+    assert w == 60 and h == 30
 
 
 # ---------------------------------------------------------------------------
@@ -174,6 +198,24 @@ def test_grout_flat_romb_adds_black_lines(tmp_path):
     base = np.asarray(_preview(e, tmp_path, "romb", grout_preset=None))
     grouted = np.asarray(_preview(e, tmp_path, "romb", grout_preset="gruby"))
     assert base.shape == grouted.shape
+    assert not np.array_equal(base, grouted)
+    near_black = lambda a: int((a.sum(axis=2) < 30).sum())
+    assert near_black(grouted) > near_black(base)
+
+
+def test_grout_flat_rectangle_3x1_adds_black_lines(tmp_path):
+    e = _small_engine(tmp_path)
+    base = np.asarray(_preview(e, tmp_path, "rectangle_3x1", grout_preset=None))
+    grouted = np.asarray(_preview(e, tmp_path, "rectangle_3x1", grout_preset="gruby"))
+    assert not np.array_equal(base, grouted)
+    near_black = lambda a: int((a.sum(axis=2) < 30).sum())
+    assert near_black(grouted) > near_black(base)
+
+
+def test_grout_flat_brick_wall_adds_black_lines(tmp_path):
+    e = _small_engine(tmp_path)
+    base = np.asarray(_preview(e, tmp_path, "brick_wall", grout_preset=None))
+    grouted = np.asarray(_preview(e, tmp_path, "brick_wall", grout_preset="gruby"))
     assert not np.array_equal(base, grouted)
     near_black = lambda a: int((a.sum(axis=2) < 30).sum())
     assert near_black(grouted) > near_black(base)
