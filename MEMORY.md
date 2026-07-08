@@ -28,6 +28,14 @@
 - Posteryzacja przez PIL quantize(MEDIANCUT) — palette_size 8/16/32/None
 - Parametr variation (domyślnie 20): niższy = ostrzejszy, wyższy = organiczny
 
+[2026-07-08] **Dopasowanie świadome maski — plan jakości 1+2+3 WDROŻONY** (commity 3dd42d9, 0d2c5f8)
+- `create_mosaic`: zapis JPEG z `subsampling=0` (4:4:4) — mozaika to tysiące ostrych granic kolorów, domyślne 4:2:0 rozmywało chrominancję na szwach/fugach
+- `_mean_fill_outside_mask` rozszerzone na gałęzie grid (standardowa + hexagon_romb composite) — wcześniej tylko kites/spectre; triangle miał ~50% bboxa zanieczyszczone treścią sąsiadów
+- `_mask_cell_weights` + **ważony re-scoring top-K**: wagi = pokrycie maską komórek 5×5 (BOX, ten sam kernel co cechy), normalizacja do średniej 1.0 (balans freq_penalty zachowany); maska pełna → None → square bit-w-bit; edge-dimy z wagą 1.0; `wmask` także w `_polygon_sector` (kształty S2+ dostają za darmo)
+- DECYZJA ARCHITEKTONICZNA: re-scoring top-K ZAMIAST sqrt(w)-przed-GEMM — wiele masek w jednym renderze (triangle norm/flip, hexagon_romb×3, kites×6, spectre per sektor) wymagałoby kopii biblioteki per maska; GEMM/`_euclid_f32` nietknięty → inwariant A1 („prawdziwy euklides") bezpieczny
+- Empiria (0013.jpg, triangle 2K): deltaE LAB do oryginału 9.27→8.46 (~9% skumulowane); czas renderu bez regresji; goldeny: 7 regen. (celowo), square/False niezmieniony przez OBIE zmiany = dowód izolacji ścieżki GEMM
+- Punkt 4 planu (ZOSTAŁO): nakładka `data/tiles_hires/` + selektywny re-fetch po seedzie picsum tylko dla kafelków z `used_counts` (deterministyczny: `/seed/{idx}/{size}` = te same zdjęcia ostrzejsze); prywatne zdjęcia z oryginałów lokalnie; Real-ESRGAN tylko fallback dla loremflickr (niedeterministyczny). ODRZUCONE: pełny re-download biblioteki (~455k kafli, user ma duży różnorodny zbiór)
+
 ---
 
 ## Rozwiązane problemy

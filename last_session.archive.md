@@ -1,3 +1,62 @@
+## ═══ Sesja zarchiwizowana [2026-07-08 23:07] ═══
+
+# last_session.md
+
+**Sesja:** 2026-07-08 · (Opus 4.8) · ~21:00-22:10
+**Status:** ✓ Zakończona poprawnie
+**Punkt odniesienia (git):** 7010d36 @ main (zsynchronizowane z origin/main; wszystkie commity sesji wypchnięte)
+
+---
+
+## ▸ NASTĘPNY KROK (zacznij tutaj)
+
+**Wiring pierwszego kształtu sunflower do silnika: `sunflower_grande` (faworyt usera) jako shape polygon-owy.** Konkretnie w `src/engine_smart.py`:
+
+1. Dodaj generator `_gen_sunflower_grande(engine, target_w, target_h, base_s)` yieldujący poligony komórek w image space — zaadaptuj geometrię z `src/tools/gen_sunflower_schemes.py::gen_sunflower_grande` (Voronoi na ziarnach Vogela `r=c·n^0.66`), przeskaluj z układu montażu do `target_w×target_h`, przytnij komórki brzegowe do kadru (`_clip_rect` już istnieje w narzędziach). Wzór adaptera = `_gen_spectre` (linia ~131: cienki adapter nad zewnętrzną geometrią).
+2. Zarejestruj w `SHAPE_MODES` (dict ~156-169) jako `ShapeSpec("polygon", generator=_gen_sunflower_grande, aa=4)` — jeśli `_do_render` ma już gałąź polygon-sector (`_polygon_sector`), wpina się bez nowej gałęzi; jeśli nie, dodaj po wzorze spectre (~767).
+3. Podłącz do `shape_names()` → GUI `combo_shape` i CLI `_SMART_SHAPES`.
+4. Golden test w `tests/test_golden_shapes.py` + weryfikacja wizualna overlay (jak przy groucie: `_apply_grout` nie dotyczy — to nowy kształt, nie fuga).
+
+Kontekst: schematy sunflower są tylko podglądowymi PNG — silnik ich NIE generuje. To otwiera duży tor „wiring nowych kształtów" (sunflower×7 + rhombs×3 → selekcja finalna z PLAN_SHAPES). `sunflower_grande` to najmniejszy pierwszy krok (jeden wariant, faworyt). ALTERNATYWA (drugi tor, gdyby user wolał): PLAN_FRACTAL F1a — trójfazowa pętla renderu z golden bit-w-bit.
+
+---
+
+## Co zrobiono w tej sesji
+
+- ✓ **Grout flat-L1 DOMKNIĘTY dla 5 kształtów** — werdykt „4+flat" zrealizowany w 100%. spectre (f9732b8), romb (47642a4), rectangle_3x1+brick_wall (3ee163c), hexagon_romb wariant 2 (18e0b7c). Każdy `_grout_cells_*` → komórki z jednakowym `(g2,g3)=(0,0)`; `_apply_grout` rozgałęzione (hierarchiczne 4 → grubości gradowane; reszta → jednolite `{1:w,2:w,3:w}`).
+- ✓ **DECYZJA A (user):** ramka kadru RYSOWANA dla flat (L3>0), spójnie z hierarchicznym. Zilustrowane realnym renderem PIL (scratchpad).
+- ✓ **hexagon_romb = wariant 2 (user):** 3 romby/hexagon (wewnętrzny „Y"), bo composite składa hex z 3 masek=3 zdjęć.
+- ✓ **META-LEKCJA th-vs-step:** maski nakładające (hexagon/romb) → FLOAT wymiar; abutujące (rectangle/brick) → INT step. Test-strażnik `L1>L3`.
+- ✓ **Rename schematów sunflower** (594a01c): `grande_{soft,inverse,xl}` → `sunflower_grande_*` (unifikacja rodziny pod prefiks; nazwa pliku = przyszła nazwa trybu). Generator `gen_sunflower_schemes.py` zsynchronizowany.
+- ✓ **DZI polish** (22504ba): `make_dzi` + `progress_cb(done,total)`; pasek postępu GUI (wzorzec pasków renderu); `tests/test_dzi.py` (4 testy). Domknięty dług A2.
+- ✓ **Cleanup etykiet** (3fbe101, 7010d36): GUI/CLI „Hierarchical Grout" → „Grout" (flat dla 5 czyni „Hierarchical" nieścisłym); komentarze zsynchronizowane.
+- ✓ **253 testy zielone** (było 209; +44). Wszystkie 8 commitów WYPCHNIĘTE na origin. Weryfikacja wizualna każdego kształtu grout.
+
+## Co zostało (backlog sesji)
+
+- ⟳ **Wiring nowych kształtów** (sunflower×7 + rhombs×3) do silnika → selekcja finalna z PLAN_SHAPES (NASTĘPNY KROK = pierwszy wariant `sunflower_grande`).
+- ⟳ **PLAN_FRACTAL wykonawczy** — start F1a (trójfazowa pętla, golden bit-w-bit). Alternatywny tor.
+- ⟳ Standing: galeria 16K triangle+hexagon (pliki usera).
+
+## Aktywne pliki
+
+- `src/engine_smart.py` (grout flat: `_grout_cells_flat_{spectre,romb,rect,hexagon_romb}` + `_HIERARCHICAL_GROUT` + rozgałęzienie `_apply_grout`)
+- `tests/test_grout_engine.py` (+8 testów flat), `tests/test_dzi.py` (NOWY, 4 testy)
+- `src/tools/make_dzi.py` (progress_cb), `src/gui.py` (pasek DZI + etykieta Grout), `src/cli.py` (help)
+- `src/tools/gen_sunflower_schemes.py` (rejestr/nazwy sunflower_grande_*)
+- `assets/shape_schemes/sunflower_grande_{soft,inverse,xl}.png` (rename)
+
+## Otwarte pytania
+
+- Który tor backlogu jako główny na następną sesję: sunflower wiring (rekomendowany, NASTĘPNY KROK) czy PLAN_FRACTAL F1a? (nierozstrzygnięte — user wybrał w tej sesji tylko DZI polish).
+- Pasek postępu DZI zweryfikowany tylko przez testy make_dzi; widget CTk niesprawdzony headless — potwierdzić przy realnym `python -m src.gui`.
+
+## Do MEMORY.md (przeniesiono)
+
+- Repo MEMORY.md: wpis [2026-07-08] — grout flat-L1 domknięty (decyzja A, hexagon_romb wariant 2, META-LEKCJA th-vs-step), rename sunflower, DZI polish, cleanup etykiet.
+- Auto-memory: `project_grout_engine` zaktualizowane (flat-L1 + meta-lekcja + decyzja A); `project_dzi_gui_polish_todo` → ZROBIONE; indeks MEMORY.md zsynchronizowany.
+
+
 ## ═══ Sesja zarchiwizowana [2026-07-08 22:10] ═══
 
 # last_session.md
@@ -223,66 +282,3 @@ Kontekst: cała reszta rewizji kształtów jest DOMKNIĘTA (9 poprawek usera + 4
 
 - Repo MEMORY.md: NOWY wpis [2026-07-04] — fix kites (-q//2, golden nietknięte), techniki: twindragon rep-tile (kasowanie krawędzi + skręt w lewo), inwersja poincare (okno w dysku NIE działa), teselacja 2-size Kocha (bilans pól), rozeta 3.12.12 (pułapki: dziury po wszystkich centrach, filtr BOX), scales (pokrycie dokładne), redukcja rodziny radialnej.
 - Auto-memory: `project_extra_15_shapes` rozbudowane o pełną rewizję 2026-07-04 + zaindeksowane w MEMORY.md (wcześniej brakowało w indeksie).
-
-
-## ═══ Sesja zarchiwizowana [2026-07-04 11:30] ═══
-
-# last_session.md
-
-**Sesja:** 2026-07-03 · (długa sesja na modelu Fable 5)
-**Status:** ✓ Zakończona poprawnie (ETAP B schematów ZACOMMITOWANY `6aef038` + push)
-**Punkt odniesienia (git):** 6aef038 @ main (ETAP B feat commit; po push zsynchronizowany z origin/main — dawne e9d52ce/b6429aa/8aca263 też wypchnięte)
-
----
-
-## ▸ NASTĘPNY KROK (zacznij tutaj)
-
-**ETAP A: przerobić 5 pozostałych schematów na PRAWDZIWE teselacje.** Kolejność wg pewności:
-1. `gen_bloom` (najpewniejsze) → `scipy.spatial.Voronoi` na ziarnach phyllotaxis (kąt złoty) rozszerzonych POZA ramkę, każdy region przez istniejący `_clip_rect(poly, R)` do `[-R,R]²`. Voronoi ziaren słonecznika = naturalna teselacja wypełniająca.
-2. `gen_hirotaka` → Penrose (deflacja trójkątów Robinsona), pokolorowany na gwiazdy 5-krotne.
-3. `gen_koch_snowflake` → 2-rozmiarowy kafel Kocha (duży + mniejszy towarzysz kafelkują).
-4. `gen_dragon` → twindragon-**reptile** (kafle w kształcie smoka), zastąpić placeholder-wstęgi (teraz `order=6`, ~16k wielokątów przy order 9 wieszało montaż).
-5. `gen_kepler_ty` → teselacja 5-krotna gap-free (aperiodyczna, najtrudniejsza).
-
-Kontekst: user narzucił iteracyjnie TWARDĄ regułę — KAŻDY kształt musi być prawdziwą teselacją brzeg-w-brzeg (bez nakładania, bez luk, wypełnia prostokąt, samopowtarzalny). ETAP B (10 pewnych) zrobiony i zweryfikowany wizualnie; ETAP A to 5 trudnych aperiodycznych/reptile/fraktalnych, świadomie odłożonych i oznaczonych `[ETAP A]` w `SHAPES`. Wszystkie generatory szybkie (<0.02s) — jedyny problem wydajności to render dragona (dużo wielokątów).
-
----
-
-## Co zrobiono w tej sesji
-
-- ✓ **Analiza (na życzenie usera):** problemy mozaik girih/poincaré/voderberg (dziury greedy, subpikselowe kafle przy brzegu dysku, osobliwość centrum spirali); centralny kafel problematyczny (duży kafel-dominant w poincaré/girih, drzazgi w voderberg). **Czarna pustka w `kites`** — diagnoza: luka generacji siatki, człon shear `q/2` vs stały `range_r` (engine_smart.py:520) → prawy-dolny róg bez kafli. Fix (nie wdrożony): pętla `r` wokół `-q/2`.
-- ✓ **Nowy generator `src/tools/gen_extra_shape_schemes.py`** — 16 schematów (21-35 + `stagger_tri` 36). Importuje helpery z `gen_fable_shape_schemes`.
-- ✓ **ETAP B — 10 PRAWDZIWYCH teselacji** (wypełniają prostokąt, zero nakładania/luk): `sierpinski` (PRZEROBIONY na prawdziwy rekurencyjny z zagnieżdżonymi dziurami-komórkami, kafelkowany up+down), `gereh` (ośmiokąt=gwiazda-8+8 latawców, partycja), `koch_island` (reptile Minkowskiego, period=4^depth), `rosette`+`mandala` (koncentryczne KOŁA przycięte do prostokąta — pomysł usera), `nautilus`+`vortex` (radialne pierścienie ze skrętem, log/liniowe), `shatter` (radialne poza rogi), `moire` (GEOMETRYCZNA zwichrowana siatka — nie kolor), `braid` (basketweave, płaski przeplot bez nad/pod).
-- ✓ **`stagger_tri` (#36)** — stary „sierpinski" (przesunięte warstwy trójkątów) zachowany pod nową nazwą na życzenie usera.
-- ✓ **Poprawki w `gen_fable_shape_schemes.py`:** `poincaré` (siatka tła w rogach poza dyskiem), `voderberg` (promień poza rogi + kapsel centralny → wypełnia), `kepler_ty` w extra (gęstszy dekagon+10 pięciokątów — nadal ETAP A).
-- ✓ **Techniki (do pamięci):** helper `_radial_clip_cells` (sektory×pierścienie, rozszerz poza rogi + clip), `_clip_rect` (Sutherland-Hodgman do prostokąta), seam-fix (offset o pół sektora co drugi pierścień).
-- ✓ **Referencje usera:** czasopismomatematyka.pl (gereh=wypełnianie wielokątów liniami z krawędzi → przerobiłem na partycję; „fraktal Hirotaki" pokazany graficznie bez definicji → placeholder pentaflake/Penrose).
-
-## Co zostało (backlog sesji)
-
-- ✓ **COMMIT + PUSH ZROBIONE:** ETAP B `6aef038` (feat shapes) + `chore(session)` wypchnięte na origin/main.
-- ⟳ **ETAP A (NASTĘPNY KROK):** 5 trudnych — bloom→Voronoi, hirotaka→Penrose, koch_snowflake→2-size, dragon→reptile, kepler_ty→teselacja 5-krotna.
-- ⟳ **Montaż** `output/kite_schemes/proposals_extra_15_shapes.png` regenerowany w tle na końcu (36 shapes) — sprawdzić przy starcie.
-- ⟳ **Sprint 2 (`_do_render` refaktor)** — NADAL NIETKNIĘTY (pivot na schematy); zduplikowane gałęzie kites/spectre wciąż w engine_smart.py:507/592, cli.py:26 zahardkodowany. To był oryginalny „następny krok" z poprzedniej sesji.
-- ⟳ **`kites` czarna pustka** — fix zdiagnozowany (pętla r wokół -q/2), niewdrożony (dotyka golden → regeneracja hasha, po Sprint 2).
-- ⟳ **Standing:** galeria 16K triangle+hexagon (czeka na pliki usera); test_dzi + pasek postępu DZI ([[project_dzi_gui_polish_todo]]).
-
-## Aktywne pliki
-
-- `src/tools/gen_extra_shape_schemes.py` (NOWY — 16 schematów; helpery `_radial_clip_cells`/`_clip_rect`; ETAP A: bloom/hirotaka/koch_snowflake/dragon/kepler_ty)
-- `src/tools/gen_fable_shape_schemes.py` (M — poincaré/voderberg/kepler naprawione)
-- `assets/shape_schemes/*.png` (~16 nowych/zmienionych)
-- `src/engine_smart.py` (NIETKNIĘTY — cel Sprint 2 refaktor + fix pustki kites)
-
-## Otwarte pytania
-
-- ⚠ **Commit teraz?** Propozycja (2 commity): (1) `feat(shapes): 15+ schematow jako prawdziwe teselacje (ETAP B) + gen_extra_shape_schemes.py` obejmujący gen_extra + assets + poincare/voderberg fix; (2) osobno stan sesji. Push (+3 niewypchnięte: e9d52ce, b6429aa, 8aca263) — do decyzji.
-- Decyzja B potwierdzona przez usera: rodzina kolista→teselacja gwiaździsta/koncentryczna; niemożliwe→kafelkujące kuzyny. Trudne ETAP A mogą wyjść przybliżone (oznaczyć uczciwie).
-- Selekcja finalna 36 kształtów → które wdrożyć w silniku — PO wygenerowaniu wszystkich (ETAP A).
-
-## Do MEMORY.md (przeniesiono)
-
-- Repo MEMORY.md: NOWY wpis [2026-07-03] o ETAP B (10 teselacji), regule „prawdziwa teselacja", technikach `_radial_clip_cells`/`_clip_rect`, ETAP A pending.
-- Auto-memory: [[project_extra_15_shapes]] rozbudowane (wymóg teselacji, decyzje B, moire≡square caveat, gereh/koch_island/dragon).
-
-

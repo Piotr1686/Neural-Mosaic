@@ -1,55 +1,52 @@
 # last_session.md
 
-**Sesja:** 2026-07-08 · (Opus 4.8) · ~21:00-22:10
+**Sesja:** 2026-07-08 · (Fable 5) · sesja wieczorna (2. tego dnia)
 **Status:** ✓ Zakończona poprawnie
-**Punkt odniesienia (git):** 7010d36 @ main (zsynchronizowane z origin/main; wszystkie commity sesji wypchnięte)
+**Punkt odniesienia (git):** 0d2c5f8 @ main (zsynchronizowane z origin/main; oba commity sesji wypchnięte)
 
 ---
 
 ## ▸ NASTĘPNY KROK (zacznij tutaj)
 
-**Wiring pierwszego kształtu sunflower do silnika: `sunflower_grande` (faworyt usera) jako shape polygon-owy.** Konkretnie w `src/engine_smart.py`:
+**Punkt 4 planu jakości: nakładka hires dla biblioteki kafelków.** Dwa elementy:
 
-1. Dodaj generator `_gen_sunflower_grande(engine, target_w, target_h, base_s)` yieldujący poligony komórek w image space — zaadaptuj geometrię z `src/tools/gen_sunflower_schemes.py::gen_sunflower_grande` (Voronoi na ziarnach Vogela `r=c·n^0.66`), przeskaluj z układu montażu do `target_w×target_h`, przytnij komórki brzegowe do kadru (`_clip_rect` już istnieje w narzędziach). Wzór adaptera = `_gen_spectre` (linia ~131: cienki adapter nad zewnętrzną geometrią).
-2. Zarejestruj w `SHAPE_MODES` (dict ~156-169) jako `ShapeSpec("polygon", generator=_gen_sunflower_grande, aa=4)` — jeśli `_do_render` ma już gałąź polygon-sector (`_polygon_sector`), wpina się bez nowej gałęzi; jeśli nie, dodaj po wzorze spectre (~767).
-3. Podłącz do `shape_names()` → GUI `combo_shape` i CLI `_SMART_SHAPES`.
-4. Golden test w `tests/test_golden_shapes.py` + weryfikacja wizualna overlay (jak przy groucie: `_apply_grout` nie dotyczy — to nowy kształt, nie fuga).
+1. **Resolve ścieżki w silniku** — w `src/engine_smart.py`, w pętli składania (`_do_render`, okolice `Image.open(self.paths[best_idx])` ~linia 1240): przed otwarciem sprawdź `data/tiles_hires/{Path(path).name}`; jeśli istnieje → użyj wersji hires, inaczej oryginał. Jedna mała funkcja `_resolve_tile_path(path)` + test.
+2. **Skrypt `src/tools/upgrade_tiles.py`** — wejście: lista używanych kafelków (najprościej: zrzut `used_counts>0` z renderu do JSON, albo skan `paths` po ostatnich mozaikach); filtr kafelków picsum (deterministyczny seed w nazwie/URL — sprawdź format nazw plików w `data/library_public/tiles/`); pobranie `picsum.photos/seed/{idx}/512` do `data/tiles_hires/`; skip-if-exists (idempotentny jak batch CLI). Prywatne zdjęcia: generacja 512 px z oryginałów usera (katalog do ustalenia z userem); Real-ESRGAN tylko jako przyszły fallback dla loremflickr.
 
-Kontekst: schematy sunflower są tylko podglądowymi PNG — silnik ich NIE generuje. To otwiera duży tor „wiring nowych kształtów" (sunflower×7 + rhombs×3 → selekcja finalna z PLAN_SHAPES). `sunflower_grande` to najmniejszy pierwszy krok (jeden wariant, faworyt). ALTERNATYWA (drugi tor, gdyby user wolał): PLAN_FRACTAL F1a — trójfazowa pętla renderu z golden bit-w-bit.
+Kontekst: punkty 1+2+3 planu jakości WDROŻONE w tej sesji (commity 3dd42d9 + 0d2c5f8, deltaE −9%); punkt 4 to ostatni. Biblioteka ~250 px mięknie od tile_scale≈2.5 przy upscalingu. Decyzja usera: BEZ pełnego re-downloadu; rekomendacja (zaakceptowana): nakładka + selektywny re-fetch po seedzie wg used_counts. ALTERNATYWA (starszy tor, jeśli user woli): wiring `sunflower_grande` do silnika (szczegóły w archiwum sesji 2026-07-08 poranna).
 
 ---
 
 ## Co zrobiono w tej sesji
 
-- ✓ **Grout flat-L1 DOMKNIĘTY dla 5 kształtów** — werdykt „4+flat" zrealizowany w 100%. spectre (f9732b8), romb (47642a4), rectangle_3x1+brick_wall (3ee163c), hexagon_romb wariant 2 (18e0b7c). Każdy `_grout_cells_*` → komórki z jednakowym `(g2,g3)=(0,0)`; `_apply_grout` rozgałęzione (hierarchiczne 4 → grubości gradowane; reszta → jednolite `{1:w,2:w,3:w}`).
-- ✓ **DECYZJA A (user):** ramka kadru RYSOWANA dla flat (L3>0), spójnie z hierarchicznym. Zilustrowane realnym renderem PIL (scratchpad).
-- ✓ **hexagon_romb = wariant 2 (user):** 3 romby/hexagon (wewnętrzny „Y"), bo composite składa hex z 3 masek=3 zdjęć.
-- ✓ **META-LEKCJA th-vs-step:** maski nakładające (hexagon/romb) → FLOAT wymiar; abutujące (rectangle/brick) → INT step. Test-strażnik `L1>L3`.
-- ✓ **Rename schematów sunflower** (594a01c): `grande_{soft,inverse,xl}` → `sunflower_grande_*` (unifikacja rodziny pod prefiks; nazwa pliku = przyszła nazwa trybu). Generator `gen_sunflower_schemes.py` zsynchronizowany.
-- ✓ **DZI polish** (22504ba): `make_dzi` + `progress_cb(done,total)`; pasek postępu GUI (wzorzec pasków renderu); `tests/test_dzi.py` (4 testy). Domknięty dług A2.
-- ✓ **Cleanup etykiet** (3fbe101, 7010d36): GUI/CLI „Hierarchical Grout" → „Grout" (flat dla 5 czyni „Hierarchical" nieścisłym); komentarze zsynchronizowane.
-- ✓ **253 testy zielone** (było 209; +44). Wszystkie 8 commitów WYPCHNIĘTE na origin. Weryfikacja wizualna każdego kształtu grout.
+- ✓ **Analiza jakości dopasowania/kafelków** (na prośbę usera): znalezione 3 realne wady — brak mean-fill w gałęziach grid, asymetria „dopasowujemy co innego niż pokazujemy" (indeks=całe zdjęcie vs render=crop+maska), zapis JPEG 4:2:0; biblioteka zmierzona: ~250 px (dominanta 333×250, próbka 800 plików).
+- ✓ **Plan jakości 4 punktów ZATWIERDZONY przez usera** i zapisany w auto-memory (`project_tile_quality_plan`).
+- ✓ **Punkty 1+2 WDROŻONE** (commit 3dd42d9): `subsampling=0` dla .jpg/.jpeg (zweryfikowane sampling code 2→0) + `_mean_fill_outside_mask` w obu gałęziach grid; deltaE 9.27→9.09; 3 goldeny regen.
+- ✓ **Punkt 3 WDROŻONY** (commit 0d2c5f8): `_mask_cell_weights` + ważony re-scoring top-K; DECYZJA ARCH.: re-scoring zamiast sqrt(w)-przed-GEMM (wiele masek w renderze; inwariant A1 nietknięty); deltaE 9.09→8.46 (~7%); `wmask` też w `_polygon_sector` (S2+ za darmo); 6 nowych testów (test_masked_weights.py); 7 goldenów regen., square/False bit-w-bit przez OBIE zmiany (dowód izolacji GEMM).
+- ✓ **Decyzja usera pkt 4:** bez pełnego re-downloadu; zaakceptowana rekomendacja nakładki `tiles_hires/` + re-fetch po seedzie (picsum deterministyczny) wg `used_counts`; prywatne z oryginałów; ESRGAN tylko fallback loremflickr.
+- ✓ **Agenci adwersarialni ponownie ODRZUCENI** dla tego typu zadań (potwierdzenie decyzji z 2026-06-27; zadanie inline > zimny kontekst subagentów).
+- ✓ **231 testów zielonych** (było 225; +6). Oba commity WYPCHNIĘTE. Weryfikacja empiryczna każdej zmiany (deltaE LAB + porównania wizualne + sampling code).
 
 ## Co zostało (backlog sesji)
 
-- ⟳ **Wiring nowych kształtów** (sunflower×7 + rhombs×3) do silnika → selekcja finalna z PLAN_SHAPES (NASTĘPNY KROK = pierwszy wariant `sunflower_grande`).
-- ⟳ **PLAN_FRACTAL wykonawczy** — start F1a (trójfazowa pętla, golden bit-w-bit). Alternatywny tor.
-- ⟳ Standing: galeria 16K triangle+hexagon (pliki usera).
+- ⟳ **Punkt 4 planu jakości** — nakładka tiles_hires (NASTĘPNY KROK).
+- ⟳ **Wiring nowych kształtów** (sunflower×7 + rhombs×3, start: `sunflower_grande`) — tor odłożony z sesji porannej, wciąż aktualny.
+- ⟳ **PLAN_FRACTAL wykonawczy** — F1a (trójfazowa pętla, golden bit-w-bit).
+- ⟳ Standing: galeria 16K triangle+hexagon (pliki usera); pasek DZI w GUI wciąż niesprawdzony w realnym `python -m src.gui`.
 
 ## Aktywne pliki
 
-- `src/engine_smart.py` (grout flat: `_grout_cells_flat_{spectre,romb,rect,hexagon_romb}` + `_HIERARCHICAL_GROUT` + rozgałęzienie `_apply_grout`)
-- `tests/test_grout_engine.py` (+8 testów flat), `tests/test_dzi.py` (NOWY, 4 testy)
-- `src/tools/make_dzi.py` (progress_cb), `src/gui.py` (pasek DZI + etykieta Grout), `src/cli.py` (help)
-- `src/tools/gen_sunflower_schemes.py` (rejestr/nazwy sunflower_grande_*)
-- `assets/shape_schemes/sunflower_grande_{soft,inverse,xl}.png` (rename)
+- `src/engine_smart.py` (`_mask_cell_weights`, re-scoring w pętli dopasowania, mean-fill grid, `subsampling=0` w `create_mosaic`, `wmask` w 5 miejscach)
+- `tests/test_masked_weights.py` (NOWY, 6 testów), `tests/test_golden_shapes.py` (goldeny 2× regen. z komentarzem)
+- `MEMORY.md` repo (wpis [2026-07-08] plan jakości + decyzja arch.)
 
 ## Otwarte pytania
 
-- Który tor backlogu jako główny na następną sesję: sunflower wiring (rekomendowany, NASTĘPNY KROK) czy PLAN_FRACTAL F1a? (nierozstrzygnięte — user wybrał w tej sesji tylko DZI polish).
-- Pasek postępu DZI zweryfikowany tylko przez testy make_dzi; widget CTk niesprawdzony headless — potwierdzić przy realnym `python -m src.gui`.
+- Format nazw plików kafelków picsum — czy seed da się odtworzyć z nazwy pliku? (do sprawdzenia na starcie punktu 4, determinuje kształt upgrade_tiles.py).
+- Gdzie leżą oryginały prywatnych zdjęć usera (pełna rozdzielczość) do lokalnej generacji 512 px?
+- Top-K=200 przy ważonym re-scoringu — czy recall wystarcza dla mocno maskowanych kształtów (kites ~50%)? Ewentualny follow-up: podbić top_k dla wmask≠None, zmierzyć.
 
 ## Do MEMORY.md (przeniesiono)
 
-- Repo MEMORY.md: wpis [2026-07-08] — grout flat-L1 domknięty (decyzja A, hexagon_romb wariant 2, META-LEKCJA th-vs-step), rename sunflower, DZI polish, cleanup etykiet.
-- Auto-memory: `project_grout_engine` zaktualizowane (flat-L1 + meta-lekcja + decyzja A); `project_dzi_gui_polish_todo` → ZROBIONE; indeks MEMORY.md zsynchronizowany.
+- Repo MEMORY.md: wpis [2026-07-08] w sekcji Architektura — plan jakości 1+2+3 wdrożony, decyzja re-scoring vs GEMM (inwariant A1), empiria deltaE, plan punktu 4 z odrzuconym pełnym re-downloadem.
+- Auto-memory: `project_tile_quality_plan` utworzone i aktualizowane na bieżąco (statusy 1+2+3 WDROŻONE + decyzja pkt 4); indeks MEMORY.md zsynchronizowany.
