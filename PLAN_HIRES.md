@@ -12,6 +12,18 @@
 
 **Rewizja Sprintu 5 po empirii:** picsum dołącza do loremflickr jako NIEodzyskiwalny per-file (dryf seedów). Zostają dwa tory dla ~40% biblioteki: (a) etap B archiwa (food/places/dogs/flowers — jedyny deterministyczny odzysk), (b) ESRGAN 2x offline dla nie-archiwalnych (picsum ~2.6% + loremflickr). Oba nadal ODROCZONE do czasu realnego `used_tiles.json --dry-run` usera.
 
+## WERYFIKACJA WARTOŚCI A/B + DECYZJA SPRINT 5 (2026-07-09, po dry-run)
+
+**Dry-run na realnych renderach** (2× 4K, 5249 unikalnych kafli): COCO ~69%, archiwa ~15% (places ~10%, dog ~3%, food ~3%, flower ~0.3%), stracone (picsum-dryf + loremflickr/prywatne) ~15%.
+
+**Test A/B pętli wartości** (`0013.jpg`, 8K, square, tile_scale=3.0 → komórki 300 px):
+- render → upgrade_tiles (313/313 COCO pobrane, 0 rejected/failed) → re-render;
+- przypisania identyczne (dopasowanie deterministyczne — czysty efekt wklejek);
+- **ostrość (wariancja Laplace'a): +48.7% globalnie**, najlepsze komórki do 4.0×;
+- dowód wizualny: `output/0013_ab_comparison.png` (crop 1:1 przed|po) — realny detal (podwozia, śmigła, postaci) zamiast rozmycia z upscalingu.
+
+**DECYZJA: Sprint 5 (archiwa) ZAMKNIĘTY — NIE robić.** ~8 GB pobrań za +16% ostrości przy ~15% i tak straconych = zły ROI. Jedyny sensowny wyjątek on-demand: places-only (2.3 GB → ~10%) dla obrazu-bohatera, jeśli kiedyś zajdzie potrzeba. **ESRGAN: odroczony** — wraca tylko jeśli deep-zoom DZI galerii ujawni widoczną miękkość kafli nie-COCO (pokryłby ~31%: stracone + archiwalne, bez pobierania; tożsamość gwarantowana — bez bramki LAB).
+
 ---
 
 
