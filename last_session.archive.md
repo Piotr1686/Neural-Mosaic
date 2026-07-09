@@ -1,3 +1,58 @@
+## ═══ Sesja zarchiwizowana [2026-07-09 23:37] ═══
+
+# last_session.md
+
+**Sesja:** 2026-07-08 · (Fable 5) · sesja wieczorna (2. tego dnia)
+**Status:** ✓ Zakończona poprawnie
+**Punkt odniesienia (git):** 0d2c5f8 @ main (zsynchronizowane z origin/main; oba commity sesji wypchnięte)
+
+---
+
+## ▸ NASTĘPNY KROK (zacznij tutaj)
+
+**Punkt 4 planu jakości: nakładka hires dla biblioteki kafelków.** Dwa elementy:
+
+1. **Resolve ścieżki w silniku** — w `src/engine_smart.py`, w pętli składania (`_do_render`, okolice `Image.open(self.paths[best_idx])` ~linia 1240): przed otwarciem sprawdź `data/tiles_hires/{Path(path).name}`; jeśli istnieje → użyj wersji hires, inaczej oryginał. Jedna mała funkcja `_resolve_tile_path(path)` + test.
+2. **Skrypt `src/tools/upgrade_tiles.py`** — wejście: lista używanych kafelków (najprościej: zrzut `used_counts>0` z renderu do JSON, albo skan `paths` po ostatnich mozaikach); filtr kafelków picsum (deterministyczny seed w nazwie/URL — sprawdź format nazw plików w `data/library_public/tiles/`); pobranie `picsum.photos/seed/{idx}/512` do `data/tiles_hires/`; skip-if-exists (idempotentny jak batch CLI). Prywatne zdjęcia: generacja 512 px z oryginałów usera (katalog do ustalenia z userem); Real-ESRGAN tylko jako przyszły fallback dla loremflickr.
+
+Kontekst: punkty 1+2+3 planu jakości WDROŻONE w tej sesji (commity 3dd42d9 + 0d2c5f8, deltaE −9%); punkt 4 to ostatni. Biblioteka ~250 px mięknie od tile_scale≈2.5 przy upscalingu. Decyzja usera: BEZ pełnego re-downloadu; rekomendacja (zaakceptowana): nakładka + selektywny re-fetch po seedzie wg used_counts. ALTERNATYWA (starszy tor, jeśli user woli): wiring `sunflower_grande` do silnika (szczegóły w archiwum sesji 2026-07-08 poranna).
+
+---
+
+## Co zrobiono w tej sesji
+
+- ✓ **Analiza jakości dopasowania/kafelków** (na prośbę usera): znalezione 3 realne wady — brak mean-fill w gałęziach grid, asymetria „dopasowujemy co innego niż pokazujemy" (indeks=całe zdjęcie vs render=crop+maska), zapis JPEG 4:2:0; biblioteka zmierzona: ~250 px (dominanta 333×250, próbka 800 plików).
+- ✓ **Plan jakości 4 punktów ZATWIERDZONY przez usera** i zapisany w auto-memory (`project_tile_quality_plan`).
+- ✓ **Punkty 1+2 WDROŻONE** (commit 3dd42d9): `subsampling=0` dla .jpg/.jpeg (zweryfikowane sampling code 2→0) + `_mean_fill_outside_mask` w obu gałęziach grid; deltaE 9.27→9.09; 3 goldeny regen.
+- ✓ **Punkt 3 WDROŻONY** (commit 0d2c5f8): `_mask_cell_weights` + ważony re-scoring top-K; DECYZJA ARCH.: re-scoring zamiast sqrt(w)-przed-GEMM (wiele masek w renderze; inwariant A1 nietknięty); deltaE 9.09→8.46 (~7%); `wmask` też w `_polygon_sector` (S2+ za darmo); 6 nowych testów (test_masked_weights.py); 7 goldenów regen., square/False bit-w-bit przez OBIE zmiany (dowód izolacji GEMM).
+- ✓ **Decyzja usera pkt 4:** bez pełnego re-downloadu; zaakceptowana rekomendacja nakładki `tiles_hires/` + re-fetch po seedzie (picsum deterministyczny) wg `used_counts`; prywatne z oryginałów; ESRGAN tylko fallback loremflickr.
+- ✓ **Agenci adwersarialni ponownie ODRZUCENI** dla tego typu zadań (potwierdzenie decyzji z 2026-06-27; zadanie inline > zimny kontekst subagentów).
+- ✓ **231 testów zielonych** (było 225; +6). Oba commity WYPCHNIĘTE. Weryfikacja empiryczna każdej zmiany (deltaE LAB + porównania wizualne + sampling code).
+
+## Co zostało (backlog sesji)
+
+- ⟳ **Punkt 4 planu jakości** — nakładka tiles_hires (NASTĘPNY KROK).
+- ⟳ **Wiring nowych kształtów** (sunflower×7 + rhombs×3, start: `sunflower_grande`) — tor odłożony z sesji porannej, wciąż aktualny.
+- ⟳ **PLAN_FRACTAL wykonawczy** — F1a (trójfazowa pętla, golden bit-w-bit).
+- ⟳ Standing: galeria 16K triangle+hexagon (pliki usera); pasek DZI w GUI wciąż niesprawdzony w realnym `python -m src.gui`.
+
+## Aktywne pliki
+
+- `src/engine_smart.py` (`_mask_cell_weights`, re-scoring w pętli dopasowania, mean-fill grid, `subsampling=0` w `create_mosaic`, `wmask` w 5 miejscach)
+- `tests/test_masked_weights.py` (NOWY, 6 testów), `tests/test_golden_shapes.py` (goldeny 2× regen. z komentarzem)
+- `MEMORY.md` repo (wpis [2026-07-08] plan jakości + decyzja arch.)
+
+## Otwarte pytania
+
+- Format nazw plików kafelków picsum — czy seed da się odtworzyć z nazwy pliku? (do sprawdzenia na starcie punktu 4, determinuje kształt upgrade_tiles.py).
+- Gdzie leżą oryginały prywatnych zdjęć usera (pełna rozdzielczość) do lokalnej generacji 512 px?
+- Top-K=200 przy ważonym re-scoringu — czy recall wystarcza dla mocno maskowanych kształtów (kites ~50%)? Ewentualny follow-up: podbić top_k dla wmask≠None, zmierzyć.
+
+## Do MEMORY.md (przeniesiono)
+
+- Repo MEMORY.md: wpis [2026-07-08] w sekcji Architektura — plan jakości 1+2+3 wdrożony, decyzja re-scoring vs GEMM (inwariant A1), empiria deltaE, plan punktu 4 z odrzuconym pełnym re-downloadem.
+- Auto-memory: `project_tile_quality_plan` utworzone i aktualizowane na bieżąco (statusy 1+2+3 WDROŻONE + decyzja pkt 4); indeks MEMORY.md zsynchronizowany.
+
 ## ═══ Sesja zarchiwizowana [2026-07-08 23:07] ═══
 
 # last_session.md
@@ -228,57 +283,3 @@ Kontekst: to bezpośrednie werdykty usera po obejrzeniu montaży z 2026-07-04b. 
 - Auto-memory: `project_extra_15_shapes` rozszerzone o rewizję 04b (pełna technika P2 + pułapki).
 
 
-## ═══ Sesja zarchiwizowana [2026-07-04 21:58] ═══
-
-# last_session.md
-
-**Sesja:** 2026-07-04 · (sesja poprawek kształtów, Fable 5)
-**Status:** ✓ Zakończona poprawnie
-**Punkt odniesienia (git):** 75bf7df @ main (2 commity kodu: cedb2ce fix engine + 75bf7df feat shapes; NIE wypchnięte — push do decyzji)
-
----
-
-## ▸ NASTĘPNY KROK (zacznij tutaj)
-
-**Ostatni element ETAP A: przerobić `gen_hirotaka` w `src/tools/gen_extra_shape_schemes.py` na Penrose P2 (kites & darts) przez deflację trójkątów Robinsona** — usunąć `_bg_grid` (ostatni kształt z tłem). UWAGA: `kepler_ty` to już rhombic Penrose z pentagridu (P3-podobny), więc hirotaka musi być odróżnialny — właśnie latawce+strzałki (P2), kolorowane tak, by wyszły gwiazdy/słońca 5-krotne. Po nim: user robi selekcję finalną z 16 paneli montażu → potem Sprint 2 (wiring `_polygon_sector`/`SHAPE_MODES` w `_do_render`).
-
-Kontekst: cała reszta rewizji kształtów jest DOMKNIĘTA (9 poprawek usera + 4 nowe kształty, wszystko zweryfikowane wizualnie i zacommitowane). Hirotaka to jedyny pozostały `[ETAP A]` placeholder.
-
----
-
-## Co zrobiono w tej sesji
-
-- ✓ **Pakiet 9 poprawek usera (/goal) — wszystkie:** bloom→Voronoi phyllotaxis (21 ramion, bez tła); dragon→twindragon rep-tile order 8 (zero nakładania); gereh→same czworokąty (gwiazda-8 z 8 rombów, r_in=0.60·apotema); kepler_ty→pentagrid de Bruijna N=5 (romby Penrose'a); koch_snowflake→teselacja 2-rozmiarowa (małe 1/√3, obrót 30°, bilans pól dokładny); sierpinski→cegiełkowy rozkład dziur (rzędy ±S/2, depth 3) + plan foto (dziury poziomów = coraz większe zdjęcia); poincare→kontynuacja inwersyjna poza okrąg + Möbius, bez tła; rodzina radialna→sam nautilus (biegun poza kadrem, mandala/vortex/shatter USUNIĘTE); **kites: FIX W SILNIKU** (okno `r` centrowane na `-q//2`, oba miejsca engine_smart.py) — golden 8/8 bez zmian hashy, 181 testów zielonych.
-- ✓ **4 nowe kształty na życzenie usera (w trakcie sesji):** `rosette` = 12-krotna rozeta zellij Fez (partycja 3.12.12; 2 fixy: trójkąty dziur po WSZYSTKICH centrach + filtr BOX); `scales` = rybie łuski (pokrycie dokładne, kopuła+2 łuki); `pebbles` = Voronoi zmiennej gęstości (obrazek usera); `rosette_fractal` = aloes spiralny (log-polarny pas trójkątów ze skrętem).
-- ✓ **Nowy commitowany tool** `src/tools/gen_kites_scheme.py` (generator schematu kites — stary przepadł ze scratchpadem Opusa).
-- ✓ `_clip_rect` przeniesiony do `gen_fable_shape_schemes.py` (gen_extra importuje — bez cyklu importów).
-- ✓ Montaż extra = 16 paneli 4×4 (`proposals_extra_15_shapes.png`, nazwa historyczna); montaż Fable przeliczony (nowy poincare, girih seedy w tle).
-- ✓ Weryfikacja: **181/181 pytest + golden 8/8**; wizualna weryfikacja każdego panelu.
-- ✓ Commity: `cedb2ce` fix(engine) kites + `75bf7df` feat(shapes) rewizja.
-
-## Co zostało (backlog sesji)
-
-- ⟳ **hirotaka → Penrose P2 deflacja** (NASTĘPNY KROK, ostatni [ETAP A]).
-- ⟳ **Push** cedb2ce+75bf7df (+commit stanu) na origin/main — do decyzji usera.
-- ⟳ **Selekcja finalna kształtów** przez usera (16 paneli extra + 10 Fable + 10 Opus) → które wdrażamy w silniku.
-- ⟳ **Sprint 2 (`_do_render` refaktor)** — wiring `_polygon_sector` + `SHAPE_MODES` (golden gotowe, szkielet dodany addytywnie; ryzyko bbox spectre opisane w MEMORY [2026-07-02]).
-- ⟳ **Standing:** galeria 16K triangle+hexagon (czeka na pliki usera); test_dzi + pasek postępu DZI ([[project_dzi_gui_polish_todo]]).
-
-## Aktywne pliki
-
-- `src/tools/gen_extra_shape_schemes.py` (przepisany — 16 kształtów, w tym 4 nowe; hirotaka = jedyny z `_bg_grid`)
-- `src/tools/gen_fable_shape_schemes.py` (M — poincare inwersja+Möbius, `_clip_rect`)
-- `src/tools/gen_kites_scheme.py` (NOWY)
-- `src/engine_smart.py` (M — fix okna pętli r w kites, 2 miejsca)
-- `assets/shape_schemes/*.png` (16 zmienionych/nowych; mandala/vortex/shatter usunięte)
-
-## Otwarte pytania
-
-- Push na origin — nie wykonany (user kończył sesję limitem tokenów).
-- Czy `rosette_fractal` ma trafić do puli selekcji, czy to eksperyment? (user nie doprecyzował)
-- Sub-pikselowy pierścień w poincare przy |w|=1 — w realnym renderze silnik i tak będzie potrzebował min-rozmiaru kafla; zaakceptowane w schemacie jako „horyzont".
-
-## Do MEMORY.md (przeniesiono)
-
-- Repo MEMORY.md: NOWY wpis [2026-07-04] — fix kites (-q//2, golden nietknięte), techniki: twindragon rep-tile (kasowanie krawędzi + skręt w lewo), inwersja poincare (okno w dysku NIE działa), teselacja 2-size Kocha (bilans pól), rozeta 3.12.12 (pułapki: dziury po wszystkich centrach, filtr BOX), scales (pokrycie dokładne), redukcja rodziny radialnej.
-- Auto-memory: `project_extra_15_shapes` rozbudowane o pełną rewizję 2026-07-04 + zaindeksowane w MEMORY.md (wcześniej brakowało w indeksie).
