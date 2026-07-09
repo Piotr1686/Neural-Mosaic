@@ -1,7 +1,19 @@
 # PLAN_HIRES.md — Punkt 4 planu jakości: biblioteka hi-res (nakładka + re-fetch per-źródło)
 
-**Status:** ZATWIERDZONY do realizacji (2026-07-09, analiza Opus + rewizja Fable)
+**Status:** Sprinty 1-4 WYKONANE (2026-07-09). Sprint 5 (etap B archiwa) ODROCZONY.
 **Wykonawca:** Opus (HIGH) — plan jest samowystarczalny, nie powtarzaj eksploracji z sekcji „Fakty zweryfikowane".
+
+## WYKONANO (2026-07-09)
+
+- **Sprint 1** (commit 9e5b6cf): `_resolve_tile_path` + `_load_hires_overlay` w engine_smart; nakładka `data/tiles_hires/` (HIRES_DIR, anchored do repo root); guard-inwariant w library_dirs; 11 testów; 8 goldenów bez regeneracji.
+- **Sprint 2** (commit 3515769): `self.last_used_counts` w `_do_render`; `_write_used_tiles` w create_mosaic → `<stem>_used_tiles.json`; preview bez I/O; 7 testów.
+- **Sprint 3** (commit 00df732): `src/tools/upgrade_tiles.py` — router `classify_tile`, async fetch, bramka LAB `verify_identity`; 17 testów. **EMPIRIA end-to-end na żywo:** COCO 4/4 pobrane (0 odrzuconych, hi-res 640px vs 250px), routing train2017/unlabeled2017 OK. **picsum seed→foto DRYFNAŁ** (deltaE ~49 dla seed 0) → re-fetch zwraca inny obraz, LAB odrzuca; picsum NIE pobierany domyślnie (opt-in `--include-picsum`). COCO = jedyne zweryfikowane per-file źródło.
+- **Sprint 4** (commit 7d8c3f9): optimizer 250→512 (env `OPTIMIZER_SHORT_SIDE`) + delete-corrupt za flagą + guard na tiles_hires; `DOWNLOAD_SIZE` (config) odsklejone od TILE_SIZE; downloader używa DOWNLOAD_SIZE; .env.example + README; 9 testów. **303 testy zielone.**
+
+**Rewizja Sprintu 5 po empirii:** picsum dołącza do loremflickr jako NIEodzyskiwalny per-file (dryf seedów). Zostają dwa tory dla ~40% biblioteki: (a) etap B archiwa (food/places/dogs/flowers — jedyny deterministyczny odzysk), (b) ESRGAN 2x offline dla nie-archiwalnych (picsum ~2.6% + loremflickr). Oba nadal ODROCZONE do czasu realnego `used_tiles.json --dry-run` usera.
+
+---
+
 
 ---
 
