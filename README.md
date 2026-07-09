@@ -363,7 +363,9 @@ cp .env.example .env
 
 | Variable | Default | Description |
 |---|---|---|
-| `TILE_SIZE` | `75` | Base tile size in pixels |
+| `TILE_SIZE` | `75` | Render placement grid, in pixels — **not** the stored tile size |
+| `DOWNLOAD_SIZE` | `512` | Resolution the downloader fetches tiles at. Decoupled from `TILE_SIZE` so tiles stay sharp at high `tile_scale`. Existing 250 px libraries: recover per-tile with `python -m src.tools.upgrade_tiles` (COCO) into the `data/tiles_hires` overlay |
+| `OPTIMIZER_SHORT_SIDE` | `512` | Max short side the optimiser downscales to, **in-place/destructive** (was 250, which softened the library) |
 | `TARGET_SHORT_SIDE` | `18000` | Legacy/downloader hint. **The render resolution is fixed by the `--res` preset, not this value** — the Smart engine ignores it |
 | `USE_CUDA` | `True` | Reserved for the optional depth module; the mosaic engines are CPU-only |
 | `GHOSTING_OPACITY` | `0.25` | Overlay opacity for the optional ghosting pass (0.0 = pure mosaic) |

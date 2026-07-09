@@ -29,6 +29,11 @@ class Config:
     # --- PARAMETERS ---
     TARGET_SHORT_SIDE: int = int(os.getenv("TARGET_SHORT_SIDE", 18000))
     TILE_SIZE: int = int(os.getenv("TILE_SIZE", 75))
+    # Resolution (px) at which the downloader fetches source tiles. Decoupled
+    # from TILE_SIZE (the render placement grid, 75 px): tiles must be stored
+    # large enough to stay sharp when a mosaic cell exceeds TILE_SIZE (high
+    # tile_scale / high-res output). 512 gives headroom to tile_scale ~5.
+    DOWNLOAD_SIZE: int = int(os.getenv("DOWNLOAD_SIZE", 512))
     GHOSTING_OPACITY: float = float(os.getenv("GHOSTING_OPACITY", 0.25))
     
     # --- DATA ---

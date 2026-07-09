@@ -56,12 +56,16 @@ class FastDownloader:
         # Source rotation strategy:
         #   Even indices  → Picsum (deterministic seed for reproducibility)
         #   Odd indices   → LoremFlickr with a random keyword (variety)
+        # DOWNLOAD_SIZE (default 512), NOT TILE_SIZE (75): tiles are stored at
+        # fetch resolution and must stay sharp when a mosaic cell is larger than
+        # the placement grid. See config.Config.DOWNLOAD_SIZE.
+        size = settings.DOWNLOAD_SIZE
         if idx % 2 == 0:
-            url = f"https://picsum.photos/seed/{idx}/{settings.TILE_SIZE}"
+            url = f"https://picsum.photos/seed/{idx}/{size}"
         else:
             keyword = random.choice(self.KEYWORDS)
             # random={idx} forces a fresh image for each index.
-            url = f"https://loremflickr.com/{settings.TILE_SIZE}/{settings.TILE_SIZE}/{keyword}?random={idx}"
+            url = f"https://loremflickr.com/{size}/{size}/{keyword}?random={idx}"
 
         try:
             async with self.semaphore:
@@ -85,7 +89,7 @@ class FastDownloader:
     async def run(self):
         settings.DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-        logger.info(f"Starting download of {self.target_count} tiles ({settings.TILE_SIZE}px)...")
+        logger.info(f"Starting download of {self.target_count} tiles ({settings.DOWNLOAD_SIZE}px)...")
         logger.info("Strategy: Picsum + LoremFlickr (Filtered Keywords)")
 
         async with aiohttp.ClientSession() as session:

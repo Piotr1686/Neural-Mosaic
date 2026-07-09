@@ -3,11 +3,24 @@ src/optimizer.py
 ----------------
 Batch image optimiser for the tile library.
 
-Resizes large images in-place so the short side is at most TARGET_SHORT_SIDE
-pixels, then re-saves with JPEG quality 90.  Corrupted files are deleted
-automatically.  Uses multiprocessing for throughput on large datasets.
+Resizes large images IN-PLACE so the short side is at most --short-side pixels
+(default OPTIMIZER_SHORT_SIDE env or 512), then re-saves with JPEG quality 90.
+Uses multiprocessing for throughput on large datasets.
+
+WARNING: this operation is DESTRUCTIVE — it overwrites originals. Historically
+the default was 250 px, which is what softened the whole tile library (a 640 px
+COCO photo crushed to 250 px cannot be un-crushed; recovery means re-downloading
+the source, see src/tools/upgrade_tiles.py). The default is now 512 px so fresh
+libraries keep enough resolution for tile_scale up to ~5. Corrupt files are only
+deleted when --delete-corrupt is passed (otherwise they are logged and skipped),
+so a single unreadable file never silently disappears.
+
+The hi-res overlay dir (data/tiles_hires, engine_smart.HIRES_DIR) is explicitly
+refused as a target: optimising it would undo the whole point of the overlay.
 """
 import os
+import argparse
+import functools
 import concurrent.futures
 from pathlib import Path
 from PIL import Image
@@ -19,20 +32,26 @@ from src.library_dirs import LIBRARY_DIRS
 # Folders to scan and optimise — the full library set (see library_dirs).
 TARGET_DIRS = LIBRARY_DIRS
 
-# Target: resize images whose short side exceeds this value.
-# Images already smaller or equal are left untouched.
-TARGET_SHORT_SIDE = 250
+# Default target: resize images whose short side exceeds this value. Images
+# already smaller or equal are left untouched. Overridable via env or --short-side.
+TARGET_SHORT_SIDE = int(os.getenv("OPTIMIZER_SHORT_SIDE", "512"))
+
+# The overlay dir must never be optimised (it holds the sharp re-fetched tiles).
+_REFUSED_DIR_NAMES = {"tiles_hires"}
 
 
-def process_image(file_path):
-    """Resize a single image file to TARGET_SHORT_SIDE on its short side.
+def process_image(file_path, target_short_side, delete_corrupt):
+    """Resize a single image file to target_short_side on its short side.
 
     Args:
-        file_path: Path to the image file to process.
+        file_path:         Path to the image file to process.
+        target_short_side: Max short-side length; larger images are downscaled.
+        delete_corrupt:    When True, unreadable files are removed; otherwise
+                           they are left on disk (and reported as skipped).
 
     Returns:
         True if the image was resized, False if it was already small enough
-        or if the file was corrupt (and subsequently deleted).
+        or could not be opened.
     """
     try:
         with Image.open(file_path) as img:
@@ -42,11 +61,11 @@ def process_image(file_path):
             current_short_side = min(w, h)
 
             # Skip images that are already within the size limit.
-            if current_short_side <= TARGET_SHORT_SIDE:
+            if current_short_side <= target_short_side:
                 return False
 
-            # Downscale so the short side equals TARGET_SHORT_SIDE.
-            scale = TARGET_SHORT_SIDE / current_short_side
+            # Downscale so the short side equals target_short_side.
+            scale = target_short_side / current_short_side
             new_w = int(w * scale)
             new_h = int(h * scale)
 
@@ -57,23 +76,26 @@ def process_image(file_path):
             img.save(file_path, quality=90, optimize=True)
             return True
     except Exception:
-        # Remove corrupt files that cannot be opened.
-        try:
-            os.remove(file_path)
-        except Exception:
-            pass
+        # A corrupt/unreadable file: deleting silently once cost us data before,
+        # so removal is now opt-in only.
+        if delete_corrupt:
+            try:
+                os.remove(file_path)
+            except Exception:
+                pass
         return False
 
 
-def optimize_folder(folder_path):
+def optimize_folder(folder_path, target_short_side, delete_corrupt):
     """Optimise all images inside *folder_path* using a process pool.
-
-    Args:
-        folder_path: Path object pointing to the directory to scan.
 
     Returns:
         Tuple of (total_files, resized_count).
     """
+    if folder_path.name in _REFUSED_DIR_NAMES:
+        print(f"   [REFUSED] {folder_path} is the hi-res overlay; never optimise it.")
+        return 0, 0
+
     if not folder_path.exists():
         print(f"   [INFO] Folder does not exist, skipping: {folder_path}")
         return 0, 0
@@ -89,12 +111,16 @@ def optimize_folder(folder_path):
         print("   [INFO] Folder is empty.")
         return 0, 0
 
-    print(f"   Found {len(files)} files. Optimising...")
+    print(f"   Found {len(files)} files. Optimising to {target_short_side} px...")
 
-    # Multiprocessing for speed across large datasets.
+    worker = functools.partial(
+        process_image,
+        target_short_side=target_short_side,
+        delete_corrupt=delete_corrupt,
+    )
     with concurrent.futures.ProcessPoolExecutor() as executor:
         results = list(
-            tqdm(executor.map(process_image, files), total=len(files), unit="img")
+            tqdm(executor.map(worker, files), total=len(files), unit="img")
         )
 
     resized = sum(results)
@@ -103,16 +129,32 @@ def optimize_folder(folder_path):
     return len(files), resized
 
 
-def main():
+def main(argv=None):
     """Entry point — optimise all configured tile directories."""
-    print(f"--- IMAGE OPTIMISER ---")
-    print(f"Target: downscale to {TARGET_SHORT_SIDE} px on the short side.")
+    parser = argparse.ArgumentParser(
+        description="Downscale oversized tile images in-place (DESTRUCTIVE)."
+    )
+    parser.add_argument(
+        "--short-side", type=int, default=TARGET_SHORT_SIDE,
+        help=f"Max short side in px (default: {TARGET_SHORT_SIDE}, "
+             f"env OPTIMIZER_SHORT_SIDE).",
+    )
+    parser.add_argument(
+        "--delete-corrupt", action="store_true",
+        help="Remove files that cannot be opened (default: keep and skip).",
+    )
+    args = parser.parse_args(argv)
+
+    print("--- IMAGE OPTIMISER (in-place, destructive) ---")
+    print(f"Target: downscale to {args.short_side} px on the short side.")
+    if not args.delete_corrupt:
+        print("Corrupt files: kept (pass --delete-corrupt to remove).")
 
     total_files = 0
     total_resized = 0
 
     for folder in TARGET_DIRS:
-        count, resized = optimize_folder(folder)
+        count, resized = optimize_folder(folder, args.short_side, args.delete_corrupt)
         total_files += count
         total_resized += resized
 

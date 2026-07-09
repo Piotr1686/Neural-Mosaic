@@ -32,6 +32,18 @@ def test_default_target_short_side():
     assert cfg.TARGET_SHORT_SIDE == 18000
 
 
+def test_default_download_size():
+    cfg = Config()
+    assert cfg.DOWNLOAD_SIZE == 512
+
+
+def test_download_size_decoupled_from_tile_size():
+    cfg = Config()
+    # Storage resolution must not collapse to the placement grid (the bug that
+    # softened the library): downloads should be larger than TILE_SIZE.
+    assert cfg.DOWNLOAD_SIZE > cfg.TILE_SIZE
+
+
 def test_use_cuda_is_bool():
     cfg = Config()
     assert isinstance(cfg.USE_CUDA, bool)
