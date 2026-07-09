@@ -19,6 +19,7 @@ import pickle
 import math
 import threading
 from dataclasses import dataclass
+from pathlib import Path
 from PIL import Image, ImageOps, ImageDraw
 from tqdm import tqdm
 from scipy.spatial import cKDTree
@@ -27,6 +28,16 @@ import skimage.color
 from .spectre_tiling import generate_spectre_tiling
 from .render_control import RenderCancelled
 from .grout import classify_edges, draw_grout, scale_widths, sub7
+
+# Hi-res tile overlay directory. When a file with the same basename as a
+# library tile exists here, the assembly loop pastes THIS copy instead of the
+# (downscaled) library original — see _resolve_tile_path. Anchored to the repo
+# root so it is independent of the process working directory. This dir must
+# NEVER be added to src/library_dirs.LIBRARY_DIRS: the indexer would index the
+# overlay as separate tiles and the optimiser would crush it back to 250 px.
+# When the dir is absent/empty the overlay is a no-op and renders stay bit-
+# identical to the pre-overlay behaviour (golden invariant).
+HIRES_DIR = Path(__file__).resolve().parents[1] / "data" / "tiles_hires"
 
 # Shapes whose sub7/block grouping was reviewed and approved (2026-07-05): the
 # grout pass draws hierarchical L1/L2/L3 lines for these. Other shapes fall
@@ -347,6 +358,35 @@ class SmartEngine:
             draw.polygon(pts, fill=255)
 
         return mask.resize((w, h), Image.Resampling.LANCZOS)
+
+    @staticmethod
+    def _load_hires_overlay():
+        """Return the set of filenames present in the hi-res overlay dir.
+
+        Built once per render (see _do_render) so the assembly loop never
+        touches the filesystem per tile — cheap even with a large overlay,
+        and a single iterdir instead of 100k+ stat calls. Reads HIRES_DIR via
+        module-global lookup so tests can monkeypatch it. Returns an empty set
+        when the dir is absent (overlay becomes a no-op, render bit-identical).
+        """
+        try:
+            return {p.name for p in HIRES_DIR.iterdir() if p.is_file()}
+        except (FileNotFoundError, NotADirectoryError):
+            return set()
+
+    @staticmethod
+    def _resolve_tile_path(path, overlay_names):
+        """Redirect a library tile path to its hi-res overlay copy if present.
+
+        The overlay is keyed by filename only (``path.name``), so a tile from
+        any library dir is served from ``HIRES_DIR/<name>`` when that name is
+        in ``overlay_names`` (the precomputed set from _load_hires_overlay).
+        An empty set leaves every path untouched. Accepts str or Path.
+        """
+        p = Path(path)
+        if p.name in overlay_names:
+            return HIRES_DIR / p.name
+        return p
 
     def _smart_crop(self, img, target_w, target_h):
         src_w, src_h = img.size
@@ -1153,6 +1193,13 @@ class SmartEngine:
         sector_assignments = -1 * np.ones(len(sectors_data), dtype=np.int32)
         failed_tiles = 0
 
+        # Snapshot the hi-res overlay once (not per tile) so the assembly loop
+        # below can redirect any matched tile to its sharp copy without a
+        # per-open filesystem stat. Empty when data/tiles_hires is absent.
+        hires_names = self._load_hires_overlay()
+        if hires_names:
+            print(f"  Hi-res overlay active: {len(hires_names)} tiles in {HIRES_DIR.name}/")
+
         features_norm = tile_features.astype(np.float32, copy=False)
         features_flip = None
         if allow_mirror:
@@ -1248,7 +1295,8 @@ class SmartEngine:
                 sector_assignments[global_idx] = best_idx
 
                 try:
-                    with Image.open(self.paths[best_idx]) as img:
+                    tile_path = self._resolve_tile_path(self.paths[best_idx], hires_names)
+                    with Image.open(tile_path) as img:
                         img = img.convert("RGBA")
                         if should_mirror: img = ImageOps.mirror(img)
 
