@@ -17,7 +17,9 @@ slices the first 75 dimensions, so old and new indexes are both accepted.
 import numpy as np
 import pickle
 import math
+import json
 import threading
+from datetime import datetime
 from dataclasses import dataclass
 from pathlib import Path
 from PIL import Image, ImageOps, ImageDraw
@@ -399,6 +401,50 @@ class SmartEngine:
             box = (0, offset, src_w, offset + new_h)
         return img.crop(box).resize((target_w, target_h), Image.Resampling.LANCZOS)
 
+    def _used_tiles_report(self, used_counts):
+        """Build the used-tiles list from a per-library-index count array.
+
+        Returns one entry per tile actually placed (count > 0), sorted by
+        count descending then path (deterministic, idempotent output). Each
+        entry: {"path", "name", "count"}. Names feed the per-source router in
+        upgrade_tiles.py (Sprint 3), so basenames must be preserved verbatim.
+        """
+        entries = []
+        for idx, c in enumerate(used_counts):
+            c = int(c)
+            if c > 0:
+                p = self.paths[idx]
+                entries.append({"path": str(p), "name": Path(p).name, "count": c})
+        entries.sort(key=lambda e: (-e["count"], e["path"]))
+        return entries
+
+    def _write_used_tiles(self, output_path, shape_mode):
+        """Dump the used-tiles report for the last render next to the mosaic.
+
+        Writes ``<stem>_used_tiles.json`` beside ``output_path`` (stem-based,
+        no timestamp -> idempotent overwrite, like the batch CLI naming). Reads
+        self.last_used_counts set by _do_render; a no-op if it is missing.
+        """
+        counts = getattr(self, "last_used_counts", None)
+        if counts is None:
+            return
+        report = self._used_tiles_report(counts)
+        out = Path(output_path)
+        json_path = out.with_name(f"{out.stem}_used_tiles.json")
+        payload = {
+            "generated": datetime.now().isoformat(timespec="seconds"),
+            "engine": "smart",
+            "shape_mode": shape_mode,
+            "mosaic": out.name,
+            "unique_tiles": len(report),
+            "total_placements": sum(e["count"] for e in report),
+            "tiles": report,
+        }
+        with open(json_path, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh, indent=2)
+        print(f"Used-tiles report: {json_path.name} "
+              f"({len(report)} unique tiles, {payload['total_placements']} placements)")
+
     def create_mosaic(self, target_path, output_path, resolution_key, shape_mode, tile_scale, border_mode=False, blend_strength=0.0, tint_strength=0.0, grout_preset=None, progress_cb=None, cancel_event=None):
         """Public API — resolves resolution_key and delegates to _do_render.
 
@@ -424,6 +470,9 @@ class SmartEngine:
             # every seam and grout line. Non-JPEG outputs ignore the key.
             save_kwargs["subsampling"] = 0
         result.save(output_path, **save_kwargs)
+
+        # Report which tiles were used — input for the hi-res upgrade tool.
+        self._write_used_tiles(output_path, shape_mode)
 
     def render_preview(self, target_path, short_edge=512, shape_mode="hexagon_romb",
                        tile_scale=1.0, border_mode=False, grout_preset=None):
@@ -1348,4 +1397,9 @@ class SmartEngine:
             _check_cancel()
             self._apply_grout(mosaic_rgb, shape_mode, target_w, target_h, base_s,
                               grout_preset)
+        # Expose which library tiles were placed (indexed like self.paths) so
+        # create_mosaic can dump a used-tiles report for the hi-res upgrade
+        # tool (Sprint 3). Kept in memory only; render_preview never writes it
+        # to disk (it stays a no-I/O path).
+        self.last_used_counts = used_counts
         return mosaic_rgb
