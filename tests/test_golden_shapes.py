@@ -43,6 +43,18 @@ GOLDEN = {
     # so these hashes lock the first render — no "before" to match against.
     ("sunflower_grande", False): "58b658768dfd4d0d26c5af12f761b06375f69ade9fb7c69e414e051383a2bb99",
     ("sunflower_grande", True): "b658d937874bd1d54204d0c64bd897a2cb130cb05edc28babee3f5d8ab74e7b9",
+    ("sunflower_grande_xl", False): "01a35aedf9d5dcf40dcf831086309c4531c9773268bb78f7836deda22bbc3cf6",
+    ("sunflower_grande_xl", True): "3ce0214c22e3baf40acd95ee5cb09f83f5afceffadb4d7dde5f3a8ded03c8ac1",
+    ("sunflower_grande_soft", False): "467a5b409fce4408f5ee5721da1b184de9867a890d2954776687076b87426795",
+    ("sunflower_grande_soft", True): "68ef85a27ef9ba69842c1d94c18c76ef28d3c2d25d5f47ccc97b927ab898d470",
+    ("sunflower_grande_inverse", False): "75c3f0fdb9a4c9bc2ef6e95b297bcad83799c70f9818987908cd3c164049ba5d",
+    ("sunflower_grande_inverse", True): "e05e89c5e4d84b6fc81f1569eb3b071c7a0a8cb7abb60ee90e4e968e1342463c",
+    ("sunflower_soft", False): "f2e18a0654a7d11e0ea8d3d52d84b88783e62b8a420f8eb010d5b48646938249",
+    ("sunflower_soft", True): "85afad72de8104116dbef0d1190a36fb8c5ede4499f0cc028b72d2cf8cdb6b9b",
+    ("sunflower_rings", False): "52dce57a15ad2fd4f5350a423a654f6f9b581344c30ef495ab925add65f28a29",
+    ("sunflower_rings", True): "179a3173d1a2220c70f02b9d7142d489e5e67530296ba39ab4f241f191b52696",
+    ("sunflower_disc", False): "271518f173191cca4d0a5bd6978193239f562e354bfe6254bc835412cafcdaa7",
+    ("sunflower_disc", True): "71be46ac6c2ec200af542276dc206f133df11313beb1eff60f191170b4265ae0",
 }
 
 

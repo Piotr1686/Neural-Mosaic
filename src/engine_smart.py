@@ -223,34 +223,147 @@ def _voronoi_cells(pts, R=1.0):
             yield cl
 
 
+def _poly_centroid(cl):
+    """Area centroid of a simple (x, y) polygon; None if degenerate."""
+    a = cx = cy = 0.0
+    for (x1, y1), (x2, y2) in zip(cl, cl[1:] + cl[:1]):
+        cr = x1 * y2 - x2 * y1
+        a += cr
+        cx += (x1 + x2) * cr
+        cy += (y1 + y2) * cr
+    if abs(a) < 1e-12:
+        return None
+    return (cx / (3 * a), cy / (3 * a))
+
+
+def _lloyd_relax(pts, iters, clip=1.6):
+    """Lloyd relaxation: move each generator to its Voronoi-cell centroid.
+    Rounds seeds toward even 'pebbles' while the phyllotaxis spiral arms
+    survive. Unbounded cells stay put."""
+    pts = np.asarray(pts, dtype=np.float64)
+    for _ in range(iters):
+        vor = Voronoi(pts)
+        new = pts.copy()
+        for i in range(len(pts)):
+            reg = vor.regions[vor.point_region[i]]
+            if not reg or -1 in reg:
+                continue
+            poly = [tuple(vor.vertices[v]) for v in reg]
+            cl = _clip_square(poly, clip)
+            if len(cl) < 3:
+                continue
+            cen = _poly_centroid(cl)
+            if cen is not None:
+                new[i] = cen
+        pts = new
+    return [tuple(p) for p in pts]
+
+
 # Seed density: Vogel seeds reach r ~ 1.86 while the frame is [-1, 1], so only
 # ~1/K of the seeds yield an in-frame cell. K compensates so the mean in-frame
 # cell area stays ~ base_s^2 and tile_scale sizes cells like it sizes lattice
 # tiles (the scheme's fixed N=1500 would be one huge cell per ~130 px at 16K).
+# One constant across the whole family: the per-power spill differences only
+# shift the mean cell size by ~+/-15%, which reads as the patterns' character.
 _SUNFLOWER_CELL_DENSITY = 2.6
 
 
-def _gen_sunflower_grande(engine, target_w, target_h, base_s):
-    """Yield graded-Voronoi sunflower cells (Vogel seeds r = c*n^0.66) as
-    image-space polygons (y down).
+def _sunflower_n_seeds(target_w, target_h, base_s):
+    """Seed count so the mean in-frame Voronoi cell area stays ~ base_s^2."""
+    n = int(_SUNFLOWER_CELL_DENSITY * target_w * target_h / (base_s * base_s))
+    return max(16, n)
 
-    The world square [-1, 1]^2 is mapped affinely onto the target rectangle;
-    the y-flip folds into the map. An affine image of a Voronoi diagram is
-    still an exact partition (cells abut with no gaps/overlaps), so the
-    tessellation survives a non-square stretch. Cell count scales with the
-    frame area / base_s^2, so the shape honours tile_scale. Fully deterministic
-    (no RNG) -> preview and render agree for identical dimensions.
-    """
-    R = 1.0
-    power = 0.66
-    n_seeds = int(_SUNFLOWER_CELL_DENSITY * target_w * target_h / (base_s * base_s))
-    n_seeds = max(16, n_seeds)
-    c = (math.sqrt(2.0) + 0.45) / (n_seeds ** power)
-    pts = _vogel_points(n_seeds, c, power=power)
+
+def _emit_cells(pts, target_w, target_h, R=1.0):
+    """Voronoi-partition `pts` and map each world-space [-R, R]^2 cell affinely
+    onto the target rectangle, folding in the y-flip (world y up -> image y
+    down). An affine image of a Voronoi diagram is still an exact partition, so
+    the tessellation survives a non-square stretch."""
     sx = target_w / (2.0 * R)
     sy = target_h / (2.0 * R)
     for cl in _voronoi_cells(pts, R):
         yield [((x + R) * sx, (R - y) * sy) for x, y in cl]
+
+
+def _graded_sunflower(target_w, target_h, base_s, power, lloyd_iters=0):
+    """Shared body of the Vogel-lattice sunflowers: r = c*n^power seeds
+    (optionally Lloyd-relaxed) -> Voronoi cells mapped to the frame. Fully
+    deterministic (no RNG) so preview and render agree for equal dimensions."""
+    n = _sunflower_n_seeds(target_w, target_h, base_s)
+    c = (math.sqrt(2.0) + 0.45) / (n ** power)
+    pts = _vogel_points(n, c, power=power)
+    if lloyd_iters:
+        pts = _lloyd_relax(pts, lloyd_iters)
+    yield from _emit_cells(pts, target_w, target_h)
+
+
+def _gen_sunflower_grande(engine, target_w, target_h, base_s):
+    """Growth-graded head, r = c*n^0.66 (bigger seeds toward the rim)."""
+    yield from _graded_sunflower(target_w, target_h, base_s, power=0.66)
+
+
+def _gen_sunflower_grande_xl(engine, target_w, target_h, base_s):
+    """Steeper growth r = c*n^0.75: tiny centre, huge rim seeds."""
+    yield from _graded_sunflower(target_w, target_h, base_s, power=0.75)
+
+
+def _gen_sunflower_grande_soft(engine, target_w, target_h, base_s):
+    """grande geometry + 1 Lloyd pass: rounder cells, gentler size ramp."""
+    yield from _graded_sunflower(target_w, target_h, base_s, power=0.66,
+                                 lloyd_iters=1)
+
+
+def _gen_sunflower_grande_inverse(engine, target_w, target_h, base_s):
+    """Reversed gradient r = c*n^0.40: large centre seeds shrinking to a
+    fine rim."""
+    yield from _graded_sunflower(target_w, target_h, base_s, power=0.40)
+
+
+def _gen_sunflower_soft(engine, target_w, target_h, base_s):
+    """Classic uniform head (r = c*sqrt(n)) after 2 Lloyd passes: rounder,
+    even 'pebble' seeds with the spiral arms preserved."""
+    yield from _graded_sunflower(target_w, target_h, base_s, power=0.5,
+                                 lloyd_iters=2)
+
+
+def _gen_sunflower_rings(engine, target_w, target_h, base_s):
+    """Classic head with seed radii softly snapped into concentric courses,
+    so the seeds line up in circular rows (reference photo look)."""
+    n = _sunflower_n_seeds(target_w, target_h, base_s)
+    c = (math.sqrt(2.0) + 0.45) / math.sqrt(n)
+    d = 1.9 * c                                  # course (row) spacing
+    pts = []
+    for k in range(1, n + 1):
+        rr = c * math.sqrt(k)
+        row = int(rr / d)
+        # 70% snap toward the row centre keeps courses visible without making
+        # generators exactly co-circular (Voronoi stays numerically stable).
+        rr = 0.7 * (d * (row + 0.5)) + 0.3 * rr
+        aa = k * _GOLDEN_ANGLE
+        pts.append((rr * math.cos(aa), rr * math.sin(aa)))
+    yield from _emit_cells(pts, target_w, target_h)
+
+
+def _gen_sunflower_disc(engine, target_w, target_h, base_s):
+    """Two-zone head: fine disc florets in the centre, coarser seeds outside
+    (real flower-head anatomy). K florets fill a disc of radius 0.42 at
+    area-uniform spacing; the rim continues area-uniform but 1.7x coarser.
+    K/N is fixed at ~1/7.5 so the two zones keep their proportion at any
+    seed count."""
+    n = _sunflower_n_seeds(target_w, target_h, base_s)
+    disc_r = 0.42
+    K = max(4, int(n / 7.487))
+    c1 = disc_r / math.sqrt(K)
+    c2 = 1.7 * c1
+    pts = []
+    for k in range(1, n + 1):
+        if k <= K:
+            rr = c1 * math.sqrt(k)
+        else:
+            rr = math.sqrt(disc_r ** 2 + c2 ** 2 * (k - K))
+        aa = k * _GOLDEN_ANGLE
+        pts.append((rr * math.cos(aa), rr * math.sin(aa)))
+    yield from _emit_cells(pts, target_w, target_h)
 
 
 @dataclass(frozen=True)
@@ -285,7 +398,13 @@ SHAPE_MODES = {
     "triangle":      ShapeSpec("grid"),
     "kites":         ShapeSpec("polygon", _gen_kites, aa=1),
     "spectre":       ShapeSpec("polygon", _gen_spectre, aa=4),
-    "sunflower_grande": ShapeSpec("polygon", _gen_sunflower_grande, aa=4),
+    "sunflower_grande":         ShapeSpec("polygon", _gen_sunflower_grande, aa=4),
+    "sunflower_grande_xl":      ShapeSpec("polygon", _gen_sunflower_grande_xl, aa=4),
+    "sunflower_grande_soft":    ShapeSpec("polygon", _gen_sunflower_grande_soft, aa=4),
+    "sunflower_grande_inverse": ShapeSpec("polygon", _gen_sunflower_grande_inverse, aa=4),
+    "sunflower_soft":           ShapeSpec("polygon", _gen_sunflower_soft, aa=4),
+    "sunflower_rings":          ShapeSpec("polygon", _gen_sunflower_rings, aa=4),
+    "sunflower_disc":           ShapeSpec("polygon", _gen_sunflower_disc, aa=4),
 }
 
 
