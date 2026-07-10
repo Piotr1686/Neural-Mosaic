@@ -63,6 +63,12 @@ GOLDEN = {
     ("rhombs_funnel", True): "f6daa0ccc63ffd58f7b03a986ce5d92575f9848cf2b5a67fae16482f23c30023",
     ("rhombs_star", False): "558b2d187ecbf9e4f8a5723712f43c7e91e3c995383e9975b16773f9ba9b3554",
     ("rhombs_star", True): "e92d5357a4b9cf18d03c7857fe250673a79d4d35dacbe8ac8dfe1ed1eb56c382",
+    # S5 variable-cell shapes: uniform Voronoi (seeded RNG from dims -> stable
+    # per size) and canonical phyllotaxis (Vogel power=0.5, no RNG).
+    ("voronoi", False): "05d55f73d17db1a44b6dae5460ae8dd5bbcca9043b5731fc396bbc2757d40568",
+    ("voronoi", True): "44a665d467d0ede4666480fb8321f45ee7a0e60e77bad913e0e7e286df9a99c9",
+    ("phyllotaxis", False): "2d6f0e07782ed19945bfbd135faa42aa0bb3bdfa5545dffecb8ecde83ae42245",
+    ("phyllotaxis", True): "70161b6c52e4b54077e4bf6ada6b832eb92a6858e09c9bb7e27ff2eb553e15a8",
 }
 
 

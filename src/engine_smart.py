@@ -236,15 +236,24 @@ def _poly_centroid(cl):
     return (cx / (3 * a), cy / (3 * a))
 
 
-def _lloyd_relax(pts, iters, clip=1.6):
+def _lloyd_relax(pts, iters, clip=1.6, freeze_r=None):
     """Lloyd relaxation: move each generator to its Voronoi-cell centroid.
     Rounds seeds toward even 'pebbles' while the phyllotaxis spiral arms
-    survive. Unbounded cells stay put."""
+    survive. Unbounded cells stay put.
+
+    ``freeze_r`` (None to disable): points with max(|x|, |y|) >= freeze_r are
+    held fixed. Used by the uniform-Voronoi shape to anchor its outer ring so
+    frame-edge cells stay covered while the interior relaxes evenly. When None
+    (the sunflower callers) the loop is bit-for-bit the original."""
     pts = np.asarray(pts, dtype=np.float64)
+    frozen = (np.max(np.abs(pts), axis=1) >= freeze_r
+              if freeze_r is not None else None)
     for _ in range(iters):
         vor = Voronoi(pts)
         new = pts.copy()
         for i in range(len(pts)):
+            if frozen is not None and frozen[i]:
+                continue
             reg = vor.regions[vor.point_region[i]]
             if not reg or -1 in reg:
                 continue
@@ -600,6 +609,39 @@ def _gen_rhombs_star(engine, target_w, target_h, base_s):
     yield from _emit_polys(cells, target_w, target_h)
 
 
+# --- Uniform Voronoi + canonical phyllotaxis (PLAN_SHAPES S5) ---------------
+def _shape_seed(base_s, target_w, target_h):
+    """Deterministic RNG seed from the render dimensions. The geometry is a
+    pure function of (base_s, w, h): identical dims reproduce it exactly, while
+    a preview at a different size gets its own stable tiling (same contract as
+    spectre). NEVER seed from global random -- preview and render would drift."""
+    return ((base_s * 73856093) ^ (target_w * 19349663)
+            ^ (target_h * 83492791)) & 0x7FFFFFFF
+
+
+def _gen_voronoi(engine, target_w, target_h, base_s):
+    """Uniform random Voronoi: Lloyd-relaxed random seeds (even cells, no
+    slivers). Seeds are generated past the [-1, 1] frame so every in-frame cell
+    stays bounded (unbounded border cells are dropped). Cell count ~ frame area
+    / base_s^2 so tile_scale sizes the cells."""
+    n = max(16, int(target_w * target_h / (base_s * base_s)))
+    margin = 1.30                                # generate past the frame edge
+    n_gen = int(n * margin * margin)
+    rng = np.random.default_rng(_shape_seed(base_s, target_w, target_h))
+    pts = [tuple(p) for p in rng.uniform(-margin, margin, size=(n_gen, 2))]
+    # Freeze the outer ring so frame-edge cells stay covered (no black slivers
+    # at coarse cell counts); relax only the interior toward even cells.
+    pts = _lloyd_relax(pts, iters=2, clip=margin, freeze_r=1.05)
+    yield from _emit_cells(pts, target_w, target_h)
+
+
+def _gen_phyllotaxis(engine, target_w, target_h, base_s):
+    """Canonical golden-angle phyllotaxis: Voronoi of r = c*sqrt(n) Vogel seeds
+    (area-uniform cells) with no relaxation, so the raw spiral courses stay
+    crisp -- distinct from sunflower_soft (Lloyd-rounded) and _rings (snapped)."""
+    yield from _graded_sunflower(target_w, target_h, base_s, power=0.5)
+
+
 @dataclass(frozen=True)
 class ShapeSpec:
     """Descriptor for one tile shape.
@@ -642,6 +684,8 @@ SHAPE_MODES = {
     "rhombs_nopole":            ShapeSpec("polygon", _gen_rhombs_nopole, aa=4),
     "rhombs_funnel":            ShapeSpec("polygon", _gen_rhombs_funnel, aa=4),
     "rhombs_star":              ShapeSpec("polygon", _gen_rhombs_star, aa=4),
+    "voronoi":                  ShapeSpec("polygon", _gen_voronoi, aa=4, seeded=True),
+    "phyllotaxis":              ShapeSpec("polygon", _gen_phyllotaxis, aa=4),
 }
 
 
