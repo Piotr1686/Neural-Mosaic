@@ -376,7 +376,7 @@ class App(ctk.CTk):
 
         ctk.CTkLabel(frame, text="Output Resolution").pack(pady=(10, 0))
         self.seg_res_p = ctk.CTkSegmentedButton(frame, values=["2K", "4K", "8K", "16K"])
-        self.seg_res_p.set("4K")
+        self.seg_res_p.set("8K")
         self.seg_res_p.pack(pady=5)
 
         ctk.CTkLabel(frame, text="Tile Size Multiplier", font=("Arial", 12, "bold")).pack(pady=(15, 0))
@@ -400,22 +400,6 @@ class App(ctk.CTk):
         self.check_mirror.select()
         self.check_mirror.pack(pady=(15, 5))
 
-        self.check_border = ctk.CTkCheckBox(
-            frame, text="Black Borders (uniform gap)",
-        )
-        self.check_border.deselect()
-        self.check_border.pack(pady=5)
-
-        # Grout: independent opt-in pass, orthogonal to the uniform-gap border
-        # above. Hierarchical (L1/L2/L3 lines thickening with the group level)
-        # for square/hexagon/triangle/kites; every other grid shape draws flat
-        # single-width grout. _apply_grout picks the mode per shape.
-        ctk.CTkLabel(frame, text="Grout").pack(pady=(10, 0))
-        self.combo_grout = ctk.CTkOptionMenu(
-            frame, values=["Off", "cienki", "sredni", "gruby"])
-        self.combo_grout.set("Off")
-        self.combo_grout.pack(pady=5)
-
         self.check_edge_aware = ctk.CTkCheckBox(
             frame, text="Edge-Aware Matching  (large library)",
             command=self._on_edge_aware_toggled,
@@ -423,12 +407,27 @@ class App(ctk.CTk):
         self.check_edge_aware.deselect()
         self.check_edge_aware.pack(pady=5)
 
+        # Tile Borders: one control for both separator effects. "Gap (uniform)"
+        # maps to border_mode (tiles rendered at 94% of the cell -> uniform
+        # black gap); "Grout: ..." maps to grout_preset (lines drawn on the
+        # finished mosaic — hierarchical L1/L2/L3 for square/hexagon/triangle/
+        # kites, flat single-width for other grid shapes; _apply_grout picks
+        # the mode per shape). The engine still accepts both independently;
+        # the GUI deliberately exposes them as mutually exclusive to avoid
+        # the confusing checkbox+dropdown combinatorics.
+        ctk.CTkLabel(frame, text="Tile Borders").pack(pady=(10, 0))
+        self.combo_borders = ctk.CTkOptionMenu(
+            frame, values=["Off", "Gap (uniform)",
+                           "Grout: cienki", "Grout: sredni", "Grout: gruby"])
+        self.combo_borders.set("Off")
+        self.combo_borders.pack(pady=5)
+
         ctk.CTkLabel(frame, text="POST-PROCESSING",
                      font=("Arial", 12, "bold")).pack(pady=(20, 5))
 
         ctk.CTkLabel(frame, text="Color Blend").pack(pady=(10, 0))
         self.seg_blend = ctk.CTkSegmentedButton(
-            frame, values=["0%", "10%", "20%", "30%"],
+            frame, values=["0%", "10%", "20%", "30%", "40%"],
         )
         self.seg_blend.set("0%")
         self.seg_blend.pack(pady=5)
@@ -684,10 +683,18 @@ class App(ctk.CTk):
 
     _ZOOM_SHORT_EDGE = {"¼": 450, "½": 900, "Full": 1800}
 
-    def _grout_preset(self):
-        """Selected hierarchical-grout preset, or None when 'Off'."""
-        val = self.combo_grout.get()
-        return None if val == "Off" else val
+    def _border_settings(self):
+        """Map the 'Tile Borders' menu to engine kwargs.
+
+        Returns ``(border_mode, grout_preset)``: the uniform-gap flag and the
+        grout preset (None when no grout). Mutually exclusive by construction.
+        """
+        val = self.combo_borders.get()
+        if val == "Gap (uniform)":
+            return True, None
+        if val.startswith("Grout: "):
+            return False, val.removeprefix("Grout: ")
+        return False, None
 
     def _on_shape_selected(self, choice):
         """Show the shape's layout scheme in the preview pane and unlock rendering.
@@ -726,11 +733,12 @@ class App(ctk.CTk):
         # the current settings instead of the last full render's state.
         self.smart_engine.settings["allow_mirror"] = bool(self.check_mirror.get())
         self.smart_engine.settings["edge_aware"] = bool(self.check_edge_aware.get())
+        border_mode, grout_preset = self._border_settings()
         params = {
             "shape_mode": self.combo_shape.get(),
             "tile_scale": float(self.seg_scale_p.get() or "1.0"),
-            "border_mode": bool(self.check_border.get()),
-            "grout_preset": self._grout_preset(),
+            "border_mode": border_mode,
+            "grout_preset": grout_preset,
         }
         short_edge = self._ZOOM_SHORT_EDGE.get(self.seg_zoom_p.get(), 900)
         self.btn_preview_p.configure(state="disabled")
@@ -1061,8 +1069,7 @@ class App(ctk.CTk):
         res = self.seg_res_p.get()
         shape = self.combo_shape.get()
         scale = float(self.seg_scale_p.get() or "1.0")
-        border_mode = bool(self.check_border.get())
-        grout_preset = self._grout_preset()
+        border_mode, grout_preset = self._border_settings()
         blend_strength = int((self.seg_blend.get() or "0%").replace("%", "")) / 100.0
         tint_strength = int((self.seg_tint.get() or "0%").replace("%", "")) / 100.0
 
