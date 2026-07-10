@@ -366,6 +366,240 @@ def _gen_sunflower_disc(engine, target_w, target_h, base_s):
     yield from _emit_cells(pts, target_w, target_h)
 
 
+# --- Log-spiral rhombus mesh (rhombs family) -------------------------------
+# Ported from gen_sunflower_schemes. Seeds r = r0*exp(k*n), theta = n*golden
+# angle give a SELF-SIMILAR quad mesh (every cell a rotated+scaled copy of its
+# neighbour), so a fixed parastichy pair (F1, F2) stays embedded at every
+# radius and the inner hole ALWAYS has F1+F2 boundary edges regardless of the
+# density k. That invariant lets base_s scale k freely: the mesh densifies
+# while the centre closures (funnel rings / star rosette), which only touch the
+# F1+F2-edge boundary loop, stay valid. tile_scale is honoured by solving k so
+# the in-frame cell count ~ frame_area / base_s^2 (count ~ 1/k^2).
+def _emit_polys(polys, target_w, target_h, R=1.0):
+    """Clip explicit world-space [-R, R]^2 polygons to the frame and map them
+    affinely onto the target rectangle (y-flip folded in). Unlike _emit_cells
+    these polygons are already a partition (mesh quads / closure cells), so no
+    Voronoi step -- just clip + map."""
+    sx = target_w / (2.0 * R)
+    sy = target_h / (2.0 * R)
+    for poly in polys:
+        cl = _clip_square(poly, R)
+        if len(cl) >= 3:
+            yield [((x + R) * sx, (R - y) * sy) for x, y in cl]
+
+
+def _log_quads(F1, F2, r0, k, N0, N, pole):
+    """Self-similar mesh quads as world-space 4-vertex polygons (no loop)."""
+    quads = []
+    for n in range(N0, N + 1):
+        pts = []
+        for m in (n, n + F1, n + F1 + F2, n + F2):
+            rr = r0 * math.exp(k * m)
+            aa = m * _GOLDEN_ANGLE
+            pts.append((pole[0] + rr * math.cos(aa), pole[1] + rr * math.sin(aa)))
+        quads.append((n, pts))
+    return quads
+
+
+def _log_mesh(F1, F2, r0, k, N0, N, pole):
+    """Return (quad_polys, loop): the mesh quads plus the ordered inner-boundary
+    vertex loop (F1+F2 vertices walked CCW around the pole)."""
+    quads = _log_quads(F1, F2, r0, k, N0, N, pole)
+    edge_count = {}
+    for _, q in quads:
+        for a, b in zip(q, q[1:] + q[:1]):
+            edge_count[tuple(sorted((a, b)))] = edge_count.get(tuple(sorted((a, b))), 0) + 1
+    r_inner = r0 * math.exp(k * (N0 + F1 + F2)) * 1.25
+    binner = {}
+    for (a, b), cnt in edge_count.items():
+        if cnt != 1:
+            continue
+        da = math.hypot(a[0] - pole[0], a[1] - pole[1])
+        db = math.hypot(b[0] - pole[0], b[1] - pole[1])
+        if da < r_inner and db < r_inner:
+            binner.setdefault(a, []).append(b)
+            binner.setdefault(b, []).append(a)
+    start = next(iter(binner))
+    loop, prev, cur = [start], None, start
+    while True:
+        nxt = [v for v in binner[cur] if v != prev][0]
+        if nxt == start:
+            break
+        loop.append(nxt)
+        prev, cur = cur, nxt
+    area2 = sum(x1 * y2 - x2 * y1
+               for (x1, y1), (x2, y2) in zip(loop, loop[1:] + loop[:1]))
+    if area2 < 0:
+        loop.reverse()
+    return [q for _, q in quads], loop
+
+
+def _group_loop(L, T):
+    """Split L boundary edges into T contiguous groups of ~2 edges each."""
+    sizes = [2] * T
+    extra = L - 2 * T
+    i = 0
+    while extra != 0:
+        step = 1 if extra > 0 else -1
+        sizes[i % T] += step
+        extra -= step
+        i += 1
+    bounds, acc = [], 0
+    for s in sizes:
+        bounds.append((acc, acc + s))
+        acc += s
+    return bounds
+
+
+def _align_rot(anchors, T):
+    """Rotation best aligning T uniformly spaced vertices with `anchors`."""
+    step = 2 * math.pi / T
+    sc = ss = 0.0
+    for j, (x, y) in enumerate(anchors):
+        d = math.atan2(y, x) - j * step
+        sc += math.cos(d)
+        ss += math.sin(d)
+    return math.atan2(ss, sc)
+
+
+def _circle_pts(T, radius, rot):
+    step = 2 * math.pi / T
+    return [(radius * math.cos(rot + j * step),
+             radius * math.sin(rot + j * step)) for j in range(T)]
+
+
+def _rosette(m, r_side, rot):
+    """Rosette of m TRUE rhombi meeting at the pole (apex 2*pi/m, side r_side).
+    Returns (cells, zigzag outer boundary of 2m vertices)."""
+    step = 2 * math.pi / m
+    S = [(r_side * math.cos(rot + j * step),
+          r_side * math.sin(rot + j * step)) for j in range(m)]
+    F = [(S[j][0] + S[(j + 1) % m][0], S[j][1] + S[(j + 1) % m][1])
+         for j in range(m)]
+    cells = [[(0.0, 0.0), S[j], F[j], S[(j + 1) % m]] for j in range(m)]
+    zig = []
+    for j in range(m):
+        zig.extend((S[j], F[j]))
+    return cells, zig
+
+
+def _bridge(loop, target, bands=1):
+    """Ring cells connecting the jagged mesh boundary `loop` to `target` (a
+    polygon of len(target) vertices). Loop edges group ~2 per target edge;
+    intermediate bands interpolate. Returns world-space polygons (no colour)."""
+    L, T = len(loop), len(target)
+    bounds = _group_loop(L, T)
+    anchors = [loop[a] for a, _ in bounds]
+    levels = []
+    for lev in range(1, bands + 1):
+        t = lev / bands
+        levels.append([(ax + (zx - ax) * t, ay + (zy - ay) * t)
+                       for (ax, ay), (zx, zy) in zip(anchors, target)])
+    cells = []
+    inner = levels[0]
+    for j, (a, b) in enumerate(bounds):
+        outer = [loop[kk % L] for kk in range(b, a - 1, -1)]
+        cells.append([inner[j], inner[(j + 1) % T]] + outer)
+    for lev in range(1, bands):
+        out_pts, in_pts = levels[lev - 1], levels[lev]
+        for j in range(T):
+            cells.append([in_pts[j], in_pts[(j + 1) % T],
+                          out_pts[(j + 1) % T], out_pts[j]])
+    return cells
+
+
+def _solve_k(build_count, n_target, k0, iters=4):
+    """Solve for the log-mesh density k so the in-frame cell count ~ n_target,
+    exploiting count ~ 1/k^2 (each Newton-ish step multiplies k by the sqrt of
+    the count ratio). Converges in a few steps; guarded against empty meshes."""
+    k = k0
+    for _ in range(iters):
+        c = build_count(k)
+        if c <= 0:
+            break
+        k *= math.sqrt(c / n_target)
+    return k
+
+
+def _rhombs_n_target(target_w, target_h, base_s):
+    return max(40, int(target_w * target_h / (base_s * base_s)))
+
+
+def _count_in_frame(polys):
+    return sum(1 for p in polys if len(_clip_square(p, 1.0)) >= 3)
+
+
+def _gen_rhombs_nopole(engine, target_w, target_h, base_s):
+    """Centre variant 1: the pole sits OUTSIDE the frame (nautilus precedent),
+    so the frame holds nothing but proper mesh rhombi. Dense parastichy pair
+    (34, 55) keeps the swirl visible far from the pole."""
+    F1, F2, r0, pole = 34, 55, 0.055, (-1.35, -1.28)
+
+    def mesh(k):
+        N0 = int(math.log(0.30 / r0) / k) - (F1 + F2)
+        N = int(math.log(3.7 / r0) / k)
+        return _log_quads(F1, F2, r0, k, N0, N, pole)
+
+    n_target = _rhombs_n_target(target_w, target_h, base_s)
+    k = _solve_k(lambda kk: _count_in_frame([q for _, q in mesh(kk)]),
+                 n_target, 0.0015)
+    yield from _emit_polys([q for _, q in mesh(k)], target_w, target_h)
+
+
+# Funnel/star share the tight (21, 34) mesh centred on the origin; the central
+# hole is kept at a fixed world radius as k varies so the closure keeps scale.
+_RH_F1, _RH_F2, _RH_r0 = 21, 34, 0.055
+_RH_HOLE, _RH_OUTER = 0.34, math.sqrt(2.0) + 0.6
+
+
+def _rh_mesh_k(k):
+    N0 = int(math.log(_RH_HOLE / _RH_r0) / k) - (_RH_F1 + _RH_F2)
+    N = int(math.log(_RH_OUTER / _RH_r0) / k)
+    return _log_mesh(_RH_F1, _RH_F2, _RH_r0, k, N0, N, (0.0, 0.0))
+
+
+def _rh_solve_k(target_w, target_h, base_s):
+    n_target = _rhombs_n_target(target_w, target_h, base_s)
+
+    def count(k):
+        polys, _ = _rh_mesh_k(k)
+        return _count_in_frame(polys)
+
+    return _solve_k(count, n_target, 0.0042)
+
+
+def _gen_rhombs_funnel(engine, target_w, target_h, base_s):
+    """Centre variant 2: funnel of quad rings 28 -> 14 -> 7 (each ring halves
+    the count so cells keep the mesh aspect) closed by one small 7-gon pole
+    tile."""
+    k = _rh_solve_k(target_w, target_h, base_s)
+    polys, loop = _rh_mesh_k(k)
+    r_mean = sum(math.hypot(*v) for v in loop) / len(loop)
+    cells = list(polys)
+    cur = loop
+    for T, frac in [(28, 0.80), (14, 0.55), (7, 0.28)]:
+        rot = _align_rot([cur[a] for a, _ in _group_loop(len(cur), T)], T)
+        target = _circle_pts(T, frac * r_mean, rot)
+        cells.extend(_bridge(cur, target, bands=1))
+        cur = target
+    cells.append(cur)                              # single pole tile (7-gon)
+    yield from _emit_polys(cells, target_w, target_h)
+
+
+def _gen_rhombs_star(engine, target_w, target_h, base_s):
+    """Centre variant 3: rosette of 14 TRUE rhombi meeting at the pole, bridged
+    to the mesh by two interpolated quad rings."""
+    k = _rh_solve_k(target_w, target_h, base_s)
+    polys, loop = _rh_mesh_k(k)
+    r_mean = sum(math.hypot(*v) for v in loop) / len(loop)
+    cells = list(polys)
+    rot = _align_rot([loop[a] for a, _ in _group_loop(len(loop), 28)], 28)
+    rosette, zig = _rosette(14, 0.36 * r_mean, rot)
+    cells.extend(_bridge(loop, zig, bands=2))
+    cells.extend(rosette)
+    yield from _emit_polys(cells, target_w, target_h)
+
+
 @dataclass(frozen=True)
 class ShapeSpec:
     """Descriptor for one tile shape.
@@ -405,6 +639,9 @@ SHAPE_MODES = {
     "sunflower_soft":           ShapeSpec("polygon", _gen_sunflower_soft, aa=4),
     "sunflower_rings":          ShapeSpec("polygon", _gen_sunflower_rings, aa=4),
     "sunflower_disc":           ShapeSpec("polygon", _gen_sunflower_disc, aa=4),
+    "rhombs_nopole":            ShapeSpec("polygon", _gen_rhombs_nopole, aa=4),
+    "rhombs_funnel":            ShapeSpec("polygon", _gen_rhombs_funnel, aa=4),
+    "rhombs_star":              ShapeSpec("polygon", _gen_rhombs_star, aa=4),
 }
 
 

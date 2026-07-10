@@ -55,6 +55,14 @@ GOLDEN = {
     ("sunflower_rings", True): "179a3173d1a2220c70f02b9d7142d489e5e67530296ba39ab4f241f191b52696",
     ("sunflower_disc", False): "271518f173191cca4d0a5bd6978193239f562e354bfe6254bc835412cafcdaa7",
     ("sunflower_disc", True): "71be46ac6c2ec200af542276dc206f133df11313beb1eff60f191170b4265ae0",
+    # rhombs family: log-spiral quad mesh, k solved from base_s (density scales
+    # with tile_scale). Deterministic (no RNG), so these lock the first render.
+    ("rhombs_nopole", False): "af0aa741c12502e7422eede95421851d0b64f99d8aa81f55abaaa69215e5229e",
+    ("rhombs_nopole", True): "f419f7ed7c560cc7d4a331e515acf5b245962eaad94db6a59f4fbd58adfc64b7",
+    ("rhombs_funnel", False): "e8cac6477aa9b685769b2ecf25e07e04ab3c931dd24390595faeda0098db89c1",
+    ("rhombs_funnel", True): "f6daa0ccc63ffd58f7b03a986ce5d92575f9848cf2b5a67fae16482f23c30023",
+    ("rhombs_star", False): "558b2d187ecbf9e4f8a5723712f43c7e91e3c995383e9975b16773f9ba9b3554",
+    ("rhombs_star", True): "e92d5357a4b9cf18d03c7857fe250673a79d4d35dacbe8ac8dfe1ed1eb56c382",
 }
 
 
