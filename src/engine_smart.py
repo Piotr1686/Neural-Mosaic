@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from PIL import Image, ImageOps, ImageDraw
 from tqdm import tqdm
-from scipy.spatial import cKDTree
+from scipy.spatial import cKDTree, Voronoi
 import skimage.color
 
 from .spectre_tiling import generate_spectre_tiling
@@ -151,6 +151,108 @@ def _gen_spectre(engine, target_w, target_h, base_s):
         yield list(spec.points)
 
 
+# --- Phyllotaxis / Voronoi geometry (sunflower + rhombs family) ------------
+# Ported from src/tools/gen_sunflower_schemes.py (the verified scheme geometry;
+# PLAN_SHAPES.md: port it into the engine, do not reinvent). Only the GEOMETRY
+# is ported -- the scheme's per-cell colour (vary/palette) is a scheme-only
+# concern, so preview and render stay a pure function of (w, h, base_s), no RNG.
+_GOLDEN_ANGLE = math.pi * (3.0 - math.sqrt(5.0))   # 137.508 deg
+
+
+def _vogel_points(n_pts, c, power):
+    """Vogel phyllotaxis lattice r = c*n**power, theta = n*golden angle.
+    Returns a list of (x, y) tuples in world space (y up)."""
+    idx = np.arange(1, n_pts + 1, dtype=np.float64)
+    rr = c * idx ** power
+    aa = idx * _GOLDEN_ANGLE
+    return list(zip(rr * np.cos(aa), rr * np.sin(aa)))
+
+
+def _clip_square(poly, R):
+    """Sutherland-Hodgman clip of an (x, y) polygon to the square [-R, R]^2.
+    Returns the clipped vertex list (possibly empty)."""
+    def clip(pts, inside, inter):
+        out = []
+        m = len(pts)
+        for i in range(m):
+            a, b = pts[i], pts[(i + 1) % m]
+            ina, inb = inside(a), inside(b)
+            if ina:
+                out.append(a)
+                if not inb:
+                    out.append(inter(a, b))
+            elif inb:
+                out.append(inter(a, b))
+        return out
+
+    def ix(a, b, t):
+        (ax, ay), (bx, by) = a, b
+        f = (t - ax) / (bx - ax)
+        return (t, ay + f * (by - ay))
+
+    def iy(a, b, t):
+        (ax, ay), (bx, by) = a, b
+        f = (t - ay) / (by - ay)
+        return (ax + f * (bx - ax), t)
+
+    pts = poly
+    for inside, inter in (
+        (lambda p: p[0] >= -R, lambda a, b: ix(a, b, -R)),
+        (lambda p: p[0] <= R,  lambda a, b: ix(a, b, R)),
+        (lambda p: p[1] >= -R, lambda a, b: iy(a, b, -R)),
+        (lambda p: p[1] <= R,  lambda a, b: iy(a, b, R)),
+    ):
+        if not pts:
+            return pts
+        pts = clip(pts, inside, inter)
+    return pts
+
+
+def _voronoi_cells(pts, R=1.0):
+    """Yield bounded Voronoi cells of `pts`, each clipped to [-R, R]^2 (>= 3
+    vertices). Unbounded cells (generators past the corners) are skipped; the
+    frame stays covered by their bounded neighbours."""
+    vor = Voronoi(np.asarray(pts, dtype=np.float64))
+    for i in range(len(pts)):
+        reg = vor.regions[vor.point_region[i]]
+        if not reg or -1 in reg:
+            continue
+        poly = [tuple(vor.vertices[v]) for v in reg]
+        cl = _clip_square(poly, R)
+        if len(cl) >= 3:
+            yield cl
+
+
+# Seed density: Vogel seeds reach r ~ 1.86 while the frame is [-1, 1], so only
+# ~1/K of the seeds yield an in-frame cell. K compensates so the mean in-frame
+# cell area stays ~ base_s^2 and tile_scale sizes cells like it sizes lattice
+# tiles (the scheme's fixed N=1500 would be one huge cell per ~130 px at 16K).
+_SUNFLOWER_CELL_DENSITY = 2.6
+
+
+def _gen_sunflower_grande(engine, target_w, target_h, base_s):
+    """Yield graded-Voronoi sunflower cells (Vogel seeds r = c*n^0.66) as
+    image-space polygons (y down).
+
+    The world square [-1, 1]^2 is mapped affinely onto the target rectangle;
+    the y-flip folds into the map. An affine image of a Voronoi diagram is
+    still an exact partition (cells abut with no gaps/overlaps), so the
+    tessellation survives a non-square stretch. Cell count scales with the
+    frame area / base_s^2, so the shape honours tile_scale. Fully deterministic
+    (no RNG) -> preview and render agree for identical dimensions.
+    """
+    R = 1.0
+    power = 0.66
+    n_seeds = int(_SUNFLOWER_CELL_DENSITY * target_w * target_h / (base_s * base_s))
+    n_seeds = max(16, n_seeds)
+    c = (math.sqrt(2.0) + 0.45) / (n_seeds ** power)
+    pts = _vogel_points(n_seeds, c, power=power)
+    sx = target_w / (2.0 * R)
+    sy = target_h / (2.0 * R)
+    for cl in _voronoi_cells(pts, R):
+        yield [((x + R) * sx, (R - y) * sy) for x, y in cl]
+
+
 @dataclass(frozen=True)
 class ShapeSpec:
     """Descriptor for one tile shape.
@@ -183,6 +285,7 @@ SHAPE_MODES = {
     "triangle":      ShapeSpec("grid"),
     "kites":         ShapeSpec("polygon", _gen_kites, aa=1),
     "spectre":       ShapeSpec("polygon", _gen_spectre, aa=4),
+    "sunflower_grande": ShapeSpec("polygon", _gen_sunflower_grande, aa=4),
 }
 
 
@@ -1084,6 +1187,35 @@ class SmartEngine:
                     "feature": self._compute_sector_feature(feat_img, edge_aware),
                     "wmask": self._mask_cell_weights(mask_spec, edge_aware)
                 })
+
+        # ==========================================
+        # GENERIC POLYGON SHAPES (registry-driven)
+        # ==========================================
+        # Every polygon shape beyond kites/spectre flows through the shared
+        # `_polygon_sector` helper: the SHAPE_MODES generator yields image-space
+        # polygons, the helper builds one sector per polygon (crop + LazyMask +
+        # mean-fill + feature). kites/spectre keep their own branches above only
+        # to preserve their locked golden hashes (spectre's edge bbox strategy
+        # differs); migrating them here is a bit-identical cleanup for later.
+        elif SHAPE_MODES.get(shape_mode) and SHAPE_MODES[shape_mode].kind == "polygon":
+            spec = SHAPE_MODES[shape_mode]
+            print(f"Mode: {shape_mode} (polygon, aa={spec.aa}). Borders: {border_mode}")
+            polys = list(spec.generator(self, target_w, target_h, base_s))
+            print(f"Polygon tiling ready: {len(polys)} cells")
+            for i_poly, poly in enumerate(
+                    tqdm(polys, desc=f"Sampling {shape_mode} sectors")):
+                if i_poly % 256 == 0:
+                    _check_cancel()
+                sector = self._polygon_sector(
+                    target, poly, render_padding, spec.aa, edge_aware)
+                if sector is None:
+                    continue
+                # _polygon_sector emits a placeholder meta index 0; stamp the
+                # real sector index (only consulted for is_hat grouping, which
+                # is always False for these shapes).
+                m = sector["meta"]
+                sector["meta"] = (i_poly, m[1], m[2], m[3], m[4], m[5], m[6])
+                sectors_data.append(sector)
 
         # ==========================================
         # STANDARD GRID (HexagonRomb, Square, Triangle, …)

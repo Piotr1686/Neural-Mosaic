@@ -38,6 +38,11 @@ GOLDEN = {
     ("kites", True): "d9f3c83beb7b4f5be302af04e54016f4cba52ee2838a916031efee8fe95d31ae",
     ("spectre", False): "ed5ad4f4c582341daba6cb2cf61ec021bac48d9bfa7f0fac9fd41cc4ca5bc5dc",
     ("spectre", True): "998a645f47ef0d222add0f32fce9276002fdd8505f10944e1b3860ac19a500a8",
+    # New polygon shape wired via the generic dispatch + _polygon_sector
+    # (2026-07-10). Geometry is deterministic (Vogel seeds + Voronoi, no RNG),
+    # so these hashes lock the first render — no "before" to match against.
+    ("sunflower_grande", False): "58b658768dfd4d0d26c5af12f761b06375f69ade9fb7c69e414e051383a2bb99",
+    ("sunflower_grande", True): "b658d937874bd1d54204d0c64bd897a2cb130cb05edc28babee3f5d8ab74e7b9",
 }
 
 

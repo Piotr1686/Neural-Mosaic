@@ -23,10 +23,10 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 _LOG_PATH = Path("logs/cli.log")
 
 _RESOLUTIONS = ["2K", "4K", "8K", "16K"]
-_SMART_SHAPES = [
-    "square", "rectangle_3x1", "brick_wall",
-    "hexagon", "hexagon_romb", "romb", "triangle", "kites", "spectre",
-]
+# Single source of truth for the shape list: the engine's SHAPE_MODES registry
+# (adding a shape is a one-line edit there; the old hardcoded copy drifted).
+from .engine_smart import shape_names as _shape_names
+_SMART_SHAPES = _shape_names()
 _GROUT_PRESETS = ["cienki", "sredni", "gruby"]   # mirrors src.grout.PRESETS
 _TYPO_MODES = ["black_on_white", "white_on_black"]
 _FONT_GROUPS = [

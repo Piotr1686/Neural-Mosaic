@@ -28,7 +28,7 @@ from PIL import Image
 from sklearn.decomposition import PCA
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from .engine_smart import SmartEngine
+from .engine_smart import SmartEngine, shape_names
 from .engine_typo import TypoEngine
 from .render_control import RenderCancelled
 from .preview import PreviewRenderer
@@ -387,9 +387,9 @@ class App(ctk.CTk):
         self.seg_scale_p.pack(pady=5)
 
         ctk.CTkLabel(frame, text="Tile Shape").pack(pady=(10, 0))
-        shapes = ["square", "rectangle_3x1", "brick_wall", "hexagon", "hexagon_romb", "romb", "triangle", "kites", "spectre"]
+        # Single source of truth: the engine's SHAPE_MODES registry.
         self.combo_shape = ctk.CTkComboBox(
-            frame, values=shapes, command=self._on_shape_selected,
+            frame, values=shape_names(), command=self._on_shape_selected,
         )
         self.combo_shape.set("")
         self.combo_shape.pack(pady=5)
