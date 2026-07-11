@@ -1,62 +1,60 @@
 # last_session.md
 
-**Sesja:** 2026-07-10 · 21:00-22:31 · (Opus 4.8, częściowo Fable 5)
+**Sesja:** 2026-07-11 · ~10:30-12:30 · (Opus 4.8 + Fable 5)
 **Status:** ✓ Zakończona poprawnie
-**Punkt odniesienia (git):** b278373 @ main (5 commitów sesji NIE wypchnięte na origin — ahead 5; push do decyzji usera)
+**Punkt odniesienia (git):** 9a74ff2 @ main (zsynchronizowane z origin/main; wszystkie 4 commity sesji wypchnięte)
 
 ---
 
 ## ▸ NASTĘPNY KROK (zacznij tutaj)
 
-**PLAN_SHAPES S3+ — wiring kolejnych kształtów, zacznij od najtańszych „deterministycznych Fable".** Konkretnie: `pinwheel`, `cairo`, `floret`, `gosper`, `pythagorean` mają już zweryfikowaną wizualnie geometrię w `src/tools/gen_fable_shape_schemes.py` (`gen_pinwheel`, `gen_cairo`, `gen_floret`, `gen_gosper`, `gen_pythagorean` — czyste konstrukcje deterministyczne, bez RNG). Dla każdego:
-1. Przenieś geometrię z generatora Fable do `engine_smart.py` jako `_gen_<shape>(engine, target_w, target_h, base_s)` yieldujący poligony w przestrzeni obrazu (y w dół); użyj `_emit_polys` (jawne partycje) albo mapowania afinicznego jak w rodzinie sunflower. base_s ma sterować gęstością/skalą.
-2. Wpis w `SHAPE_MODES` (`ShapeSpec("polygon", _gen_<shape>, aa=4)`).
-3. Golden (both borders) przez scratch-script z fixture jak `tests/test_golden_shapes.py` → dodaj 2 hashe do `GOLDEN`.
-4. Weryfikacja: pokrycie (0% dziur), montaż na `input/0013.jpg`.
+**Wiring voderberg + escher_lizard + weave** — trzy ostatnie kształty z gotową geometrią w `src/tools/gen_fable_shape_schemes.py` (`gen_voderberg`:425, `gen_escher`:495, `gen_weave`:534; RNG tylko do kolorów paneli, geometria deterministyczna). Wzorzec identyczny jak dzisiejsze Fable ×4:
+1. Port geometrii do `engine_smart.py` jako `_gen_<shape>(engine, w, h, base_s)` w image space (scheme renderer był y-down → bez flipu); skala: pole DOMINUJĄCEGO kafla ~ base_s².
+2. Wpis `ShapeSpec("polygon", _gen_<shape>, aa=4)` w `SHAPE_MODES`.
+3. Rasteryzacja pokrycia (scratch `check_coverage.py` — wzorzec w archiwum czatu; cel 0% dziur, sub-px na łukach OK) + side-by-side z PNG schematu.
+4. Goldeny both-borders ×2 procesy (scratch `gen_goldens.py`) → hashe do `GOLDEN` w `tests/test_golden_shapes.py`.
+5. Montaż na `input/0013.jpg` (CLI render 2K) + pełny pytest.
 
-**NIE ruszaj gałęzi kites/spectre** w `_do_render` (zablokowane goldeny). Nowe kształty wpinają się w generyczną gałąź `elif ...kind=="polygon"`.
+UWAGA voderberg: środek przeprojektowany werdyktem 2026-07-05 (pierścienie od r=0, 8 wygiętych klinów w biegunie, arc_in=[] gdy rin==0) — portować wersję z gen_fable (już poprawioną), nie wymyślać od nowa. escher_lizard: krawędzie `_wavy` to poliliniowe poligony — przechodzą przez `_polygon_sector` bez nowej maszynerii.
 
-Kontekst: generyczny dispatch polygon jest już aktywny (wzorzec ustalony na 12 kształtach tej sesji). Zostają trudniejsze kształty z PLAN_SHAPES — deterministyczne Fable to najtańszy kolejny krok przed geometrią ryzykowną (penrose multigrid, girih, poincare, truchet). User chce WSZYSTKIE kształty wdrożone przed galerią 16K.
+Kontekst: po dzisiejszych 11 kształtach z PLAN_SHAPES zostają: ta trójka (najtańsza — kod istnieje), girih (sweep seedów → potrzebne decyzje: zamrożenie seeda per wymiary?), poincare (model pasmowy, BFS odbić — złożony), truchet×2 (wymaga nowej maszynerii `_CurvedMask`), pula extra 21-43. User chce WSZYSTKIE kształty przed galerią 16K i selekcją finalną.
 
 ---
 
 ## Co zrobiono w tej sesji
 
-- ✓ **Push zaległego commitu `/end`** z poprzedniej sesji (915adfd → origin/main).
-- ✓ **GUI polish** (509136f): Output Resolution Smart domyślnie 8K; **Black Borders + Grout scalone w jeden dropdown „Tile Borders"** (Off | Gap (uniform) | Grout: cienki/sredni/gruby; `_border_settings()` mapuje na (border_mode, grout_preset), wzajemnie wykluczające się — koniec mylącej kombinatoryki); Edge-Aware przeniesiony pod Allow Mirroring (mutex razem); Color Blend +40% (wyrównanie z Tile Tint).
-- ✓ **ODKRYCIE: Sprint 2 refaktor był w połowie** — `SHAPE_MODES`/`ShapeSpec`/`_polygon_sector` istniały, ale `_do_render` miał zahardkodowane gałęzie, a `_polygon_sector` był MARTWYM kodem.
-- ✓ **Generyczny dispatch polygon** (7871951): gałąź `elif kind=="polygon"` aktywuje `_polygon_sector`; nowy kształt = generator + wpis w rejestrze. CLI/GUI czytają z `shape_names()` (koniec 3 zahardkodowanych list).
-- ✓ **12 nowych kształtów WDROŻONYCH** (wszystkie polygon aa=4, +24 goldeny cross-proces):
-  - **sunflower ×7** (7871951+909ecb9): grande/grande_xl/grande_soft/grande_inverse + soft/rings/disc. Vogel/Voronoi bez koloru → zero RNG. Helpery `_graded_sunflower`/`_emit_cells`/`_lloyd_relax`/`_vogel_points`/`_voronoi_cells`/`_poly_centroid`.
-  - **rhombs ×3** (0f625c2): nopole/funnel/star. Mesh log-spiralny `_log_mesh`/`_log_quads` + `_bridge`/`_rosette`/`_circle_pts`/`_align_rot`/`_group_loop` + `_emit_polys`. **DECYZJA USERA: tile_scale steruje gęstością** → `_solve_k` (count~1/k²); inwariant samopodobności (pętla F1+F2) → domknięcia środka niezależne od k.
-  - **voronoi + phyllotaxis** (b278373): voronoi jednorodny (seed z wymiarów `_shape_seed` → determinizm; pierścień brzegowy zamrożony w Lloydzie `freeze_r`, 0.05% dziur); phyllotaxis = Vogel power=0.5.
-- ✓ **Decyzje geometrii Voronoi:** mapowanie afiniczne [-1,1]²→kadr z flipem Y (partycja przeżywa stretch), liczba komórek ~pole/base_s², `_SUNFLOWER_CELL_DENSITY=2.6`.
-- ✓ **327 testów zielonych** (było 305; +12 nowych goldenów: sunflower rodzina + rhombs + voronoi/phyllotaxis; grande golden bit-identyczny przez refaktor). Każdy kształt zweryfikowany wizualnie na `0013.jpg` (montaże w scratchpad). Rejestr `SHAPE_MODES` = 21 kształtów.
-- ✓ MEMORY.md repo (wpis [2026-07-10]) + auto-memory (`project_10_shapes_plan`) zaktualizowane.
+- ✓ **Pakiet poprawek po uwagach usera** (5f3ada0): presety groutu EN `thin`/`medium`/`thick` wszędzie (grout.py/GUI/CLI/sufiks batch); `used_tiles.json` opt-in domyślnie OFF (param `save_used_tiles`, checkbox GUI, flaga `--save-used-tiles`); **generyczny flat grout dla WSZYSTKICH kształtów polygon** (`_grout_cells` fallback re-yieldujący poligony generatora → linie na szwach; naprawia „grout nie działa na nowych kształtach").
+- ✓ **Fable ×4 wdrożone** (5e04b42): pinwheel (substytucja Conway-Radin, pruning w subdywizji), cairo, floret, gosper (162-gon depth-3). Helper `_lattice_mn_range`. Pokrycie ≤0.025%, chiralność zgodna z PNG (scheme renderer y-down).
+- ✓ **Archimedesowe ×5 OD ZERA z PNG schematów** (98924bd; kod Opusa przepadł): trunc_square, trunc_hex, rhombitrihex (ciemne trójkąty PNG = pełnoprawne komórki), pythagorean (pułapka dziury [b-s,b]×[b,b+s] — złapana rasteryzacją, było 19% dziur), sunburst (log-polar, twist −0.18, czapka 7 klinów, łuki polygonizowane).
+- ✓ **Multigrid ×2 wdrożone** (9a74ff2): `_multigrid_dual` (Cramer verbatim ze zwalidowanego kodu; okno przecięć = kadr/(N/2) → 16K w 0.2 s); penrose P3 (pentagrid γ suma=1) + ammann_beenker (N=4, zgodny 1:1 z PNG).
+- ✓ **Bilans: +11 kształtów dziś, rejestr SHAPE_MODES = 32; 325 testów zielonych (+22 goldeny cross-proces).** Każdy kształt: rasteryzacja pokrycia + side-by-side ze schematem + montaż na 0013.jpg.
+- ✓ Fix 2 testów groutu (penrose jako „spoza rejestru" wszedł do rejestru → nazwy fikcyjne).
+- ✓ MEMORY.md repo (wpis [2026-07-11]) + auto-memory (`project_grout_engine`, `project_tile_quality_plan`, `project_10_shapes_plan`) zaktualizowane na bieżąco.
+- ✓ Wyjaśnienie zagadki liczby testów: „327" poprzedniej sesji liczyło z `test_ai_core` (28); konwencja CI = ignore test_ai_core.
 
 ## Co zostało (backlog sesji)
 
-- ⟳ **PLAN_SHAPES S3+ pozostałe kształty** (NASTĘPNY KROK = deterministyczne Fable): penrose/ammann_beenker (multigrid de Bruijna), pinwheel/gosper/cairo/floret/pythagorean, poincare, girih, truchet/truchet_hex (maski krzywoliniowe `_CurvedMask` — nowa maszyneria), sunburst/voderberg, trunc_square/trunc_hex/rhombitrihex, escher_lizard, weave. Po WSZYSTKICH → selekcja finalna usera.
-- ⟳ **Galeria 16K triangle+hexagon** z workflow hires — ODŁOŻONA przez usera do czasu wdrożenia WSZYSTKICH kształtów (decyzja 2026-07-10).
+- ⟳ **PLAN_SHAPES — ostatnie kształty** (NASTĘPNY KROK = voderberg/escher_lizard/weave): potem girih (decyzje seedów), poincare (pasmowy), truchet×2 (`_CurvedMask`), pula extra 21-43. Po WSZYSTKICH → selekcja finalna usera.
+- ⟳ **Galeria 16K triangle+hexagon** — odłożona do wdrożenia wszystkich kształtów (decyzja 2026-07-10).
 - ⟳ **PLAN_FRACTAL wykonawczy** — F1a (trójfazowa pętla, golden bit-w-bit).
-- ⟳ (opcjonalny cleanup) migracja kites/spectre do generycznej gałęzi polygon (kites bit-identyczny, spectre wymaga regen golden — niekonieczne).
-- ⟳ Standing: pasek DZI w GUI wciąż niesprawdzony w realnym `python -m src.gui`; GUI polish tej sesji też niesprawdzony wizualnie w realnym GUI.
-- ⟳ **Push:** 5 commitów sesji (509136f..b278373) niewypchnięte na origin.
+- ⟳ (opcjonalny cleanup) migracja kites/spectre do generycznej gałęzi polygon.
+- ⟳ Standing: GUI niesprawdzone wizualnie w realnym `python -m src.gui` (pasek DZI, dropdown Tile Borders z EN presetami, nowy checkbox used-tiles, 11 nowych kształtów w dropdownie ze schematami).
+- ⟳ Stare pliki batch `_grout-sredni` w output/ nie łapią skip-if-exists po rename presetów (kosmetyka).
 
 ## Aktywne pliki
 
-- `src/engine_smart.py` (generyczny dispatch polygon w `_do_render`; sekcja geometrii: `_vogel_points`/`_clip_square`/`_voronoi_cells`/`_poly_centroid`/`_lloyd_relax`/`_emit_cells`/`_emit_polys`/`_graded_sunflower` + 7 generatorów sunflower; `_log_mesh`/`_log_quads`/`_bridge`/`_rosette`/`_circle_pts`/`_align_rot`/`_group_loop`/`_solve_k`/`_rh_mesh_k` + 3 generatory rhombs; `_shape_seed`/`_gen_voronoi`/`_gen_phyllotaxis`; rejestr `SHAPE_MODES` 21 wpisów)
-- `src/cli.py` (`_SMART_SHAPES` = `shape_names()`), `src/gui.py` (Tile Borders dropdown + `_border_settings`; combo_shape z `shape_names()`; 8K default; blend 40%)
-- `tests/test_golden_shapes.py` (24 nowe hashe: 14 sunflower + 6 rhombs + 4 voronoi/phyllotaxis)
-- `MEMORY.md` repo (wpis [2026-07-10])
+- `src/engine_smart.py` (sekcja generatorów: `_lattice_mn_range`/`_pin_sub`/`_gen_pinwheel`/`_gen_cairo`/`_gen_floret`/`_gosper_edge`/`_gen_gosper` + `_multigrid_dual`/`_gen_penrose`/`_gen_ammann_beenker` + `_gen_trunc_square`/`_gen_trunc_hex`/`_gen_rhombitrihex`/`_gen_pythagorean`/`_sun_arc`/`_gen_sunburst`; `_grout_cells` generyczny fallback polygon; `create_mosaic(save_used_tiles=False)`; rejestr `SHAPE_MODES` = 32)
+- `src/grout.py` (PRESETS thin/medium/thick), `src/cli.py` (`--save-used-tiles`, `_GROUT_PRESETS` EN), `src/gui.py` (dropdown Tile Borders EN, checkbox used-tiles)
+- `tests/test_golden_shapes.py` (GOLDEN = 54 hashe), `tests/test_grout_engine.py` (+3 testy generycznego groutu), `tests/test_used_tiles.py` (opt-in), `tests/test_grout.py`, `tests/test_cli.py`
+- Scratch (wzorce, w scratchpadzie sesji): `check_coverage.py`, `gen_goldens.py`
 
 ## Otwarte pytania
 
-- Kolejność wdrażania pozostałych PLAN_SHAPES — sugerowana: najpierw deterministyczne Fable (tanie), potem multigrid (penrose/AB), na końcu ryzykowne (girih/poincare/truchet — decyzja go/no-go po prototypie per PLAN_SHAPES).
-- Czy migrować kites/spectre do generycznej gałęzi (dedup) — obecnie NIE, bit-repro ważniejszy.
-- Push 5 commitów na origin — do decyzji.
+- girih w silniku: jak zamrozić sweep seedów (per wymiary jak `_shape_seed`? stały seed?) i czy domykanie dziur convex-hullem jest deterministyczne — decyzja przy wiringu.
+- truchet: go/no-go po prototypie 1 kafelka `_CurvedMask` (per PLAN_SHAPES).
+- Selekcja finalna kształtów przez usera — po wdrożeniu wszystkich.
 
 ## Do MEMORY.md (przeniesiono)
 
-- Repo MEMORY.md: wpis [2026-07-10] w Architekturze — pełny opis wiringu (odkrycie połowicznego Sprint 2, generyczny dispatch, 12 kształtów z podziałem na rodziny, decyzje geometrii Voronoi/rhombs base_s-scaling, następne kroki).
-- Auto-memory: `project_10_shapes_plan` zaktualizowane (12 kształtów wdrożonych, wzorzec dodania kształtu, base_s-scaling rhombs, następne S3+); indeks MEMORY.md zsynchronizowany.
+- Repo MEMORY.md: wpis [2026-07-11] — pakiet poprawek UX (grout EN, used_tiles opt-in, generyczny grout polygon), 11 kształtów z lekcjami (pułapka pythagorean, optymalizacja okna multigridu (N/2)·p, wzorzec „pole dominującego kafla ~ base_s²", lekcja testowa o nazwach fikcyjnych).
+- Auto-memory: `project_grout_engine` (presety EN + generyczna gałąź), `project_tile_quality_plan` (used_tiles opt-in), `project_10_shapes_plan` (Fable ×4, archimedesowe ×5, stan „zostało") + indeks MEMORY.md.
