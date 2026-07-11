@@ -1,3 +1,66 @@
+## ═══ Sesja zarchiwizowana [2026-07-11 22:59] ═══
+
+# last_session.md
+
+**Sesja:** 2026-07-11 · ~10:30-12:30 · (Opus 4.8 + Fable 5)
+**Status:** ✓ Zakończona poprawnie
+**Punkt odniesienia (git):** 9a74ff2 @ main (zsynchronizowane z origin/main; wszystkie 4 commity sesji wypchnięte)
+
+---
+
+## ▸ NASTĘPNY KROK (zacznij tutaj)
+
+**Wiring voderberg + escher_lizard + weave** — trzy ostatnie kształty z gotową geometrią w `src/tools/gen_fable_shape_schemes.py` (`gen_voderberg`:425, `gen_escher`:495, `gen_weave`:534; RNG tylko do kolorów paneli, geometria deterministyczna). Wzorzec identyczny jak dzisiejsze Fable ×4:
+1. Port geometrii do `engine_smart.py` jako `_gen_<shape>(engine, w, h, base_s)` w image space (scheme renderer był y-down → bez flipu); skala: pole DOMINUJĄCEGO kafla ~ base_s².
+2. Wpis `ShapeSpec("polygon", _gen_<shape>, aa=4)` w `SHAPE_MODES`.
+3. Rasteryzacja pokrycia (scratch `check_coverage.py` — wzorzec w archiwum czatu; cel 0% dziur, sub-px na łukach OK) + side-by-side z PNG schematu.
+4. Goldeny both-borders ×2 procesy (scratch `gen_goldens.py`) → hashe do `GOLDEN` w `tests/test_golden_shapes.py`.
+5. Montaż na `input/0013.jpg` (CLI render 2K) + pełny pytest.
+
+UWAGA voderberg: środek przeprojektowany werdyktem 2026-07-05 (pierścienie od r=0, 8 wygiętych klinów w biegunie, arc_in=[] gdy rin==0) — portować wersję z gen_fable (już poprawioną), nie wymyślać od nowa. escher_lizard: krawędzie `_wavy` to poliliniowe poligony — przechodzą przez `_polygon_sector` bez nowej maszynerii.
+
+Kontekst: po dzisiejszych 11 kształtach z PLAN_SHAPES zostają: ta trójka (najtańsza — kod istnieje), girih (sweep seedów → potrzebne decyzje: zamrożenie seeda per wymiary?), poincare (model pasmowy, BFS odbić — złożony), truchet×2 (wymaga nowej maszynerii `_CurvedMask`), pula extra 21-43. User chce WSZYSTKIE kształty przed galerią 16K i selekcją finalną.
+
+---
+
+## Co zrobiono w tej sesji
+
+- ✓ **Pakiet poprawek po uwagach usera** (5f3ada0): presety groutu EN `thin`/`medium`/`thick` wszędzie (grout.py/GUI/CLI/sufiks batch); `used_tiles.json` opt-in domyślnie OFF (param `save_used_tiles`, checkbox GUI, flaga `--save-used-tiles`); **generyczny flat grout dla WSZYSTKICH kształtów polygon** (`_grout_cells` fallback re-yieldujący poligony generatora → linie na szwach; naprawia „grout nie działa na nowych kształtach").
+- ✓ **Fable ×4 wdrożone** (5e04b42): pinwheel (substytucja Conway-Radin, pruning w subdywizji), cairo, floret, gosper (162-gon depth-3). Helper `_lattice_mn_range`. Pokrycie ≤0.025%, chiralność zgodna z PNG (scheme renderer y-down).
+- ✓ **Archimedesowe ×5 OD ZERA z PNG schematów** (98924bd; kod Opusa przepadł): trunc_square, trunc_hex, rhombitrihex (ciemne trójkąty PNG = pełnoprawne komórki), pythagorean (pułapka dziury [b-s,b]×[b,b+s] — złapana rasteryzacją, było 19% dziur), sunburst (log-polar, twist −0.18, czapka 7 klinów, łuki polygonizowane).
+- ✓ **Multigrid ×2 wdrożone** (9a74ff2): `_multigrid_dual` (Cramer verbatim ze zwalidowanego kodu; okno przecięć = kadr/(N/2) → 16K w 0.2 s); penrose P3 (pentagrid γ suma=1) + ammann_beenker (N=4, zgodny 1:1 z PNG).
+- ✓ **Bilans: +11 kształtów dziś, rejestr SHAPE_MODES = 32; 325 testów zielonych (+22 goldeny cross-proces).** Każdy kształt: rasteryzacja pokrycia + side-by-side ze schematem + montaż na 0013.jpg.
+- ✓ Fix 2 testów groutu (penrose jako „spoza rejestru" wszedł do rejestru → nazwy fikcyjne).
+- ✓ MEMORY.md repo (wpis [2026-07-11]) + auto-memory (`project_grout_engine`, `project_tile_quality_plan`, `project_10_shapes_plan`) zaktualizowane na bieżąco.
+- ✓ Wyjaśnienie zagadki liczby testów: „327" poprzedniej sesji liczyło z `test_ai_core` (28); konwencja CI = ignore test_ai_core.
+
+## Co zostało (backlog sesji)
+
+- ⟳ **PLAN_SHAPES — ostatnie kształty** (NASTĘPNY KROK = voderberg/escher_lizard/weave): potem girih (decyzje seedów), poincare (pasmowy), truchet×2 (`_CurvedMask`), pula extra 21-43. Po WSZYSTKICH → selekcja finalna usera.
+- ⟳ **Galeria 16K triangle+hexagon** — odłożona do wdrożenia wszystkich kształtów (decyzja 2026-07-10).
+- ⟳ **PLAN_FRACTAL wykonawczy** — F1a (trójfazowa pętla, golden bit-w-bit).
+- ⟳ (opcjonalny cleanup) migracja kites/spectre do generycznej gałęzi polygon.
+- ⟳ Standing: GUI niesprawdzone wizualnie w realnym `python -m src.gui` (pasek DZI, dropdown Tile Borders z EN presetami, nowy checkbox used-tiles, 11 nowych kształtów w dropdownie ze schematami).
+- ⟳ Stare pliki batch `_grout-sredni` w output/ nie łapią skip-if-exists po rename presetów (kosmetyka).
+
+## Aktywne pliki
+
+- `src/engine_smart.py` (sekcja generatorów: `_lattice_mn_range`/`_pin_sub`/`_gen_pinwheel`/`_gen_cairo`/`_gen_floret`/`_gosper_edge`/`_gen_gosper` + `_multigrid_dual`/`_gen_penrose`/`_gen_ammann_beenker` + `_gen_trunc_square`/`_gen_trunc_hex`/`_gen_rhombitrihex`/`_gen_pythagorean`/`_sun_arc`/`_gen_sunburst`; `_grout_cells` generyczny fallback polygon; `create_mosaic(save_used_tiles=False)`; rejestr `SHAPE_MODES` = 32)
+- `src/grout.py` (PRESETS thin/medium/thick), `src/cli.py` (`--save-used-tiles`, `_GROUT_PRESETS` EN), `src/gui.py` (dropdown Tile Borders EN, checkbox used-tiles)
+- `tests/test_golden_shapes.py` (GOLDEN = 54 hashe), `tests/test_grout_engine.py` (+3 testy generycznego groutu), `tests/test_used_tiles.py` (opt-in), `tests/test_grout.py`, `tests/test_cli.py`
+- Scratch (wzorce, w scratchpadzie sesji): `check_coverage.py`, `gen_goldens.py`
+
+## Otwarte pytania
+
+- girih w silniku: jak zamrozić sweep seedów (per wymiary jak `_shape_seed`? stały seed?) i czy domykanie dziur convex-hullem jest deterministyczne — decyzja przy wiringu.
+- truchet: go/no-go po prototypie 1 kafelka `_CurvedMask` (per PLAN_SHAPES).
+- Selekcja finalna kształtów przez usera — po wdrożeniu wszystkich.
+
+## Do MEMORY.md (przeniesiono)
+
+- Repo MEMORY.md: wpis [2026-07-11] — pakiet poprawek UX (grout EN, used_tiles opt-in, generyczny grout polygon), 11 kształtów z lekcjami (pułapka pythagorean, optymalizacja okna multigridu (N/2)·p, wzorzec „pole dominującego kafla ~ base_s²", lekcja testowa o nazwach fikcyjnych).
+- Auto-memory: `project_grout_engine` (presety EN + generyczna gałąź), `project_tile_quality_plan` (used_tiles opt-in), `project_10_shapes_plan` (Fable ×4, archimedesowe ×5, stan „zostało") + indeks MEMORY.md.
+
 ## ═══ Sesja zarchiwizowana [2026-07-11 12:24] ═══
 
 # last_session.md
@@ -123,7 +186,6 @@ Kontekst: pkt 4 planu jakości ZAMKNIĘTY z dowodem A/B (+48.7% ostrości Laplac
 - Repo MEMORY.md: nowy wpis [2026-07-09] w Architekturze — pełna architektura nakładki hires, dryf picsum, bramka LAB, empiria A/B +48.7%, decyzja Sprint 5/ESRGAN; korekta wpisu [2026-07-08] (założenie picsum-seed było błędne).
 - Auto-memory: `project_tile_quality_plan` (plan UKOŃCZONY z dowodem) + NOWY `project_picsum_seed_drift` (dryf seedów, nie proponować picsum-seed jako odzysku); indeks MEMORY.md zsynchronizowany.
 
-
 ## ═══ Sesja zarchiwizowana [2026-07-09 23:37] ═══
 
 # last_session.md
@@ -236,54 +298,3 @@ Kontekst: schematy sunflower są tylko podglądowymi PNG — silnik ich NIE gene
 
 - Repo MEMORY.md: wpis [2026-07-08] — grout flat-L1 domknięty (decyzja A, hexagon_romb wariant 2, META-LEKCJA th-vs-step), rename sunflower, DZI polish, cleanup etykiet.
 - Auto-memory: `project_grout_engine` zaktualizowane (flat-L1 + meta-lekcja + decyzja A); `project_dzi_gui_polish_todo` → ZROBIONE; indeks MEMORY.md zsynchronizowany.
-
-
-## ═══ Sesja zarchiwizowana [2026-07-08 22:10] ═══
-
-# last_session.md
-
-**Sesja:** 2026-07-07 · (Opus 4.8)
-**Status:** ✓ Zakończona poprawnie
-**Punkt odniesienia (git):** d8e03d6 @ main (zsynchronizowane z origin/main; commit stanu tej sesji dochodzi na górze)
-
----
-
-## ▸ NASTĘPNY KROK (zacznij tutaj)
-
-**Grout flat-L1 — zacznij od `spectre` (najprostszy).** W `src/engine_smart.py` dodaj `_grout_cells_flat_spectre(target_w, target_h, base_s)`: iteruj `generate_spectre_tiling(...)`, dla każdego `spec` emituj `(list(spec.points), 0, 0)` (jednakowy group-id ⇒ tylko L1 + ramka). Podłącz w dispatcherze `_grout_cells` (dziś `return None` dla spectre). W `_apply_grout` dla kształtów flat użyj jednej grubości na wszystkich poziomach: `level_w = {1: w, 2: w, 3: w}` (dziś `scale_widths` daje L1<L2<L3 — dla flat to niepożądane), więc rozgałęź: hierarchiczne 4 → `scale_widths(preset, base_s)`; flat → `{1:w,2:w,3:w}` gdzie `w = scale_widths(preset, base_s)[1]`. Dodaj test do `tests/test_grout_engine.py` (spectre: cells != None, wszystkie group-id równe, render z grout != baseline). Potem powtórz dla romb/hexagon_romb/rectangle_3x1/brick_wall (poligon z pętli composite; UWAGA na float-th jak w hexagonie — [[project_grout_engine]]).
-
-Kontekst: werdykt usera „4 z hierarchią + reszta płaska L1" zrealizowany tylko w połowie — hierarchiczna czwórka (square/hexagon/triangle/kites) działa, 5 pozostałych kształtów daje dziś no-op z notą. Spectre ma już jawne poligony, więc jest najtańszym pierwszym krokiem domknięcia.
-
----
-
-## Co zrobiono w tej sesji
-
-- ✓ **Sprzątanie: przerwany /end domknięty** (c41783f): pliki stanu z 2026-07-06 były niezacommitowane i błędnie opisywały sunflower jako urwany WIP — w rzeczywistości domknięty (56590d3+ea4fe49, sunflower ZAMKNIĘTY). last_session.md → ea4fe49, poprawka wpisu w repo MEMORY.md.
-- ✓ **Grout Stage 1 — src/grout.py** (59dd0c7): produkcyjny moduł geometrii (sub7, classify_edges, draw_grout, PRESETS, scale_widths, stable_seed) wydzielony z narzędzia propozycji; usunięta duplikacja; fix determinizmu seeda (crc32 zamiast solonego hash()). +11 testów.
-- ✓ **Grout Stage 2 — border pass w silniku** (ed23955): param `grout_preset` (osobny opt-in tryb; border_mode nietknięty), hierarchia dla square/hexagon/triangle/kites. `grout_preset=None` = bit-w-bit baseline. LEKCJA: hexagon th musi być FLOAT `base_s*2/√3` (int rozjeżdża przekątne → brak wspólnych krawędzi; bug wykryty wizualnie). +9 testów.
-- ✓ **Grout CLI** (e11abde): `--grout PRESET` obok `--border`; batch name suffix `_grout-{preset}`. +2 testy.
-- ✓ **Grout GUI** (f89f159): `CTkOptionMenu` „Hierarchical Grout" w Smart tab; wpięte w podgląd on-demand i render pełny.
-- ✓ **Weryfikacja wizualna** (scratchpad/grout_engine_visual.png) — 4 kształty poprawne. **209 testów zielonych** (było 187; +22). Wszystkie commity WYPCHNIĘTE na origin.
-
-## Co zostało (backlog sesji)
-
-- ⟳ **Grout flat-L1 dla 5 kształtów** (NASTĘPNY KROK; spectre → romb/hexagon_romb/rectangle_3x1/brick_wall).
-- ⟳ **Wiring nowych kształtów** (sunflower×7 + rhombs×3) do silnika → selekcja finalna z PLAN_SHAPES.
-- ⟳ **PLAN_FRACTAL wykonawczy** — start F1a (trójfazowa pętla, golden bit-w-bit).
-- ⟳ Standing: galeria 16K triangle+hexagon (pliki usera); test_dzi + pasek postępu DZI ([[project_dzi_gui_polish_todo]]).
-
-## Aktywne pliki
-
-- `src/grout.py` (NOWY — geometria groutu), `tests/test_grout.py`, `tests/test_grout_engine.py`
-- `src/engine_smart.py` (border pass + `_grout_cells_*` + param grout_preset)
-- `src/cli.py` (--grout), `src/gui.py` (selektor), `src/tools/gen_grout_proposals.py` (import z src.grout)
-
-## Otwarte pytania
-
-- Płaski grout — czy ramka kadru też ma być rysowana (dziś krawędzie ramki = L3), czy tylko krawędzie wewnętrzne? (rozstrzygnąć przy pierwszym flat — spectre).
-- Nazewnictwo finalne schematów grande_* w assets (przy wiringu sunflower do silnika).
-
-## Do MEMORY.md (przeniesiono)
-
-- Repo MEMORY.md: [2026-07-07] — grout WDROŻONY (architektura src/grout.py + border pass 4 kształtów; lekcja float-th hexagonu; offset→axial q=c-(r-(r&1))//2; fix determinizmu crc32); werdykty usera (osobny tryb, 4+flat, follow-up).
-- Auto-memory: nowy `project_grout_engine` (pełna architektura + lekcje + follow-up).
