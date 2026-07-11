@@ -17,6 +17,7 @@ slices the first 75 dimensions, so old and new indexes are both accepted.
 import numpy as np
 import pickle
 import math
+import cmath
 import json
 import threading
 from datetime import datetime
@@ -642,6 +643,160 @@ def _gen_phyllotaxis(engine, target_w, target_h, base_s):
     yield from _graded_sunflower(target_w, target_h, base_s, power=0.5)
 
 
+# --- Deterministic Fable tessellations (pinwheel/cairo/floret/gosper) -------
+# Geometry ported from src/tools/gen_fable_shape_schemes.py (visually verified
+# there; the scheme renderer maps world y straight to canvas y, i.e. y-down,
+# so the coordinates below live directly in image space and the on-screen
+# chirality matches the assets/shape_schemes PNGs). All four are pure
+# constructions (no RNG): scale is chosen so the tile area ~ base_s^2 and the
+# lattice ranges cover the frame; polygons sticking past the frame are cropped
+# (or skipped) by _polygon_sector, exactly like the kites/spectre edge tiles.
+def _lattice_mn_range(t1, t2, target_w, target_h, pad):
+    """Index ranges (m0, m1, n0, n1) so lattice points m*t1 + n*t2 (complex,
+    image px) cover the frame expanded by `pad` px on every side."""
+    det = t1.real * t2.imag - t1.imag * t2.real
+    ms, ns = [], []
+    for c in (complex(-pad, -pad), complex(target_w + pad, -pad),
+              complex(-pad, target_h + pad),
+              complex(target_w + pad, target_h + pad)):
+        ms.append((c.real * t2.imag - c.imag * t2.real) / det)
+        ns.append((t1.real * c.imag - t1.imag * c.real) / det)
+    return (math.floor(min(ms)), math.ceil(max(ms)),
+            math.floor(min(ns)), math.ceil(max(ns)))
+
+
+def _pin_sub(A, B, C):
+    """Subdivide a 1:2:sqrt5 right triangle (right angle at A, |AB| = 2|AC|)
+    into 5 similar copies (Conway-Radin substitution)."""
+    d = C - B
+    F = B + ((A - B).real * d.real + (A - B).imag * d.imag) / abs(d) ** 2 * d
+    M1 = (A + F) / 2
+    M2 = (F + B) / 2
+    M3 = (A + B) / 2
+    return [(F, A, C), (M1, M3, A), (M2, B, M3), (F, M2, M1), (M3, M1, M2)]
+
+
+def _gen_pinwheel(engine, target_w, target_h, base_s):
+    """Conway-Radin pinwheel: 1:2:sqrt5 right triangles subdivided until the
+    short leg ~ base_s. The seed rectangle is tilted 13 degrees (scheme
+    decision: new orientation classes emerge only at unrenderable depths, so
+    the two dominant families are taken off-axis instead) and sized to cover
+    the frame at any tilt. Fully-outside triangles are pruned DURING
+    subdivision (children stay inside the parent), so the oversized seed
+    patch never explodes the tile count."""
+    ctr = complex(target_w / 2.0, target_h / 2.0)
+    R = math.hypot(target_w, target_h) / 2.0 + 2.0 * base_s
+    L = 2.0 * R                     # 2L x L rect centred on ctr covers radius R
+    rot = cmath.exp(1j * math.radians(13))
+
+    def _t(z):                      # seed-rect coords -> tilted image coords
+        return ctr + (z - complex(L, L / 2.0)) * rot
+
+    tris = [(_t(0j), _t(complex(2 * L, 0)), _t(complex(0, L))),
+            (_t(complex(2 * L, L)), _t(complex(0, L)), _t(complex(2 * L, 0)))]
+    depth = max(1, round(math.log(L / base_s) / math.log(math.sqrt(5.0))))
+    pad = float(base_s)
+    for _ in range(depth):
+        nxt = []
+        for (A, B, C) in tris:
+            if (max(A.real, B.real, C.real) < -pad
+                    or min(A.real, B.real, C.real) > target_w + pad
+                    or max(A.imag, B.imag, C.imag) < -pad
+                    or min(A.imag, B.imag, C.imag) > target_h + pad):
+                continue
+            nxt += _pin_sub(A, B, C)
+        tris = nxt
+    for (A, B, C) in tris:
+        yield [(A.real, A.imag), (B.real, B.imag), (C.real, C.imag)]
+
+
+def _gen_cairo(engine, target_w, target_h, base_s):
+    """Cairo pentagonal tiling: 4 congruent equilateral-parameter pentagons
+    around every (i+j even) node of a unit square lattice. Pentagon area is
+    1/2 lattice unit, so scale s = base_s*sqrt(2) keeps tile area ~ base_s^2."""
+    d = (math.sqrt(7.0) - 1.0) / 6.0
+    s = base_s * math.sqrt(2.0)
+    ni = int(target_w / s) + 2
+    nj = int(target_h / s) + 2
+    for i in range(-2, ni + 1):
+        for j in range(-2, nj + 1):
+            if (i + j) % 2 != 0:
+                continue
+            v1 = (i + .5, j + .5 - d)
+            v2 = (i + .5, j + .5 + d)
+            w1r = (i + 1.5 - d, j + .5)   # right neighbour pair, left point
+            w2l = (i - 0.5 + d, j + .5)   # left neighbour pair, right point
+            p1u = (i + .5 - d, j + 1.5)   # upper neighbour pair
+            p2u = (i + .5 + d, j + 1.5)
+            q1d = (i + .5 - d, j - .5)    # lower neighbour pair
+            q2d = (i + .5 + d, j - .5)
+            pents = [
+                [v1, (i + 1, j), w1r, (i + 1, j + 1), v2],           # right
+                [(i, j), v1, v2, (i, j + 1), w2l],                   # left
+                [v2, (i + 1, j + 1), p2u, p1u, (i, j + 1)],          # up
+                [v1, (i, j), q1d, q2d, (i + 1, j)],                  # down
+            ]
+            for p in pents:
+                yield [(x * s, y * s) for x, y in p]
+
+
+def _gen_floret(engine, target_w, target_h, base_s):
+    """Floret pentagonal (dual snub hexagonal): 6-petal pinwheel flowers on a
+    hex lattice. Petal area is ~1.01 lattice units, so scale s = base_s."""
+    s = float(base_s)
+    petal = [0j, complex(1, 1 / math.sqrt(3)),
+             complex(1.5, 0.5 / math.sqrt(3)),
+             complex(1.5, -0.5 / math.sqrt(3)),
+             complex(1, -1 / math.sqrt(3))]
+    t1 = complex(2.5, math.sqrt(3) / 2) * s
+    t2 = complex(2.0, -math.sqrt(3)) * s
+    m0, m1, n0, n1 = _lattice_mn_range(t1, t2, target_w, target_h,
+                                       pad=2.0 * s)   # flower radius ~1.8 units
+    rots = [cmath.exp(1j * math.pi / 3 * k) for k in range(6)]
+    for m in range(m0, m1 + 1):
+        for n in range(n0, n1 + 1):
+            centre = m * t1 + n * t2
+            for rot in rots:
+                yield [((centre + v * rot * s).real,
+                        (centre + v * rot * s).imag) for v in petal]
+
+
+def _gosper_edge(a, b, depth):
+    """Replace segment a->b with the Gosper island generator, recursively."""
+    if depth == 0:
+        return [a]
+    v = b - a
+    r = 1 / math.sqrt(7.0)
+    m1 = r * cmath.exp(1j * math.radians(19.1066))
+    m2 = r * cmath.exp(1j * math.radians(-40.8934))
+    p1 = a + v * m1
+    p2 = p1 + v * m2
+    return (_gosper_edge(a, p1, depth - 1)
+            + _gosper_edge(p1, p2, depth - 1)
+            + _gosper_edge(p2, b, depth - 1))
+
+
+def _gen_gosper(engine, target_w, target_h, base_s):
+    """Gosper islands (hexflake): hexagons with a depth-3 fractal boundary
+    (162-gon) on the triangular lattice they tile. Island area equals the
+    base hexagon's (3*sqrt(3)/2 units), so s = base_s/sqrt(3*sqrt(3)/2)
+    keeps tile area ~ base_s^2."""
+    s = base_s / math.sqrt(1.5 * math.sqrt(3.0))
+    hexv = [cmath.exp(1j * math.radians(30 + 60 * k)) for k in range(6)]
+    island = []
+    for k in range(6):
+        island += _gosper_edge(hexv[k], hexv[(k + 1) % 6], 3)
+    t1 = complex(math.sqrt(3.0), 0) * s
+    t2 = complex(math.sqrt(3.0) / 2, 1.5) * s
+    m0, m1, n0, n1 = _lattice_mn_range(t1, t2, target_w, target_h,
+                                       pad=1.5 * s)   # boundary bulge ~1.2 units
+    for m in range(m0, m1 + 1):
+        for n in range(n0, n1 + 1):
+            centre = m * t1 + n * t2
+            yield [((centre + p * s).real, (centre + p * s).imag)
+                   for p in island]
+
+
 @dataclass(frozen=True)
 class ShapeSpec:
     """Descriptor for one tile shape.
@@ -686,6 +841,10 @@ SHAPE_MODES = {
     "rhombs_star":              ShapeSpec("polygon", _gen_rhombs_star, aa=4),
     "voronoi":                  ShapeSpec("polygon", _gen_voronoi, aa=4, seeded=True),
     "phyllotaxis":              ShapeSpec("polygon", _gen_phyllotaxis, aa=4),
+    "pinwheel":                 ShapeSpec("polygon", _gen_pinwheel, aa=4),
+    "cairo":                    ShapeSpec("polygon", _gen_cairo, aa=4),
+    "floret":                   ShapeSpec("polygon", _gen_floret, aa=4),
+    "gosper":                   ShapeSpec("polygon", _gen_gosper, aa=4),
 }
 
 

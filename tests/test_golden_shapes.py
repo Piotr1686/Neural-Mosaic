@@ -69,6 +69,17 @@ GOLDEN = {
     ("voronoi", True): "44a665d467d0ede4666480fb8321f45ee7a0e60e77bad913e0e7e286df9a99c9",
     ("phyllotaxis", False): "2d6f0e07782ed19945bfbd135faa42aa0bb3bdfa5545dffecb8ecde83ae42245",
     ("phyllotaxis", True): "70161b6c52e4b54077e4bf6ada6b832eb92a6858e09c9bb7e27ff2eb553e15a8",
+    # Deterministic Fable tessellations (2026-07-11): geometry ported from
+    # gen_fable_shape_schemes.py, pure constructions (no RNG). Hashes lock the
+    # first render, verified identical across two separate processes.
+    ("pinwheel", False): "849334cb7fb68dfbea20db7b241343fa19ff45b2fc98fdf0ab472ff490f5b631",
+    ("pinwheel", True): "6ddc04111b5666c51ae243a3a67805fc5b48af28b72b6ebee9cc75a55f0b6360",
+    ("cairo", False): "ee0a3e2805ab523ca9937d36d2424c450ac9cceb5bae4fbc1e4f8e58a24882b6",
+    ("cairo", True): "bdbf84f6026859d22c91d2fc5ac494eb699c769b52674164e45facf74dc1dd2c",
+    ("floret", False): "6dbdb8df7b6ce1f04ad46132e7264e0eacc5e8f1c2591a1747c391c65a2f234e",
+    ("floret", True): "ecb63302aa87873000f21265c55b4c1506ce6ebb4fa273c94410ce7b13542bfd",
+    ("gosper", False): "538de3f57939ff27cbd028a80cf6c6641bd58117baa1fcf940fe3376e6787b4a",
+    ("gosper", True): "fcbab1c1ee1255eb96ce6ca559925c14e5844770621f2a0d830e3e6a00e7e45e",
 }
 
 
