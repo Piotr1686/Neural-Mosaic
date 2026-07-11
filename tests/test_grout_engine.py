@@ -86,8 +86,10 @@ def test_kites_level2_is_parent_hexagon_of_six():
 def test_unsupported_shapes_return_none():
     e = _engine()
     # only shapes absent from the SHAPE_MODES registry hit the dispatcher's
-    # default None path (the caller then skips the pass).
-    for shape in ("penrose", "girih"):
+    # default None path (the caller then skips the pass). Deliberately fake
+    # names: every real planned shape eventually joins the registry (penrose
+    # did exactly that and broke the previous version of this test).
+    for shape in ("no_such_shape", "definitely_not_a_shape"):
         assert e._grout_cells(shape, 400, 300, 100) is None, shape
 
 
@@ -295,5 +297,5 @@ def test_grout_is_noop_for_unsupported_shape():
     e = _engine()
     img = Image.new("RGB", (200, 150), "white")
     before = np.asarray(img).copy()
-    e._apply_grout(img, "penrose", 200, 150, 60, "medium")
+    e._apply_grout(img, "no_such_shape", 200, 150, 60, "medium")
     assert np.array_equal(before, np.asarray(img))

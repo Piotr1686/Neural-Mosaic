@@ -94,6 +94,13 @@ GOLDEN = {
     ("pythagorean", True): "112af310279de9d5eb3354d10c0e635cb82fef8de699fb9c302cee05535ec024",
     ("sunburst", False): "36997d500713f7d41dd38137eaf038ef9b6b9e7c925350be2806ab6edcf8ddb5",
     ("sunburst", True): "0949671235dd370533908e49bee1d954ef404423eaa3e59ea3d9054d29b9e7d5",
+    # De Bruijn multigrid duals (2026-07-11): penrose P3 (pentagrid N=5,
+    # gamma sum=1) + ammann_beenker (N=4). Deterministic (fixed generic
+    # offsets, no RNG); hashes lock the first render, cross-process verified.
+    ("penrose", False): "107789f68531f74f9c2147a8d44b1a6bff536d149622bf8bb406d31aa95c41dc",
+    ("penrose", True): "bdcda867688ea52ece9911555455e10f7da2876523fa3e32acb7715cb643293e",
+    ("ammann_beenker", False): "ccf9124eeb90c012eaa5aca4824a8f6fbea447b0dd083f92681686104077fba2",
+    ("ammann_beenker", True): "20b42e242ca75161aaabc7d47caa21cbc14c0a2e915186c21cce66f8669a6b0f",
 }
 
 

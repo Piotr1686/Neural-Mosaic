@@ -887,6 +887,77 @@ def _gen_rhombitrihex(engine, target_w, target_h, base_s):
                 yield [(z.real, z.imag) for z in tri]
 
 
+def _multigrid_dual(N, zeta, gamma, target_w, target_h, s):
+    """De Bruijn multigrid dual -> aperiodic rhombic tiling, unit edge scaled
+    to `s` px, centred on the frame centre (image space, no flip — the scheme
+    tool rendered y-down too). Ported from the validated gen_ammann_beenker
+    construction (incl. its Cramer solution — the sign convention there is the
+    documented multigrid trap; do not rederive).
+
+    Every grid-line intersection (k,l,m,n) duals to one rhomb at ~(N/2)*p
+    (the standard sum identity for symmetric star vectors), so the p-window is
+    the frame rect shrunk by N/2 (+2 units slack) and the line indices only
+    need to reach the window's diagonal — that bound is what makes 16K frames
+    iterate in ~1e5 intersections instead of ~1e6."""
+    cx, cy = target_w / 2.0, target_h / 2.0
+    hw = cx / s + 1.5                    # world half-extents (+ tile pad)
+    hh = cy / s + 1.5
+    dual = N / 2.0
+    pw = hw / dual + 2.0                 # p-window half-extents
+    ph = hh / dual + 2.0
+    mrange = int(math.hypot(pw, ph)) + 2
+    for k in range(N):
+        ak = zeta[k].conjugate()
+        for l in range(k + 1, N):
+            al = zeta[l].conjugate()
+            det = ak.real * al.imag - ak.imag * al.real
+            if abs(det) < 1e-12:
+                continue
+            for m in range(-mrange, mrange + 1):
+                bk = m + gamma[k]
+                for n in range(-mrange, mrange + 1):
+                    bl = n + gamma[l]
+                    px = (bk * al.imag - bl * ak.imag) / det
+                    py = (bk * al.real - bl * ak.real) / det
+                    if abs(px) > pw or abs(py) > ph:
+                        continue
+                    p = complex(px, py)
+                    K = [0] * N
+                    for j in range(N):
+                        if j == k or j == l:
+                            continue
+                        K[j] = math.ceil((p * zeta[j].conjugate()).real
+                                         - gamma[j])
+                    basev = sum(K[j] * zeta[j] for j in range(N)
+                                if j not in (k, l))
+                    verts = [basev + (m + a) * zeta[k] + (n + b) * zeta[l]
+                             for a, b in ((0, 0), (1, 0), (1, 1), (0, 1))]
+                    xs = [v.real for v in verts]
+                    ys = [v.imag for v in verts]
+                    if (max(xs) < -hw or min(xs) > hw
+                            or max(ys) < -hh or min(ys) > hh):
+                        continue
+                    yield [(cx + v.real * s, cy + v.imag * s) for v in verts]
+
+
+def _gen_ammann_beenker(engine, target_w, target_h, base_s):
+    """Ammann-Beenker (8-fold): squares + 45deg rhombs, multigrid N=4.
+    Mean tile area ~0.83*edge^2 -> edge = 1.1*base_s."""
+    zeta = [cmath.exp(1j * math.pi * k / 4) for k in range(4)]
+    gamma = [0.13, 0.27, 0.41, 0.19]     # validated generic offsets (scheme)
+    yield from _multigrid_dual(4, zeta, gamma, target_w, target_h,
+                               1.1 * base_s)
+
+
+def _gen_penrose(engine, target_w, target_h, base_s):
+    """Penrose P3 (5-fold): fat 72deg + thin 36deg rhombs, pentagrid N=5.
+    gamma sums to 1.0 (the canonical class). Mean tile area ~0.81*edge^2."""
+    zeta = [cmath.exp(2j * math.pi * k / 5) for k in range(5)]
+    gamma = [0.05, 0.15, 0.25, 0.35, 0.20]
+    yield from _multigrid_dual(5, zeta, gamma, target_w, target_h,
+                               1.1 * base_s)
+
+
 def _gen_pythagorean(engine, target_w, target_h, base_s):
     """Pythagorean tiling: axis-aligned big (b) and small (b/2) squares in the
     classic staircase pattern, lattice t1=(b, s), t2=(-s, b). Mean tile area
@@ -1007,6 +1078,8 @@ SHAPE_MODES = {
     "rhombitrihex":             ShapeSpec("polygon", _gen_rhombitrihex, aa=4),
     "pythagorean":              ShapeSpec("polygon", _gen_pythagorean, aa=4),
     "sunburst":                 ShapeSpec("polygon", _gen_sunburst, aa=4),
+    "penrose":                  ShapeSpec("polygon", _gen_penrose, aa=4),
+    "ammann_beenker":           ShapeSpec("polygon", _gen_ammann_beenker, aa=4),
 }
 
 
