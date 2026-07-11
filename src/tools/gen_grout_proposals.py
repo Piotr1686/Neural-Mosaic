@@ -27,7 +27,7 @@ edge drawn at the width of the HIGHEST level whose group ids differ across it
 (frame-boundary edges use their cell's highest level).
 
 User verdict 2026-07-05: grout thickness must be USER-SELECTABLE. Each shape
-is therefore rendered in three width presets (cienki / sredni / gruby); in the
+is therefore rendered in three width presets (thin / medium / thick); in the
 engine implementation the preset becomes a GUI/CLI parameter (one "Grout
 width" control scaling all levels, level ratios kept from the chosen preset).
 
@@ -57,7 +57,7 @@ GROUT = (0, 0, 0)
 # Width presets per level at supersampled scale (final px = half of these).
 # Canonical widths + ratios live in src.grout.PRESETS; kept as (name, dict)
 # pairs here for the montage's row-per-preset ordering.
-PRESETS = [(name, _PRESET_WIDTHS[name]) for name in ("cienki", "sredni", "gruby")]
+PRESETS = [(name, _PRESET_WIDTHS[name]) for name in ("thin", "medium", "thick")]
 
 
 def vary(rng, base, amount=14):

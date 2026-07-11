@@ -85,10 +85,35 @@ def test_kites_level2_is_parent_hexagon_of_six():
 
 def test_unsupported_shapes_return_none():
     e = _engine()
-    # exotic shapes without an approved grout geometry hit the dispatcher's
+    # only shapes absent from the SHAPE_MODES registry hit the dispatcher's
     # default None path (the caller then skips the pass).
-    for shape in ("penrose", "voronoi", "girih"):
+    for shape in ("penrose", "girih"):
         assert e._grout_cells(shape, 400, 300, 100) is None, shape
+
+
+def test_polygon_registry_shapes_get_flat_cells():
+    # Registry polygon shapes without an explicit branch fall through to the
+    # generic case: their SHAPE_MODES generator re-yields the tile polygons as
+    # flat cells (uniform group ids -> L1 seams, L3 frame).
+    e = _engine()
+    for shape in ("voronoi", "phyllotaxis", "sunflower_grande", "rhombs_star"):
+        cells = e._grout_cells(shape, 400, 300, 100)
+        assert cells, shape
+        assert all(len(poly) >= 3 for poly, _, _ in cells), shape
+        assert {(g2, g3) for _, g2, g3 in cells} == {(0, 0)}, shape
+
+
+def test_polygon_grout_cells_match_render_geometry():
+    # The grout pass re-runs the same generator with the same dimensions, so
+    # the cells must be identical polys to what the render used (seeded
+    # voronoi included) — grout lines land exactly on the tile seams.
+    from src.engine_smart import SHAPE_MODES
+    e = _engine()
+    for shape in ("voronoi", "sunflower_grande"):
+        gen_polys = [list(p) for p in
+                     SHAPE_MODES[shape].generator(e, 400, 300, 100)]
+        cells = e._grout_cells(shape, 400, 300, 100)
+        assert [poly for poly, _, _ in cells] == gen_polys, shape
 
 
 def test_spectre_flat_cells_share_one_group():
@@ -195,7 +220,7 @@ def test_grout_none_is_identical_to_baseline(tmp_path):
 def test_grout_preset_adds_black_lines(tmp_path):
     e = _small_engine(tmp_path)
     base = np.asarray(_preview(e, tmp_path, "square", grout_preset=None))
-    grouted = np.asarray(_preview(e, tmp_path, "square", grout_preset="gruby"))
+    grouted = np.asarray(_preview(e, tmp_path, "square", grout_preset="thick"))
     assert base.shape == grouted.shape
     assert not np.array_equal(base, grouted)
     near_black = lambda a: int((a.sum(axis=2) < 30).sum())
@@ -208,7 +233,7 @@ def test_grout_flat_spectre_adds_black_lines(tmp_path):
     # gains black pixels.
     e = _small_engine(tmp_path)
     base = np.asarray(_preview(e, tmp_path, "spectre", grout_preset=None))
-    grouted = np.asarray(_preview(e, tmp_path, "spectre", grout_preset="gruby"))
+    grouted = np.asarray(_preview(e, tmp_path, "spectre", grout_preset="thick"))
     assert base.shape == grouted.shape
     assert not np.array_equal(base, grouted)
     near_black = lambda a: int((a.sum(axis=2) < 30).sum())
@@ -218,7 +243,7 @@ def test_grout_flat_spectre_adds_black_lines(tmp_path):
 def test_grout_flat_romb_adds_black_lines(tmp_path):
     e = _small_engine(tmp_path)
     base = np.asarray(_preview(e, tmp_path, "romb", grout_preset=None))
-    grouted = np.asarray(_preview(e, tmp_path, "romb", grout_preset="gruby"))
+    grouted = np.asarray(_preview(e, tmp_path, "romb", grout_preset="thick"))
     assert base.shape == grouted.shape
     assert not np.array_equal(base, grouted)
     near_black = lambda a: int((a.sum(axis=2) < 30).sum())
@@ -228,7 +253,7 @@ def test_grout_flat_romb_adds_black_lines(tmp_path):
 def test_grout_flat_rectangle_3x1_adds_black_lines(tmp_path):
     e = _small_engine(tmp_path)
     base = np.asarray(_preview(e, tmp_path, "rectangle_3x1", grout_preset=None))
-    grouted = np.asarray(_preview(e, tmp_path, "rectangle_3x1", grout_preset="gruby"))
+    grouted = np.asarray(_preview(e, tmp_path, "rectangle_3x1", grout_preset="thick"))
     assert not np.array_equal(base, grouted)
     near_black = lambda a: int((a.sum(axis=2) < 30).sum())
     assert near_black(grouted) > near_black(base)
@@ -237,7 +262,7 @@ def test_grout_flat_rectangle_3x1_adds_black_lines(tmp_path):
 def test_grout_flat_brick_wall_adds_black_lines(tmp_path):
     e = _small_engine(tmp_path)
     base = np.asarray(_preview(e, tmp_path, "brick_wall", grout_preset=None))
-    grouted = np.asarray(_preview(e, tmp_path, "brick_wall", grout_preset="gruby"))
+    grouted = np.asarray(_preview(e, tmp_path, "brick_wall", grout_preset="thick"))
     assert not np.array_equal(base, grouted)
     near_black = lambda a: int((a.sum(axis=2) < 30).sum())
     assert near_black(grouted) > near_black(base)
@@ -246,7 +271,19 @@ def test_grout_flat_brick_wall_adds_black_lines(tmp_path):
 def test_grout_flat_hexagon_romb_adds_black_lines(tmp_path):
     e = _small_engine(tmp_path)
     base = np.asarray(_preview(e, tmp_path, "hexagon_romb", grout_preset=None))
-    grouted = np.asarray(_preview(e, tmp_path, "hexagon_romb", grout_preset="gruby"))
+    grouted = np.asarray(_preview(e, tmp_path, "hexagon_romb", grout_preset="thick"))
+    assert not np.array_equal(base, grouted)
+    near_black = lambda a: int((a.sum(axis=2) < 30).sum())
+    assert near_black(grouted) > near_black(base)
+
+
+def test_grout_flat_voronoi_adds_black_lines(tmp_path):
+    # A registry polygon shape (generic grout branch): seams get the flat
+    # uniform-width overlay, same semantics as spectre/romb above.
+    e = _small_engine(tmp_path)
+    base = np.asarray(_preview(e, tmp_path, "voronoi", grout_preset=None))
+    grouted = np.asarray(_preview(e, tmp_path, "voronoi", grout_preset="thick"))
+    assert base.shape == grouted.shape
     assert not np.array_equal(base, grouted)
     near_black = lambda a: int((a.sum(axis=2) < 30).sum())
     assert near_black(grouted) > near_black(base)
@@ -258,5 +295,5 @@ def test_grout_is_noop_for_unsupported_shape():
     e = _engine()
     img = Image.new("RGB", (200, 150), "white")
     before = np.asarray(img).copy()
-    e._apply_grout(img, "penrose", 200, 150, 60, "sredni")
+    e._apply_grout(img, "penrose", 200, 150, 60, "medium")
     assert np.array_equal(before, np.asarray(img))

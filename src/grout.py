@@ -6,7 +6,7 @@ Hierarchical grout (multi-level tile borders) — engine-agnostic geometry.
 Productionised home of the group-id + edge-classification logic first
 prototyped in ``src/tools/gen_grout_proposals.py``. User verdict 2026-07-05:
 grout thickness must be USER-SELECTABLE, so widths are expressed as presets
-(cienki / sredni / gruby) that the caller scales to its own tile size. The
+(thin / medium / thick) that the caller scales to its own tile size. The
 engine's border pass and the proposal tool both import from here so the
 geometry has a single definition (the proposal docstring's stated plan:
 "after the verdict the same group-id logic moves into the engine").
@@ -43,11 +43,11 @@ import zlib
 # to its own tile size via ``scale_widths``. Ratios between levels are the
 # user-facing "look" and are preserved by the scaling.
 PRESETS = {
-    "cienki": {1: 2, 2: 5,  3: 10},
-    "sredni": {1: 3, 2: 8,  3: 16},
-    "gruby":  {1: 5, 2: 12, 3: 24},
+    "thin":   {1: 2, 2: 5,  3: 10},
+    "medium": {1: 3, 2: 8,  3: 16},
+    "thick":  {1: 5, 2: 12, 3: 24},
 }
-DEFAULT_PRESET = "sredni"
+DEFAULT_PRESET = "medium"
 
 # Tile edge (px) the preset widths above are tuned for. ``scale_widths`` keeps
 # grout width proportional to tile edge length so the same preset reads the

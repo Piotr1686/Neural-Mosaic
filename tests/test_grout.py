@@ -87,14 +87,14 @@ def test_g3_difference_wins_over_matching_g2():
 # width presets / scaling
 # ---------------------------------------------------------------------------
 def test_scale_widths_is_proportional_and_at_least_one_px():
-    at_ref = grout.scale_widths("sredni", grout.REFERENCE_TILE_PX)
-    assert at_ref == grout.PRESETS["sredni"]            # identity at reference
+    at_ref = grout.scale_widths("medium", grout.REFERENCE_TILE_PX)
+    assert at_ref == grout.PRESETS["medium"]            # identity at reference
 
-    bigger = grout.scale_widths("sredni", grout.REFERENCE_TILE_PX * 2)
+    bigger = grout.scale_widths("medium", grout.REFERENCE_TILE_PX * 2)
     for lvl in (1, 2, 3):
-        assert bigger[lvl] == round(grout.PRESETS["sredni"][lvl] * 2)
+        assert bigger[lvl] == round(grout.PRESETS["medium"][lvl] * 2)
 
-    tiny = grout.scale_widths("cienki", 1.0)
+    tiny = grout.scale_widths("thin", 1.0)
     assert all(w >= 1 for w in tiny.values())           # never vanishes
 
 

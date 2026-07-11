@@ -27,7 +27,7 @@ _RESOLUTIONS = ["2K", "4K", "8K", "16K"]
 # (adding a shape is a one-line edit there; the old hardcoded copy drifted).
 from .engine_smart import shape_names as _shape_names
 _SMART_SHAPES = _shape_names()
-_GROUT_PRESETS = ["cienki", "sredni", "gruby"]   # mirrors src.grout.PRESETS
+_GROUT_PRESETS = ["thin", "medium", "thick"]   # mirrors src.grout.PRESETS
 _TYPO_MODES = ["black_on_white", "white_on_black"]
 _FONT_GROUPS = [
     "A_cjk", "B_ancient", "C_symbols",
@@ -112,6 +112,11 @@ def _add_smart_args(p: argparse.ArgumentParser) -> None:
     sg.add_argument(
         "--edge-aware", action="store_true", dest="edge_aware",
         help="Use edge-aware matching (requires 79-dim index built with edge features).",
+    )
+    sg.add_argument(
+        "--save-used-tiles", action="store_true", dest="save_used_tiles",
+        help="Write <stem>_used_tiles.json beside the mosaic (input for "
+             "the hi-res upgrade tool src.tools.upgrade_tiles).",
     )
 
 
@@ -321,6 +326,7 @@ def _render_smart(engine, input_path: Path, output_path: Path, args: argparse.Na
         blend_strength=args.blend,
         tint_strength=args.tint,
         grout_preset=args.grout,
+        save_used_tiles=args.save_used_tiles,
     )
 
 

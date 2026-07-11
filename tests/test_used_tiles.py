@@ -7,7 +7,8 @@ These tests lock:
 * _used_tiles_report -> only count>0, sorted by count desc then path,
 * _write_used_tiles  -> JSON beside the mosaic, correct totals, no-op without
                         counts,
-* create_mosaic      -> writes the report; sum of counts is consistent,
+* create_mosaic      -> writes the report only with save_used_tiles=True
+                        (opt-in, default OFF); sum of counts is consistent,
 * render_preview     -> writes NO file (stays a no-I/O path).
 """
 import json
@@ -110,7 +111,8 @@ def test_create_mosaic_writes_report(tmp_path):
 
     out = tmp_path / "out.jpg"
     # 2K + high tile_scale keeps the sector count (and runtime) small.
-    e.create_mosaic(target, out, "2K", "square", tile_scale=3.0)
+    e.create_mosaic(target, out, "2K", "square", tile_scale=3.0,
+                    save_used_tiles=True)
 
     assert out.exists()
     json_path = tmp_path / "out_used_tiles.json"
@@ -119,6 +121,23 @@ def test_create_mosaic_writes_report(tmp_path):
     assert data["total_placements"] > 0
     assert data["total_placements"] == sum(t["count"] for t in data["tiles"])
     assert data["unique_tiles"] <= len(e.paths)
+
+
+def test_create_mosaic_default_writes_no_report(tmp_path):
+    # save_used_tiles defaults to False: routine renders must not litter the
+    # output directory with JSON reports.
+    lib = tmp_path / "lib"
+    lib.mkdir()
+    e = _make_engine(lib)
+
+    target = tmp_path / "target.png"
+    Image.new("RGB", (160, 120), (90, 90, 90)).save(target)
+
+    out = tmp_path / "plain.jpg"
+    e.create_mosaic(target, out, "2K", "square", tile_scale=3.0)
+
+    assert out.exists()
+    assert list(tmp_path.rglob("*_used_tiles.json")) == []
 
 
 def test_preview_writes_no_report(tmp_path):

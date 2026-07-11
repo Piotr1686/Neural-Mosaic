@@ -411,16 +411,24 @@ class App(ctk.CTk):
         # maps to border_mode (tiles rendered at 94% of the cell -> uniform
         # black gap); "Grout: ..." maps to grout_preset (lines drawn on the
         # finished mosaic — hierarchical L1/L2/L3 for square/hexagon/triangle/
-        # kites, flat single-width for other grid shapes; _apply_grout picks
+        # kites, flat single-width for all other shapes; _apply_grout picks
         # the mode per shape). The engine still accepts both independently;
         # the GUI deliberately exposes them as mutually exclusive to avoid
         # the confusing checkbox+dropdown combinatorics.
         ctk.CTkLabel(frame, text="Tile Borders").pack(pady=(10, 0))
         self.combo_borders = ctk.CTkOptionMenu(
             frame, values=["Off", "Gap (uniform)",
-                           "Grout: cienki", "Grout: sredni", "Grout: gruby"])
+                           "Grout: thin", "Grout: medium", "Grout: thick"])
         self.combo_borders.set("Off")
         self.combo_borders.pack(pady=5)
+
+        # Opt-in used-tiles report: the JSON is only needed as input for the
+        # hi-res upgrade loop (src.tools.upgrade_tiles), so routine renders
+        # keep the output directory clean by default.
+        self.check_used_tiles = ctk.CTkCheckBox(
+            frame, text="Save Used-Tiles Report  (tile upgrade)")
+        self.check_used_tiles.deselect()
+        self.check_used_tiles.pack(pady=5)
 
         ctk.CTkLabel(frame, text="POST-PROCESSING",
                      font=("Arial", 12, "bold")).pack(pady=(20, 5))
@@ -1072,6 +1080,7 @@ class App(ctk.CTk):
         border_mode, grout_preset = self._border_settings()
         blend_strength = int((self.seg_blend.get() or "0%").replace("%", "")) / 100.0
         tint_strength = int((self.seg_tint.get() or "0%").replace("%", "")) / 100.0
+        save_used_tiles = bool(self.check_used_tiles.get())
 
         if res in ("8K", "16K"):
             self.log(f"NOTE: {res} rendering requires ~2-4 GB free RAM. "
@@ -1097,6 +1106,7 @@ class App(ctk.CTk):
                     tile_scale=scale, border_mode=border_mode,
                     blend_strength=blend_strength, tint_strength=tint_strength,
                     grout_preset=grout_preset,
+                    save_used_tiles=save_used_tiles,
                     progress_cb=_progress, cancel_event=cancel_event,
                 )
                 self.log("DONE! Smart Mosaic saved.")

@@ -339,9 +339,9 @@ class TestBatchOutputNaming:
     def test_grout_preset_is_in_name(self, tmp_path):
         # keeps grout / no-grout renders distinct for skip-if-exists
         args = self._make_args(engine="smart", shape="hexagon", res="4K",
-                               grout="sredni")
+                               grout="medium")
         out = cli._batch_output_path(tmp_path, "photo", args)
-        assert out.name == "photo_smart_4K_hexagon_grout-sredni.jpg"
+        assert out.name == "photo_smart_4K_hexagon_grout-medium.jpg"
 
     def test_no_grout_omits_suffix(self, tmp_path):
         args = self._make_args(engine="smart", shape="hexagon", res="4K",

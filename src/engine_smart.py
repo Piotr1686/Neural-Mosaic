@@ -948,13 +948,18 @@ class SmartEngine:
         print(f"Used-tiles report: {json_path.name} "
               f"({len(report)} unique tiles, {payload['total_placements']} placements)")
 
-    def create_mosaic(self, target_path, output_path, resolution_key, shape_mode, tile_scale, border_mode=False, blend_strength=0.0, tint_strength=0.0, grout_preset=None, progress_cb=None, cancel_event=None):
+    def create_mosaic(self, target_path, output_path, resolution_key, shape_mode, tile_scale, border_mode=False, blend_strength=0.0, tint_strength=0.0, grout_preset=None, save_used_tiles=False, progress_cb=None, cancel_event=None):
         """Public API — resolves resolution_key and delegates to _do_render.
 
-        ``grout_preset`` (None | "cienki"/"sredni"/"gruby") is an independent
+        ``grout_preset`` (None | "thin"/"medium"/"thick") is an independent
         opt-in border pass: when set, hierarchical grout lines are drawn on the
         finished mosaic (see _do_render). Orthogonal to ``border_mode`` (the
         tile-shrink gap), which is left untouched.
+
+        ``save_used_tiles`` (default False) writes ``<stem>_used_tiles.json``
+        beside the mosaic — the input for the hi-res upgrade tool
+        (``python -m src.tools.upgrade_tiles``). Off by default so routine
+        renders don't litter the output directory.
         """
         if not self.paths:
             print("ERROR: Index not loaded.")
@@ -975,7 +980,8 @@ class SmartEngine:
         result.save(output_path, **save_kwargs)
 
         # Report which tiles were used — input for the hi-res upgrade tool.
-        self._write_used_tiles(output_path, shape_mode)
+        if save_used_tiles:
+            self._write_used_tiles(output_path, shape_mode)
 
     def render_preview(self, target_path, short_edge=512, shape_mode="hexagon_romb",
                        tile_scale=1.0, border_mode=False, grout_preset=None):
@@ -1143,8 +1149,12 @@ class SmartEngine:
         (y down). Cells reproduce the NOMINAL tile geometry (the same step
         formulas the composite uses) so grout lines land on the tile seams;
         the composite's integer mask-truncation differs by <1 px, well inside
-        the grout line width. Returns None for shapes without an approved
-        grouping — the caller then skips the hierarchical pass.
+        the grout line width. Registry polygon shapes without an explicit
+        branch fall through to the generic case: their SHAPE_MODES generator
+        re-yields the exact tile polygons (deterministic for the same
+        dimensions, incl. the seeded voronoi), so flat grout lands precisely
+        on the seams with no second geometry definition. Returns None only
+        for shapes unknown to the registry — the caller then skips the pass.
         """
         if shape_mode == "square":
             return self._grout_cells_square(target_w, target_h, base_s)
@@ -1169,6 +1179,12 @@ class SmartEngine:
                 float(base_s // 2))
         if shape_mode == "hexagon_romb":
             return self._grout_cells_flat_hexagon_romb(target_w, target_h, base_s)
+        spec = SHAPE_MODES.get(shape_mode)
+        if spec is not None and spec.kind == "polygon":
+            # Uniform (g2, g3) -> every interior seam is L1, frame closes at
+            # L3; _apply_grout then draws these flat (single width).
+            return [(list(poly), 0, 0)
+                    for poly in spec.generator(self, target_w, target_h, base_s)]
         return None
 
     def _grout_cells_square(self, target_w, target_h, base_s):
