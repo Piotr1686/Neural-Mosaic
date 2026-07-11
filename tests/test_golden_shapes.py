@@ -80,6 +80,20 @@ GOLDEN = {
     ("floret", True): "ecb63302aa87873000f21265c55b4c1506ce6ebb4fa273c94410ce7b13542bfd",
     ("gosper", False): "538de3f57939ff27cbd028a80cf6c6641bd58117baa1fcf940fe3376e6787b4a",
     ("gosper", True): "fcbab1c1ee1255eb96ce6ca559925c14e5844770621f2a0d830e3e6a00e7e45e",
+    # Archimedean tessellations + sunburst (2026-07-11): rebuilt from the
+    # scheme PNGs (original generator code was lost with the Opus scratchpad).
+    # Pure constructions (no RNG); hashes lock the first render, verified
+    # identical across two separate processes.
+    ("trunc_square", False): "9d29997b93a6d429676e3e00d1fb34795ebd9c92e1efc98a24be40e6ec04c88d",
+    ("trunc_square", True): "9c4630fe5e7bdf93107999fbed26d5a8243664c9d193b1fa8df19f8d4260bc6a",
+    ("trunc_hex", False): "dfcc610fb2cb4bf5977faa785ba5480fbe797675fb67437a55f68201899ac29e",
+    ("trunc_hex", True): "f7374628b0e61420253e5a15990ab83e305327e744042f79449c22979ac8acc6",
+    ("rhombitrihex", False): "250c47b38741c2c8b4598f4beb0464d5125339974d4b87e323ced60bda5170fa",
+    ("rhombitrihex", True): "9a655d0a8b08c0ffc3ad353f8296afe818ad1db7eecdc77540cf661d2773a0a7",
+    ("pythagorean", False): "ed656e63f7eecebb19d1eb3185b742c4316ec0fd1c5f787e4400b5cc97c5d78f",
+    ("pythagorean", True): "112af310279de9d5eb3354d10c0e635cb82fef8de699fb9c302cee05535ec024",
+    ("sunburst", False): "36997d500713f7d41dd38137eaf038ef9b6b9e7c925350be2806ab6edcf8ddb5",
+    ("sunburst", True): "0949671235dd370533908e49bee1d954ef404423eaa3e59ea3d9054d29b9e7d5",
 }
 
 

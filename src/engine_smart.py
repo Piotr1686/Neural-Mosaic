@@ -797,6 +797,163 @@ def _gen_gosper(engine, target_w, target_h, base_s):
                    for p in island]
 
 
+# --- Archimedean tessellations + sunburst (rebuilt from the scheme PNGs) ----
+# The original Opus scratchpad for these five was lost; only the approved
+# assets/shape_schemes PNGs remained, so the geometry below is a fresh
+# derivation matched visually against those PNGs (orientation, proportions).
+# Same conventions as the Fable four: image space y-down, tile area ~ base_s^2
+# (keyed to the DOMINANT tile of mixed tilings), pure constructions (no RNG).
+def _gen_trunc_square(engine, target_w, target_h, base_s):
+    """Truncated square tiling 4.8.8: axis-aligned regular octagons on a
+    square lattice + 45deg-rotated squares in the gaps. Octagon area
+    2(1+sqrt2)a^2 = base_s^2; lattice pitch = octagon across-flats a(1+sqrt2)."""
+    a = base_s / math.sqrt(2.0 + 2.0 * math.sqrt(2.0))
+    p = a * (1.0 + math.sqrt(2.0))
+    r8 = a / (2.0 * math.sin(math.pi / 8.0))
+    oct_pts = [(r8 * math.cos(math.radians(22.5 + 45.0 * k)),
+                r8 * math.sin(math.radians(22.5 + 45.0 * k))) for k in range(8)]
+    hs = a / math.sqrt(2.0)          # gap square: vertices on the axes
+    sq_pts = [(hs, 0.0), (0.0, hs), (-hs, 0.0), (0.0, -hs)]
+    ni = int(target_w / p) + 2
+    nj = int(target_h / p) + 2
+    for i in range(-1, ni):
+        for j in range(-1, nj):
+            cx, cy = i * p, j * p
+            yield [(cx + x, cy + y) for x, y in oct_pts]
+            cx, cy = cx + p / 2.0, cy + p / 2.0
+            yield [(cx + x, cy + y) for x, y in sq_pts]
+
+
+def _gen_trunc_hex(engine, target_w, target_h, base_s):
+    """Truncated hexagonal tiling 3.12.12: regular dodecagons on a triangular
+    lattice + upward/downward triangles in the two per-cell holes. Dodecagon
+    area 3(2+sqrt3)a^2 = base_s^2; pitch = across-flats a(2+sqrt3). Triangle
+    vertices sit at hole_centre + (a/sqrt3) in the directions worked out from
+    the shared dodecagon edges (see the hole-angle derivation in the tests)."""
+    a = base_s / math.sqrt(3.0 * (2.0 + math.sqrt(3.0)))
+    p = a * (2.0 + math.sqrt(3.0))
+    t1 = complex(p, 0.0)
+    t2 = complex(p / 2.0, p * math.sqrt(3.0) / 2.0)
+    r12 = a / (2.0 * math.sin(math.pi / 12.0))
+    dodec = [(r12 * math.cos(math.radians(15.0 + 30.0 * k)),
+              r12 * math.sin(math.radians(15.0 + 30.0 * k))) for k in range(12)]
+    rt = a / math.sqrt(3.0)
+    tri_up = [(rt * math.cos(math.radians(t)), rt * math.sin(math.radians(t)))
+              for t in (30.0, 150.0, 270.0)]
+    tri_dn = [(rt * math.cos(math.radians(t)), rt * math.sin(math.radians(t)))
+              for t in (90.0, 210.0, 330.0)]
+    m0, m1, n0, n1 = _lattice_mn_range(t1, t2, target_w, target_h, pad=p)
+    h1 = (t1 + t2) / 3.0
+    h2 = 2.0 * (t1 + t2) / 3.0
+    for m in range(m0, m1 + 1):
+        for n in range(n0, n1 + 1):
+            c = m * t1 + n * t2
+            yield [(c.real + x, c.imag + y) for x, y in dodec]
+            yield [((c + h1).real + x, (c + h1).imag + y) for x, y in tri_up]
+            yield [((c + h2).real + x, (c + h2).imag + y) for x, y in tri_dn]
+
+
+def _gen_rhombitrihex(engine, target_w, target_h, base_s):
+    """Rhombitrihexagonal tiling 3.4.6.4: hexagons + squares on every hex
+    edge + triangles in the holes. Hexagon area (3sqrt3/2)a^2 = base_s^2;
+    pitch a(1+sqrt3). Scheme orientation: flat-top hexagons (squares sit on
+    the horizontal edges), i.e. lattice neighbours at 30/90/150 degrees."""
+    a = base_s / math.sqrt(1.5 * math.sqrt(3.0))
+    p = a * (1.0 + math.sqrt(3.0))
+    t1 = p * cmath.exp(1j * math.radians(30.0))
+    t2 = p * cmath.exp(1j * math.radians(90.0))
+    hex_pts = [a * cmath.exp(1j * math.radians(60.0 * k)) for k in range(6)]
+    m0, m1, n0, n1 = _lattice_mn_range(t1, t2, target_w, target_h, pad=p)
+    h1 = (t1 + t2) / 3.0
+    h2 = 2.0 * (t1 + t2) / 3.0
+    sq_dirs = [cmath.exp(1j * math.radians(t)) for t in (30.0, 90.0, 150.0)]
+    rot30p = cmath.exp(1j * math.radians(30.0))
+    rot30m = cmath.exp(1j * math.radians(-30.0))
+    for m in range(m0, m1 + 1):
+        for n in range(n0, n1 + 1):
+            c = m * t1 + n * t2
+            yield [((c + v).real, (c + v).imag) for v in hex_pts]
+            # one square per shared edge, emitted from the lower-index side
+            for d in sq_dirs:
+                nb = c + p * d
+                quad = [c + a * d * rot30m, c + a * d * rot30p,
+                        nb - a * d * rot30m, nb - a * d * rot30p]
+                yield [(z.real, z.imag) for z in quad]
+            # triangles: one vertex contributed by each of the 3 hexagons
+            # around the hole (the hex vertex pointing at the hole centre)
+            for h, offs in ((c + h1, (c, c + t1, c + t2)),
+                            (c + h2, (c + t1, c + t2, c + t1 + t2))):
+                tri = [nb + a * (h - nb) / abs(h - nb) for nb in offs]
+                yield [(z.real, z.imag) for z in tri]
+
+
+def _gen_pythagorean(engine, target_w, target_h, base_s):
+    """Pythagorean tiling: axis-aligned big (b) and small (b/2) squares in the
+    classic staircase pattern, lattice t1=(b, s), t2=(-s, b). Mean tile area
+    (b^2 + s^2)/2 = base_s^2 -> b = base_s*sqrt(8/5)."""
+    b = base_s * math.sqrt(8.0 / 5.0)
+    s = b / 2.0
+    t1 = complex(b, s)
+    t2 = complex(-s, b)
+    m0, m1, n0, n1 = _lattice_mn_range(t1, t2, target_w, target_h, pad=b + s)
+    for m in range(m0, m1 + 1):
+        for n in range(n0, n1 + 1):
+            c = m * t1 + n * t2
+            yield [(c.real, c.imag), (c.real + b, c.imag),
+                   (c.real + b, c.imag + b), (c.real, c.imag + b)]
+            # the s x s hole between the four big squares at c, c+t1, c+t2,
+            # c+t1+t2 is exactly [b-s, b] x [b, b+s] relative to c
+            yield [(c.real + b - s, c.imag + b), (c.real + b, c.imag + b),
+                   (c.real + b, c.imag + b + s), (c.real + b - s, c.imag + b + s)]
+
+
+def _sun_arc(r, a0, a1, cx, cy, seg_px):
+    """Polygonised arc from angle a0 to a1 at radius r (image-space points).
+    The segment pitch is fixed in px, so the sagitta of every chord stays
+    sub-pixel and abutting rings rasterise without visible slivers even
+    though their chord endpoints differ (T-junctions on ring arcs, the
+    accepted voderberg precedent)."""
+    n = max(2, int(abs(a1 - a0) * r / seg_px) + 1)
+    return [(cx + r * math.cos(a0 + (a1 - a0) * k / n),
+             cy + r * math.sin(a0 + (a1 - a0) * k / n)) for k in range(n + 1)]
+
+
+def _gen_sunburst(engine, target_w, target_h, base_s):
+    """Sunburst: log-polar grid about the frame centre — a constant sector
+    count with geometric ring radii gives ~square, self-similar cells whose
+    radial seams line up into rays; a constant extra twist per ring bends the
+    rays into gentle spirals (the scheme's look). The pole is closed by a
+    small wedge fan (same-shape cells meeting at the centre, per the approved
+    'good centre' pattern). tile_scale sets the cell size at mid-radius."""
+    cx, cy = target_w / 2.0, target_h / 2.0
+    r_max = math.hypot(cx, cy) * 1.01
+    nsec = max(12, round(2.0 * math.pi * (0.45 * r_max) / base_s))
+    g = 1.0 + 2.0 * math.pi / nsec              # square cells: dr = arc
+    seg = max(4.0, base_s / 3.0)
+    twist = -0.18 * (2.0 * math.pi / nsec)      # per-ring twist: rays stay
+    # readable as continuous spokes but bend into gentle log-spirals
+    # (negative = counter-clockwise lean, matching the approved scheme)
+    cap_r = 1.6 * base_s
+    radii = [r_max]
+    while radii[-1] / g > cap_r:
+        radii.append(radii[-1] / g)
+    for k in range(len(radii) - 1):
+        r_out, r_in = radii[k], radii[k + 1]
+        base_a = k * twist
+        for i in range(nsec):
+            a0 = base_a + 2.0 * math.pi * i / nsec
+            a1 = a0 + 2.0 * math.pi / nsec
+            yield (_sun_arc(r_in, a0, a1, cx, cy, seg)
+                   + _sun_arc(r_out, a1, a0, cx, cy, seg))
+    ncap = 7                                    # odd: no seam lock with ring 1
+    base_a = (len(radii) - 1) * twist
+    r_in = radii[-1]
+    for i in range(ncap):
+        a0 = base_a + 2.0 * math.pi * i / ncap
+        a1 = a0 + 2.0 * math.pi / ncap
+        yield [(cx, cy)] + _sun_arc(r_in, a0, a1, cx, cy, seg)
+
+
 @dataclass(frozen=True)
 class ShapeSpec:
     """Descriptor for one tile shape.
@@ -845,6 +1002,11 @@ SHAPE_MODES = {
     "cairo":                    ShapeSpec("polygon", _gen_cairo, aa=4),
     "floret":                   ShapeSpec("polygon", _gen_floret, aa=4),
     "gosper":                   ShapeSpec("polygon", _gen_gosper, aa=4),
+    "trunc_square":             ShapeSpec("polygon", _gen_trunc_square, aa=4),
+    "trunc_hex":                ShapeSpec("polygon", _gen_trunc_hex, aa=4),
+    "rhombitrihex":             ShapeSpec("polygon", _gen_rhombitrihex, aa=4),
+    "pythagorean":              ShapeSpec("polygon", _gen_pythagorean, aa=4),
+    "sunburst":                 ShapeSpec("polygon", _gen_sunburst, aa=4),
 }
 
 
