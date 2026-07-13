@@ -129,10 +129,10 @@ def test_draw_grout_skips_zero_width_levels():
 
     # Only level-2 width given: level-1/3 skipped, so a level-2 line is drawn.
     img = Image.new("RGB", (20, 10), (255, 255, 255))
-    grout.draw_grout(ImageDraw.Draw(img), by, {2: 4}, color=(0, 0, 0))
+    grout.draw_grout(img, by, {2: 4}, color=(0, 0, 0))
     assert img.getpixel((10, 5)) == (0, 0, 0)          # shared edge painted
 
     # All widths zero -> nothing drawn, image stays blank.
     blank = Image.new("RGB", (20, 10), (255, 255, 255))
-    grout.draw_grout(ImageDraw.Draw(blank), by, {1: 0, 2: 0, 3: 0})
+    grout.draw_grout(blank, by, {1: 0, 2: 0, 3: 0})
     assert blank.getpixel((10, 5)) == (255, 255, 255)

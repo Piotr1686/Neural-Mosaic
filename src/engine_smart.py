@@ -2064,7 +2064,7 @@ class SmartEngine:
             kind = "flat"
         print(f"Grout: drawing {kind} borders '{preset}' over {len(cells)} cells...")
         by_level = classify_edges(cells)
-        draw_grout(ImageDraw.Draw(mosaic_rgb), by_level, level_w, color=(0, 0, 0))
+        draw_grout(mosaic_rgb, by_level, level_w, color=(0, 0, 0))
 
     def _do_render(self, target, shape_mode, tile_scale, border_mode=False, blend_strength=0.0, tint_strength=0.0, grout_preset=None, progress_cb=None, cancel_event=None):
         """Core rendering kernel — accepts a pre-scaled PIL Image, returns PIL Image.

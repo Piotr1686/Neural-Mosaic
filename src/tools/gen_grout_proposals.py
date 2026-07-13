@@ -188,7 +188,7 @@ def render_panel(cells, base_col, seed, level_w):
     for poly, _, _ in cells:
         draw.polygon(poly, fill=vary(rng, base_col))
 
-    draw_grout(draw, classify_edges(cells), level_w, color=GROUT)
+    draw_grout(img, classify_edges(cells), level_w, color=GROUT)
     return img.resize((SIZE, SIZE), Image.Resampling.LANCZOS)
 
 

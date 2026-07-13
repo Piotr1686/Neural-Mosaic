@@ -22,8 +22,10 @@ Level 1 is always the individual tile.
 ``classify_edges`` keys every cell edge by its rounded endpoints and assigns
 it the HIGHEST level whose group ids differ across it; frame-boundary edges
 (shared by only one cell) close the top group. ``draw_grout`` paints the
-classified segments thinnest-first / thickest-last with rounded joints so
-thick lines meet without notches — byte-for-byte the render_panel behaviour.
+classified segments as ANTI-ALIASED round-capped capsules (locally
+supersampled, composited through an L mask) so diagonal seams stay smooth at
+any zoom — see the function docstring for why plain ``ImageDraw.line`` is not
+enough.
 
 The ``sub7`` flower grouping is the one shared helper: flower centres form the
 norm-7 sublattice of the axial hex lattice spanned by A=(2,1), B=(-1,3); a
@@ -33,7 +35,10 @@ literally ``sub7`` applied to the level-2 coordinates.
 
 Pure Python + PIL. Deterministic (no RNG here).
 """
+import math
 import zlib
+
+from PIL import Image, ImageDraw
 
 # ---------------------------------------------------------------------------
 # Width presets
@@ -151,23 +156,52 @@ def classify_edges(cells):
     return by_level
 
 
-def draw_grout(draw, by_level, level_w, color=(0, 0, 0)):
-    """Paint classified grout segments onto a ``PIL.ImageDraw`` surface.
+def draw_grout(img, by_level, level_w, color=(0, 0, 0), ss=4):
+    """Paint classified grout segments onto a ``PIL.Image``, anti-aliased.
 
     ``by_level`` — output of :func:`classify_edges`. ``level_w`` — ``{level:
     width_px}`` (e.g. from :func:`scale_widths`); a level with width <= 0 is
     skipped, so passing only ``{1: w}`` draws flat (non-hierarchical) grout.
-    Levels are drawn thin-first so thicker higher-level lines sit on top;
-    rounded joints fill the notches where thick segments meet.
+
+    Every segment is rendered as a round-capped capsule into a small local
+    buffer supersampled ``ss``x, LANCZOS-downscaled and composited into one
+    full-resolution L mask; ``color`` is pasted through that mask in a single
+    pass (so level draw order cannot matter). This is the `_LazyMask aa=4`
+    pattern from the engine and the reason the pass exists: the original
+    implementation drew straight onto the canvas with ``ImageDraw.line``,
+    which Pillow does NOT anti-alias — every diagonal seam carried a hard
+    1-px staircase that read as pixelated grout when zooming a 16K render.
+    The defect never showed in the approved proposal montages because
+    ``gen_grout_proposals.render_panel`` draws its panels at SS=2 and
+    downsizes. Round caps double as the joint filler at segment meetings
+    (the old per-endpoint ellipses, now on every level).
     """
+    mask = Image.new("L", img.size, 0)
     for level in (1, 2, 3):
         wd = level_w.get(level, 0)
         if wd <= 0:
             continue
+        r = wd / 2.0
         for a, b in by_level[level]:
-            draw.line([a, b], fill=color, width=wd)
-            if level > 1:
-                rr = wd / 2 - 0.5
-                for p in (a, b):
-                    draw.ellipse([p[0] - rr, p[1] - rr, p[0] + rr, p[1] + rr],
-                                 fill=color)
+            x0 = math.floor(min(a[0], b[0]) - r) - 1
+            y0 = math.floor(min(a[1], b[1]) - r) - 1
+            x1 = math.ceil(max(a[0], b[0]) + r) + 1
+            y1 = math.ceil(max(a[1], b[1]) + r) + 1
+            loc = Image.new("L", ((x1 - x0) * ss, (y1 - y0) * ss), 0)
+            d = ImageDraw.Draw(loc)
+            la = ((a[0] - x0) * ss, (a[1] - y0) * ss)
+            lb = ((b[0] - x0) * ss, (b[1] - y0) * ss)
+            d.line([la, lb], fill=255, width=round(wd * ss))
+            rr = wd * ss / 2.0
+            for p in (la, lb):
+                d.ellipse([p[0] - rr, p[1] - rr, p[0] + rr, p[1] + rr],
+                          fill=255)
+            # BOX, not LANCZOS: at an integer factor BOX is the exact
+            # supersampling average — interiors stay a full 255 and edges get
+            # their true coverage fraction. LANCZOS ringing reaches the centre
+            # of thin (~4 px) L1 lines and leaves them ~247 instead of 255.
+            loc = loc.resize((x1 - x0, y1 - y0), Image.Resampling.BOX)
+            # paste-with-self ~ screen blend: interiors stay 255, AA edges
+            # only ever brighten, so overlapping capsules cannot leave seams
+            mask.paste(loc, (x0, y0), loc)
+    img.paste(color, (0, 0), mask)
