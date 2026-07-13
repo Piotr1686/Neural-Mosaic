@@ -1,3 +1,63 @@
+## ═══ Sesja zarchiwizowana [2026-07-13 12:30] ═══
+
+# last_session.md
+
+**Sesja:** 2026-07-11 · ~22:30-23:00 · (Opus 4.8) — sesja konsultacyjna, ZERO zmian w kodzie
+**Status:** ✓ Zakończona poprawnie
+**Punkt odniesienia (git):** 3c5bde5 @ main (zsynchronizowane z origin/main)
+
+---
+
+## ▸ NASTĘPNY KROK (zacznij tutaj)
+
+**Wiring voderberg + escher_lizard + weave** — trzy ostatnie kształty z gotową geometrią w `src/tools/gen_fable_shape_schemes.py` (`gen_voderberg`:425, `gen_escher`:495, `gen_weave`:534; RNG tylko do kolorów paneli, geometria deterministyczna). Wzorzec identyczny jak Fable ×4 z 5e04b42:
+1. Port geometrii do `engine_smart.py` jako `_gen_<shape>(engine, w, h, base_s)` w image space (scheme renderer był y-down → bez flipu); skala: pole DOMINUJĄCEGO kafla ~ base_s².
+2. Wpis `ShapeSpec("polygon", _gen_<shape>, aa=4)` w `SHAPE_MODES` (dziś 32 wpisy).
+3. Rasteryzacja pokrycia (scratch `check_coverage.py` — wzorzec w archiwum czatu; cel 0% dziur, sub-px na łukach OK) + side-by-side z PNG schematu.
+4. Goldeny both-borders ×2 procesy (scratch `gen_goldens.py`) → hashe do `GOLDEN` w `tests/test_golden_shapes.py`.
+5. Montaż na `input/0013.jpg` (CLI render 2K) + pełny pytest.
+
+UWAGA voderberg: środek przeprojektowany werdyktem 2026-07-05 (pierścienie od r=0, 8 wygiętych klinów w biegunie, `arc_in=[]` gdy `rin==0`) — portować wersję z gen_fable (już poprawioną), nie wymyślać od nowa. escher_lizard: krawędzie `_wavy` to poliliniowe poligony — przechodzą przez `_polygon_sector` bez nowej maszynerii.
+
+Kontekst: to najtańsza z pozostałych pozycji PLAN_SHAPES (kod geometrii istnieje i jest wizualnie zwalidowany). Kolejność dalsza USTALONA w tej sesji: → **truchet ×2** (potaniał: bez `_CurvedMask`) → **girih** (fix `commit()` + sweep offline) → **poincare** (najdroższy: BFS odbić, model pasmowy) → pula extra 21-43. User chce WSZYSTKIE kształty przed galerią 16K i selekcją finalną.
+
+---
+
+## Co zrobiono w tej sesji
+
+- ✓ **`/start`** — sanity-check: stan spójny, drzewo czyste, rejestr `SHAPE_MODES` = 32 potwierdzony empirycznie, `gen_voderberg`/`gen_escher`/`gen_weave` istnieją w gen_fable.
+- ✓ **Wypchnięty zaległy commit sesyjny** `3c5bde5` (`9a74ff2..3c5bde5`) — `main` == `origin/main`.
+- ✓ **ROZSTRZYGNIĘTE 2 z 3 otwartych pytań** (analiza kodu, nie spekulacja — decyzje w MEMORY.md wpis [2026-07-11b]):
+  - **truchet: `_CurvedMask` ODRZUCONY** — precedens `_sun_arc`/sunburst (`engine_smart.py:981`) dowodzi, że polygonizacja łuku z sub-px strzałką + `aa=4` w `_LazyMask` = to samo co prawdziwa krzywa. Niewypukłość OK (spectre), wspólna krawędź dokładna przy identycznym wywołaniu `_sun_arc` z obu stron. Truchet spada z „najdroższy" na „jeden z najtańszych".
+  - **girih: stały `_GIRIH_SEED` + sweep offline** (NIE `_shape_seed` per-wymiary — dałby dobry patch w preview 2K i dziurawy w 16K). Znaleziona PRAWDZIWA blokada: `commit()` w gen_fable:626-627 kopiuje CAŁY raster po każdym kaflu (setki GB memcpy przy 16K) → fix bbox-OR. Plus: `RAD` rosnący z kadrem (inwariant base_s²), inflacja hulla 1.10 → ~1.0.
+- ✓ **Standing „GUI niesprawdzone wizualnie"** — user uznał za OK, zdjęte z listy pytań.
+- ✓ MEMORY.md: wpis [2026-07-11b] w TODO + `_CurvedMask` w „Odrzucone podejścia".
+
+## Co zostało (backlog sesji)
+
+- ⟳ **PLAN_SHAPES — ostatnie kształty** (NASTĘPNY KROK = voderberg/escher_lizard/weave): potem truchet ×2, girih, poincare, pula extra 21-43. Po WSZYSTKICH → selekcja finalna usera.
+- ⟳ **Galeria 16K triangle+hexagon** — odłożona do wdrożenia wszystkich kształtów (decyzja 2026-07-10).
+- ⟳ **PLAN_FRACTAL wykonawczy** — F1a (trójfazowa pętla, golden bit-w-bit).
+- ⟳ (opcjonalny cleanup) migracja kites/spectre do generycznej gałęzi polygon.
+- ⟳ Stare pliki batch `_grout-sredni` w output/ nie łapią skip-if-exists po rename presetów (kosmetyka).
+
+## Aktywne pliki
+
+- Żadnych zmian w kodzie w tej sesji. Pliki CZYTANE (kontekst dla następnego kroku):
+  - `src/engine_smart.py` (`_sun_arc`:981, `_LazyMask`:74, `_polygon_sector`:1474, `_shape_seed`:614, `SHAPE_MODES`:1050, `_grout_cells`:1541)
+  - `src/tools/gen_fable_shape_schemes.py` (`_girih_attempt`:585 z blokadą `commit()`:625-627, `gen_girih`:729; `gen_voderberg`:425, `gen_escher`:495, `gen_weave`:534)
+- Zmienione: `MEMORY.md`, `last_session.md`, `last_session.archive.md` (pliki stanu).
+
+## Otwarte pytania
+
+- **Selekcja finalna kształtów przez usera** — po wdrożeniu wszystkich (jedyne pozostałe otwarte pytanie; girih i truchet ROZSTRZYGNIĘTE w tej sesji).
+- Girih: rewizja na wariant podstawieniowy (Lu-Steinhardt) TYLKO jeśli greedy po fixie `commit()` przekroczy kilka sekund przy 16K — zadanie badawcze, nie zaczynać od niego.
+
+## Do MEMORY.md (przeniesiono)
+
+- Repo MEMORY.md: wpis **[2026-07-11b]** w „Aktywne TODO" — rozstrzygnięcie girih (stały seed, blokada `commit()`, RAD z kadru, inflacja hulla) + truchet (`_CurvedMask` zbędny, precedens `_sun_arc`) + ustalona kolejność wdrożenia pozostałych kształtów.
+- Repo MEMORY.md: wpis **[2026-07-11]** w „Odrzucone podejścia" — `_CurvedMask` odrzucony, nie wracać.
+
 ## ═══ Sesja zarchiwizowana [2026-07-11 22:59] ═══
 
 # last_session.md
@@ -241,60 +301,3 @@ Kontekst: punkty 1+2+3 planu jakości WDROŻONE w tej sesji (commity 3dd42d9 + 0
 - Repo MEMORY.md: wpis [2026-07-08] w sekcji Architektura — plan jakości 1+2+3 wdrożony, decyzja re-scoring vs GEMM (inwariant A1), empiria deltaE, plan punktu 4 z odrzuconym pełnym re-downloadem.
 - Auto-memory: `project_tile_quality_plan` utworzone i aktualizowane na bieżąco (statusy 1+2+3 WDROŻONE + decyzja pkt 4); indeks MEMORY.md zsynchronizowany.
 
-## ═══ Sesja zarchiwizowana [2026-07-08 23:07] ═══
-
-# last_session.md
-
-**Sesja:** 2026-07-08 · (Opus 4.8) · ~21:00-22:10
-**Status:** ✓ Zakończona poprawnie
-**Punkt odniesienia (git):** 7010d36 @ main (zsynchronizowane z origin/main; wszystkie commity sesji wypchnięte)
-
----
-
-## ▸ NASTĘPNY KROK (zacznij tutaj)
-
-**Wiring pierwszego kształtu sunflower do silnika: `sunflower_grande` (faworyt usera) jako shape polygon-owy.** Konkretnie w `src/engine_smart.py`:
-
-1. Dodaj generator `_gen_sunflower_grande(engine, target_w, target_h, base_s)` yieldujący poligony komórek w image space — zaadaptuj geometrię z `src/tools/gen_sunflower_schemes.py::gen_sunflower_grande` (Voronoi na ziarnach Vogela `r=c·n^0.66`), przeskaluj z układu montażu do `target_w×target_h`, przytnij komórki brzegowe do kadru (`_clip_rect` już istnieje w narzędziach). Wzór adaptera = `_gen_spectre` (linia ~131: cienki adapter nad zewnętrzną geometrią).
-2. Zarejestruj w `SHAPE_MODES` (dict ~156-169) jako `ShapeSpec("polygon", generator=_gen_sunflower_grande, aa=4)` — jeśli `_do_render` ma już gałąź polygon-sector (`_polygon_sector`), wpina się bez nowej gałęzi; jeśli nie, dodaj po wzorze spectre (~767).
-3. Podłącz do `shape_names()` → GUI `combo_shape` i CLI `_SMART_SHAPES`.
-4. Golden test w `tests/test_golden_shapes.py` + weryfikacja wizualna overlay (jak przy groucie: `_apply_grout` nie dotyczy — to nowy kształt, nie fuga).
-
-Kontekst: schematy sunflower są tylko podglądowymi PNG — silnik ich NIE generuje. To otwiera duży tor „wiring nowych kształtów" (sunflower×7 + rhombs×3 → selekcja finalna z PLAN_SHAPES). `sunflower_grande` to najmniejszy pierwszy krok (jeden wariant, faworyt). ALTERNATYWA (drugi tor, gdyby user wolał): PLAN_FRACTAL F1a — trójfazowa pętla renderu z golden bit-w-bit.
-
----
-
-## Co zrobiono w tej sesji
-
-- ✓ **Grout flat-L1 DOMKNIĘTY dla 5 kształtów** — werdykt „4+flat" zrealizowany w 100%. spectre (f9732b8), romb (47642a4), rectangle_3x1+brick_wall (3ee163c), hexagon_romb wariant 2 (18e0b7c). Każdy `_grout_cells_*` → komórki z jednakowym `(g2,g3)=(0,0)`; `_apply_grout` rozgałęzione (hierarchiczne 4 → grubości gradowane; reszta → jednolite `{1:w,2:w,3:w}`).
-- ✓ **DECYZJA A (user):** ramka kadru RYSOWANA dla flat (L3>0), spójnie z hierarchicznym. Zilustrowane realnym renderem PIL (scratchpad).
-- ✓ **hexagon_romb = wariant 2 (user):** 3 romby/hexagon (wewnętrzny „Y"), bo composite składa hex z 3 masek=3 zdjęć.
-- ✓ **META-LEKCJA th-vs-step:** maski nakładające (hexagon/romb) → FLOAT wymiar; abutujące (rectangle/brick) → INT step. Test-strażnik `L1>L3`.
-- ✓ **Rename schematów sunflower** (594a01c): `grande_{soft,inverse,xl}` → `sunflower_grande_*` (unifikacja rodziny pod prefiks; nazwa pliku = przyszła nazwa trybu). Generator `gen_sunflower_schemes.py` zsynchronizowany.
-- ✓ **DZI polish** (22504ba): `make_dzi` + `progress_cb(done,total)`; pasek postępu GUI (wzorzec pasków renderu); `tests/test_dzi.py` (4 testy). Domknięty dług A2.
-- ✓ **Cleanup etykiet** (3fbe101, 7010d36): GUI/CLI „Hierarchical Grout" → „Grout" (flat dla 5 czyni „Hierarchical" nieścisłym); komentarze zsynchronizowane.
-- ✓ **253 testy zielone** (było 209; +44). Wszystkie 8 commitów WYPCHNIĘTE na origin. Weryfikacja wizualna każdego kształtu grout.
-
-## Co zostało (backlog sesji)
-
-- ⟳ **Wiring nowych kształtów** (sunflower×7 + rhombs×3) do silnika → selekcja finalna z PLAN_SHAPES (NASTĘPNY KROK = pierwszy wariant `sunflower_grande`).
-- ⟳ **PLAN_FRACTAL wykonawczy** — start F1a (trójfazowa pętla, golden bit-w-bit). Alternatywny tor.
-- ⟳ Standing: galeria 16K triangle+hexagon (pliki usera).
-
-## Aktywne pliki
-
-- `src/engine_smart.py` (grout flat: `_grout_cells_flat_{spectre,romb,rect,hexagon_romb}` + `_HIERARCHICAL_GROUT` + rozgałęzienie `_apply_grout`)
-- `tests/test_grout_engine.py` (+8 testów flat), `tests/test_dzi.py` (NOWY, 4 testy)
-- `src/tools/make_dzi.py` (progress_cb), `src/gui.py` (pasek DZI + etykieta Grout), `src/cli.py` (help)
-- `src/tools/gen_sunflower_schemes.py` (rejestr/nazwy sunflower_grande_*)
-- `assets/shape_schemes/sunflower_grande_{soft,inverse,xl}.png` (rename)
-
-## Otwarte pytania
-
-- Który tor backlogu jako główny na następną sesję: sunflower wiring (rekomendowany, NASTĘPNY KROK) czy PLAN_FRACTAL F1a? (nierozstrzygnięte — user wybrał w tej sesji tylko DZI polish).
-- Pasek postępu DZI zweryfikowany tylko przez testy make_dzi; widget CTk niesprawdzony headless — potwierdzić przy realnym `python -m src.gui`.
-
-## Do MEMORY.md (przeniesiono)
-
-- Repo MEMORY.md: wpis [2026-07-08] — grout flat-L1 domknięty (decyzja A, hexagon_romb wariant 2, META-LEKCJA th-vs-step), rename sunflower, DZI polish, cleanup etykiet.
-- Auto-memory: `project_grout_engine` zaktualizowane (flat-L1 + meta-lekcja + decyzja A); `project_dzi_gui_polish_todo` → ZROBIONE; indeks MEMORY.md zsynchronizowany.

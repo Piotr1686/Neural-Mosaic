@@ -1,57 +1,56 @@
 # last_session.md
 
-**Sesja:** 2026-07-11 · ~22:30-23:00 · (Opus 4.8) — sesja konsultacyjna, ZERO zmian w kodzie
+**Sesja:** 2026-07-13 · ~11:30-12:30
 **Status:** ✓ Zakończona poprawnie
-**Punkt odniesienia (git):** 3c5bde5 @ main (zsynchronizowane z origin/main)
+**Punkt odniesienia (git):** e8e0b74 @ main (zsynchronizowane z origin/main)
 
 ---
 
 ## ▸ NASTĘPNY KROK (zacznij tutaj)
 
-**Wiring voderberg + escher_lizard + weave** — trzy ostatnie kształty z gotową geometrią w `src/tools/gen_fable_shape_schemes.py` (`gen_voderberg`:425, `gen_escher`:495, `gen_weave`:534; RNG tylko do kolorów paneli, geometria deterministyczna). Wzorzec identyczny jak Fable ×4 z 5e04b42:
-1. Port geometrii do `engine_smart.py` jako `_gen_<shape>(engine, w, h, base_s)` w image space (scheme renderer był y-down → bez flipu); skala: pole DOMINUJĄCEGO kafla ~ base_s².
-2. Wpis `ShapeSpec("polygon", _gen_<shape>, aa=4)` w `SHAPE_MODES` (dziś 32 wpisy).
-3. Rasteryzacja pokrycia (scratch `check_coverage.py` — wzorzec w archiwum czatu; cel 0% dziur, sub-px na łukach OK) + side-by-side z PNG schematu.
-4. Goldeny both-borders ×2 procesy (scratch `gen_goldens.py`) → hashe do `GOLDEN` w `tests/test_golden_shapes.py`.
-5. Montaż na `input/0013.jpg` (CLI render 2K) + pełny pytest.
+**Wiring girih** — port `_girih_attempt` (`src/tools/gen_fable_shape_schemes.py:585`) do `engine_smart.py` jako `_gen_girih`, z rozstrzygnięciami z MEMORY [2026-07-11b]:
+1. **Fix `commit()`** (gen_fable:625-627): zamiast pełnej kopii rastra okupacji po każdym kaflu (`occ_np[:] = np.array(occ)` — setki GB memcpy przy 16K) rysować kafel do bufora wielkości bboxa i OR-ować w `occ_np[y0:y1, x0:x1]` ⇒ O(pole kadru).
+2. **`RAD` rosnący z przekątną kadru** (w jednostkach girih) — inwariant „pole dominującego kafla ~ base_s²".
+3. **Inflacja convex-hulla dziur 1.10 → ~1.0** (w silniku nakładka = dwa zdjęcia walczące o piksele; uszczelnienie szwu zostawić `render_padding`).
+4. **Stały `_GIRIH_SEED` + sweep offline**: commitowany skrypt w `src/tools/` drukujący pokrycie per seed; zwycięzca jako stała z komentarzem o zmierzonym pokryciu (NIE `_shape_seed` per-wymiary — preview 2K mógłby trafić dobry patch, a 16K dziurawy).
+5. Bramki jak zawsze: rasteryzacja pokrycia (cel 0% dziur; scratch `check_coverage.py` — wzorzec w archiwum czatu), goldeny both-borders ×2 procesy, render 2K na `input/0013.jpg`, pełny pytest. Spodziewany czas girih @16K po fixie: 1-3 s (najwolniejszy kształt, akceptowalne). Fallback (tylko gdyby za wolno): girih podstawieniowy Lu-Steinhardt — zadanie badawcze, nie zaczynać od niego.
 
-UWAGA voderberg: środek przeprojektowany werdyktem 2026-07-05 (pierścienie od r=0, 8 wygiętych klinów w biegunie, `arc_in=[]` gdy `rin==0`) — portować wersję z gen_fable (już poprawioną), nie wymyślać od nowa. escher_lizard: krawędzie `_wavy` to poliliniowe poligony — przechodzą przez `_polygon_sector` bez nowej maszynerii.
-
-Kontekst: to najtańsza z pozostałych pozycji PLAN_SHAPES (kod geometrii istnieje i jest wizualnie zwalidowany). Kolejność dalsza USTALONA w tej sesji: → **truchet ×2** (potaniał: bez `_CurvedMask`) → **girih** (fix `commit()` + sweep offline) → **poincare** (najdroższy: BFS odbić, model pasmowy) → pula extra 21-43. User chce WSZYSTKIE kształty przed galerią 16K i selekcją finalną.
+Kontekst: to przedostatnia pozycja PLAN_SHAPES przed pulą extra (kolejność ustalona 2026-07-11: → poincare → extra 21-43). Tier B (truchet/weave) ZAMKNIĘTY w tej sesji. User chce WSZYSTKIE kształty przed selekcją finalną i galerią 16K.
 
 ---
 
 ## Co zrobiono w tej sesji
 
-- ✓ **`/start`** — sanity-check: stan spójny, drzewo czyste, rejestr `SHAPE_MODES` = 32 potwierdzony empirycznie, `gen_voderberg`/`gen_escher`/`gen_weave` istnieją w gen_fable.
-- ✓ **Wypchnięty zaległy commit sesyjny** `3c5bde5` (`9a74ff2..3c5bde5`) — `main` == `origin/main`.
-- ✓ **ROZSTRZYGNIĘTE 2 z 3 otwartych pytań** (analiza kodu, nie spekulacja — decyzje w MEMORY.md wpis [2026-07-11b]):
-  - **truchet: `_CurvedMask` ODRZUCONY** — precedens `_sun_arc`/sunburst (`engine_smart.py:981`) dowodzi, że polygonizacja łuku z sub-px strzałką + `aa=4` w `_LazyMask` = to samo co prawdziwa krzywa. Niewypukłość OK (spectre), wspólna krawędź dokładna przy identycznym wywołaniu `_sun_arc` z obu stron. Truchet spada z „najdroższy" na „jeden z najtańszych".
-  - **girih: stały `_GIRIH_SEED` + sweep offline** (NIE `_shape_seed` per-wymiary — dałby dobry patch w preview 2K i dziurawy w 16K). Znaleziona PRAWDZIWA blokada: `commit()` w gen_fable:626-627 kopiuje CAŁY raster po każdym kaflu (setki GB memcpy przy 16K) → fix bbox-OR. Plus: `RAD` rosnący z kadrem (inwariant base_s²), inflacja hulla 1.10 → ~1.0.
-- ✓ **Standing „GUI niesprawdzone wizualnie"** — user uznał za OK, zdjęte z listy pytań.
-- ✓ MEMORY.md: wpis [2026-07-11b] w TODO + `_CurvedMask` w „Odrzucone podejścia".
+- ✓ **`/start`** — stan spójny; wypchnięty zaległy commit sesyjny `9eae032`.
+- ✓ **Wiring voderberg + escher_lizard + weave** (`5e27d0c`): voderberg z 2 korektami skali (wygięcie i grubość pierścienia zależne od promienia), escher 1:1, **weave przebudowany na prawdziwą partycję** (widoczne kawałki wstęg + komórki-węzły; schemat PNG zregenerowany z geometrii silnika). Pokrycie: 0-0.01% dziur.
+- ✓ **Wiring truchet + truchet_hex** (`ee00c92`, Tier B zamknięty bez `_CurvedMask`): komórki = regiony wycięte łukami; nowy helper `_arc_pitch(r,tol)` (pułapka: krok `base_s/3` fasetował łuki o promieniu ~base_s/2); orientacja z hasha indeksu (zero RNG, wzór stały między rozdzielczościami); schematy GUI zregenerowane z silnika (`src/tools/gen_truchet_schemes.py`).
+- ✓ **FIX pikselozy groutu** (`e8e0b74`, zgłoszenie usera): `draw_grout` = AA kapsuły ss=4 przez maskę L, downscale BOX (nie LANCZOS — ringing); 16K = 4 s; `grout_preset=None` bit-w-bit. Diagnoza: aliasowane `ImageDraw.line` + tool propozycji rysujący na SS=2 (wada niewidoczna przy akceptacji).
+- ✓ Rejestr `SHAPE_MODES`: 32 → **37**; +10 goldenów cross-proces; **363 testy zielone**; PLAN_SHAPES.md zaktualizowany (S6/S7-połowa/S8 zrobione).
+- ✓ Rendery testowe 2K: `output/new3_{voderberg,escher_lizard,weave,truchet,truchet_hex}.jpg`; zoom groutu: `output/grout_aa_zoom.png`.
 
 ## Co zostało (backlog sesji)
 
-- ⟳ **PLAN_SHAPES — ostatnie kształty** (NASTĘPNY KROK = voderberg/escher_lizard/weave): potem truchet ×2, girih, poincare, pula extra 21-43. Po WSZYSTKICH → selekcja finalna usera.
-- ⟳ **Galeria 16K triangle+hexagon** — odłożona do wdrożenia wszystkich kształtów (decyzja 2026-07-10).
+- ⟳ **PLAN_SHAPES — ostatnie kształty:** girih (NASTĘPNY KROK) → poincare (model pasmowy, BFS odbić — najdroższy) → pula extra 21-43. Po WSZYSTKICH → selekcja finalna usera.
+- ⟳ **Galeria 16K triangle+hexagon** — odłożona do wdrożenia wszystkich kształtów.
 - ⟳ **PLAN_FRACTAL wykonawczy** — F1a (trójfazowa pętla, golden bit-w-bit).
+- ⟳ escher_lizard: docelowa sylwetka jaszczurki = ręczne dostrojenie offsetów polilinii (zadanie estetyczne z userem, geometria bez zmian).
 - ⟳ (opcjonalny cleanup) migracja kites/spectre do generycznej gałęzi polygon.
-- ⟳ Stare pliki batch `_grout-sredni` w output/ nie łapią skip-if-exists po rename presetów (kosmetyka).
 
 ## Aktywne pliki
 
-- Żadnych zmian w kodzie w tej sesji. Pliki CZYTANE (kontekst dla następnego kroku):
-  - `src/engine_smart.py` (`_sun_arc`:981, `_LazyMask`:74, `_polygon_sector`:1474, `_shape_seed`:614, `SHAPE_MODES`:1050, `_grout_cells`:1541)
-  - `src/tools/gen_fable_shape_schemes.py` (`_girih_attempt`:585 z blokadą `commit()`:625-627, `gen_girih`:729; `gen_voderberg`:425, `gen_escher`:495, `gen_weave`:534)
-- Zmienione: `MEMORY.md`, `last_session.md`, `last_session.archive.md` (pliki stanu).
+- `src/engine_smart.py` — +5 generatorów (`_gen_voderberg`, `_gen_escher`, `_gen_weave`, `_gen_truchet`, `_gen_truchet_hex`), helpery `_arc_pitch`/`_truchet_flip`, rejestr 37; `_apply_grout` woła nowe `draw_grout(img,…)`.
+- `src/grout.py` — `draw_grout` przepisany (AA kapsuły ss=4, maska L, BOX).
+- `src/tools/gen_fable_shape_schemes.py` (`gen_weave` = partycja), `src/tools/gen_truchet_schemes.py` (NOWY), `src/tools/gen_grout_proposals.py` (caller).
+- `tests/test_golden_shapes.py` (+10 goldenów), `tests/test_grout.py` (nowa sygnatura).
+- `assets/shape_schemes/{weave,truchet,truchet_hex}.png` — zregenerowane z geometrii silnika.
+- `PLAN_SHAPES.md` — S8 zamknięty, wpisy weave/truchet zaktualizowane.
 
 ## Otwarte pytania
 
-- **Selekcja finalna kształtów przez usera** — po wdrożeniu wszystkich (jedyne pozostałe otwarte pytanie; girih i truchet ROZSTRZYGNIĘTE w tej sesji).
-- Girih: rewizja na wariant podstawieniowy (Lu-Steinhardt) TYLKO jeśli greedy po fixie `commit()` przekroczy kilka sekund przy 16K — zadanie badawcze, nie zaczynać od niego.
+- **Selekcja finalna kształtów przez usera** — po wdrożeniu wszystkich (bez zmian).
+- Girih: fallback podstawieniowy (Lu-Steinhardt) TYLKO jeśli greedy po fixie `commit()` przekroczy kilka sekund przy 16K.
 
 ## Do MEMORY.md (przeniesiono)
 
-- Repo MEMORY.md: wpis **[2026-07-11b]** w „Aktywne TODO" — rozstrzygnięcie girih (stały seed, blokada `commit()`, RAD z kadru, inflacja hulla) + truchet (`_CurvedMask` zbędny, precedens `_sun_arc`) + ustalona kolejność wdrożenia pozostałych kształtów.
-- Repo MEMORY.md: wpis **[2026-07-11]** w „Odrzucone podejścia" — `_CurvedMask` odrzucony, nie wracać.
+- Repo MEMORY.md: wpis **[2026-07-13]** w „Aktywne TODO" — 5 kształtów (korekty skali voderberga, weave-partycja, pułapka `_arc_pitch`, truchet bez RNG) + fix groutu (BOX nie LANCZOS, lekcja „tool propozycji musi rasteryzować jak silnik").
+- Auto-memory: `project_grout_aa_fix.md` (diagnoza + fix pikselozy groutu).
