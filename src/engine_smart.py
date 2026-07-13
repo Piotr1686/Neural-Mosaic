@@ -1163,6 +1163,111 @@ def _gen_weave(engine, target_w, target_h, base_s):
                    (xc + half, yc + pitch - half)]
 
 
+# --- Truchet (square + hex) ------------------------------------------------
+# PLAN_SHAPES listed these as "Tier B" needing a curved-mask class; the
+# 2026-07-11 review dropped that (see MEMORY): an arc polygonised with a
+# sub-pixel sagitta and aa=4 in _LazyMask rasterises like a true curve, and
+# `_sun_arc` already does exactly that for sunburst/voderberg. So a Truchet
+# tile is an ordinary `polygon` shape: the arcs cut each square/hexagon into
+# cells, and neighbouring cells that share an arc call `_sun_arc` with the SAME
+# arguments, so the shared boundary is sampled identically (exact partition).
+#
+# Orientation is NOT drawn from an RNG: it is a hash of the lattice index, so
+# the same cell gets the same orientation at every resolution -- the preview
+# shows the pattern the 16K render will have ("the same pattern, just more of
+# it", the girih seed lesson), and the shape stays reproducible bit-for-bit.
+def _arc_pitch(r, tol=0.35):
+    """Chord pitch (px) for `_sun_arc` that keeps the sagitta under `tol` px on
+    an arc of radius r: sagitta ~ pitch^2 / (8r). Sunburst/voderberg can use a
+    base_s-derived pitch because their arc radius grows with the frame; a
+    Truchet arc has radius ~ base_s/2 at ANY resolution, so a pitch of base_s/3
+    would leave a visible 1-3 px facet on every cell."""
+    return max(2.0, math.sqrt(8.0 * r * tol))
+
+
+def _truchet_flip(i, j):
+    """Deterministic 0/1 orientation for lattice cell (i, j) (integer hash)."""
+    h = ((i * 73856093) ^ (j * 19349663)) & 0xFFFFFFFF
+    h ^= h >> 15
+    h = (h * 2246822519) & 0xFFFFFFFF
+    h ^= h >> 13
+    return h & 1
+
+
+def _gen_truchet(engine, target_w, target_h, base_s):
+    """Classic (Smith) Truchet: each square is cut by two quarter-circle arcs of
+    radius s/2 centred on OPPOSITE corners -> three cells: two quarter discs and
+    the S-shaped middle band. The arcs meet the square's edges at their
+    midpoints at a right angle, so they join into continuous curves across the
+    whole frame whichever way each square is flipped.
+
+    Dominant cell = the middle band, area s^2*(1 - pi/8) -> s = base_s /
+    sqrt(1 - pi/8); the quarter discs are the small tile of the mixed tiling
+    (pi/16 s^2, as in rhombitrihex)."""
+    s = base_s / math.sqrt(1.0 - math.pi / 8.0)
+    r = s / 2.0
+    seg = _arc_pitch(r)
+    for i in range(-1, int(target_w / s) + 2):
+        for j in range(-1, int(target_h / s) + 2):
+            x0, y0 = i * s, j * s
+            x1, y1 = x0 + s, y0 + s
+            if _truchet_flip(i, j) == 0:            # arcs at top-left/bottom-right
+                a_tl = _sun_arc(r, 0.0, math.pi / 2, x0, y0, seg)
+                a_br = _sun_arc(r, math.pi, 1.5 * math.pi, x1, y1, seg)
+                yield [(x0, y0)] + a_tl
+                yield [(x1, y1)] + a_br
+                yield ([(x1, y0)] + list(reversed(a_br))
+                       + [(x0, y1)] + list(reversed(a_tl)))
+            else:                                   # arcs at top-right/bottom-left
+                a_tr = _sun_arc(r, math.pi / 2, math.pi, x1, y0, seg)
+                a_bl = _sun_arc(r, 1.5 * math.pi, 2.0 * math.pi, x0, y1, seg)
+                yield [(x1, y0)] + a_tr
+                yield [(x0, y1)] + a_bl
+                yield ([(x0, y0)] + list(reversed(a_tr))
+                       + [(x1, y1)] + list(reversed(a_bl)))
+
+
+def _gen_truchet_hex(engine, target_w, target_h, base_s):
+    """Hexagonal Truchet: three arcs of radius a/2 centred on ALTERNATE vertices
+    of each hexagon, each joining the midpoints of that vertex's two edges. Every
+    edge has exactly one of its endpoints in the chosen alternating triple, so
+    every edge midpoint is an arc endpoint in BOTH neighbouring hexagons and the
+    curves always continue across edges (the arc meets the edge at a right
+    angle: the radius runs along the edge).
+
+    Cells: three 120-degree pie slices at the chosen vertices + the curved
+    middle. Dominant = middle, area a^2*(3*sqrt(3)/2 - pi/4) -> a from base_s."""
+    a = base_s / math.sqrt(1.5 * math.sqrt(3.0) - math.pi / 4.0)
+    r = a / 2.0
+    seg = _arc_pitch(r)
+    t1 = complex(math.sqrt(3.0), 0) * a
+    t2 = complex(math.sqrt(3.0) / 2, 1.5) * a
+    m0, m1, n0, n1 = _lattice_mn_range(t1, t2, target_w, target_h, pad=1.2 * a)
+    corner = [cmath.exp(1j * math.radians(30 + 60 * k)) * a for k in range(6)]
+    for m in range(m0, m1 + 1):
+        for n in range(n0, n1 + 1):
+            c = m * t1 + n * t2
+            v = [c + z for z in corner]
+            mid = [(v[k] + v[(k + 1) % 6]) / 2 for k in range(6)]   # mid[k]: v[k]-v[k+1]
+            odd = _truchet_flip(m, n)                # which alternating triple
+            arcs, middle = {}, []
+            for k in range(6):
+                if k % 2 == odd:                     # vertex v[k] carries an arc
+                    p, q = mid[(k - 1) % 6], mid[k]  # its two edge midpoints
+                    a0 = cmath.phase(p - v[k])
+                    a1 = cmath.phase(q - v[k])
+                    d = (a1 - a0 + math.pi) % (2 * math.pi) - math.pi   # short way
+                    arcs[k] = _sun_arc(r, a0, a0 + d, v[k].real, v[k].imag, seg)
+                    middle += arcs[k]
+                else:                                # vertex stays a corner
+                    middle += [(mid[(k - 1) % 6].real, mid[(k - 1) % 6].imag),
+                               (v[k].real, v[k].imag),
+                               (mid[k].real, mid[k].imag)]
+            for k, arc in arcs.items():
+                yield [(v[k].real, v[k].imag)] + arc
+            yield middle
+
+
 @dataclass(frozen=True)
 class ShapeSpec:
     """Descriptor for one tile shape.
@@ -1221,6 +1326,8 @@ SHAPE_MODES = {
     "voderberg":                ShapeSpec("polygon", _gen_voderberg, aa=4),
     "escher_lizard":            ShapeSpec("polygon", _gen_escher, aa=4),
     "weave":                    ShapeSpec("polygon", _gen_weave, aa=4),
+    "truchet":                  ShapeSpec("polygon", _gen_truchet, aa=4),
+    "truchet_hex":              ShapeSpec("polygon", _gen_truchet_hex, aa=4),
 }
 
 

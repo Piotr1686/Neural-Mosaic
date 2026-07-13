@@ -112,6 +112,13 @@ GOLDEN = {
     ("escher_lizard", True): "c8f3ba54034e80033d7bc62dcb1d00fb7627d4705fb73083d7e8299103a6cf7e",
     ("weave", False): "454a1cf18000cf2325cbd3efda358ed9f0d54d8c92171a7a5e0feec9afa6c701",
     ("weave", True): "a02877e16975c8c1df7d23b2b73426a0dc9215fb4dcd4e0c9839a7adcaf607bd",
+    # Truchet (2026-07-13): arcs polygonised by _sun_arc with a sagitta-driven
+    # pitch (_arc_pitch), tile orientation from an integer hash of the lattice
+    # index -> no RNG, same pattern at every resolution. Cross-process verified.
+    ("truchet", False): "60a2c76342a46440daf07bd0528a85e7faf49c944d969c775e24f48f3c84ed17",
+    ("truchet", True): "40e5f0463098e046b349f16a1c2cb7b9f9986ab5376cae6211858f893e128556",
+    ("truchet_hex", False): "5637078ccaafc47f70a62902eff96e3b8aed89231082f20a7c42e70c949e1d36",
+    ("truchet_hex", True): "4ee3a40ab8a4dbe8fbf43983113d52522f0fb0fe196cb215270d326add23b0f1",
 }
 
 
