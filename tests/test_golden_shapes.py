@@ -101,6 +101,17 @@ GOLDEN = {
     ("penrose", True): "bdcda867688ea52ece9911555455e10f7da2876523fa3e32acb7715cb643293e",
     ("ammann_beenker", False): "ccf9124eeb90c012eaa5aca4824a8f6fbea447b0dd083f92681686104077fba2",
     ("ammann_beenker", True): "20b42e242ca75161aaabc7d47caa21cbc14c0a2e915186c21cce66f8669a6b0f",
+    # Last three Fable shapes (2026-07-13): voderberg (rings of bent slivers,
+    # bow made radius-relative), escher_lizard (p1 hexagon deformation) and
+    # weave (basketweave rebuilt as a true partition: visible ribbon pieces +
+    # knot cells). Pure constructions (no RNG); hashes lock the first render,
+    # verified identical across two separate processes.
+    ("voderberg", False): "7b191e564c955628214a8fa899360ddb59d29105d8c520daf04dd42dbb53a7f7",
+    ("voderberg", True): "06c1039433643f6d01872b20f6e4da29b3459cd9e01759d5b21b500825d59004",
+    ("escher_lizard", False): "1ed4b6eba6fd871cd91cd591e7209fb5f4ed114b2912e68ee773d7f580614bc1",
+    ("escher_lizard", True): "c8f3ba54034e80033d7bc62dcb1d00fb7627d4705fb73083d7e8299103a6cf7e",
+    ("weave", False): "454a1cf18000cf2325cbd3efda358ed9f0d54d8c92171a7a5e0feec9afa6c701",
+    ("weave", True): "a02877e16975c8c1df7d23b2b73426a0dc9215fb4dcd4e0c9839a7adcaf607bd",
 }
 
 

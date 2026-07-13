@@ -532,40 +532,40 @@ def gen_escher():
 # 20. WEAVE (interlaced photo ribbons)
 # ==========================================
 def gen_weave():
+    """Rev 2026-07-13 (wiring): the first version faked the interlacing with
+    paint order (crossing squares painted twice) and left the gaps between four
+    ribbons as background. That is not a partition — in the engine overlapping
+    cells mean two photos fighting for the same pixels and the gaps come out
+    black. Rebuilt as the exact partition the engine renders (`_gen_weave`):
+
+      * a ribbon is hidden precisely at its under-crossings, so its VISIBLE
+        piece runs from one under-crossing to the next: a w x (2 - w) rectangle
+        centred on the over-crossing it covers. Parity (i + j) % 2 picks the
+        ribbon on top, so every crossing square belongs to exactly one cell.
+      * the (1 - w)^2 square between four ribbons becomes its own 'knot' cell.
+    """
     rng = np.random.default_rng(20)
-    # rendered directly (occlusion needs paint order), so build rect polys in order
     w = 0.74
+    half = w / 2
+    arm = 1.0 - half          # cell half-length along the ribbon
     N = 9
     warm = (205, 130, 60)
     cool = (90, 120, 160)
+    knot = (105, 100, 110)
     polys = []
-
-    def cells(vert, idx):
-        """One ribbon as a list of cell rectangles with varied colours."""
-        out = []
-        for k in range(-1, N + 1):
-            if vert:
-                rect = [(idx - w / 2, k - 0.5), (idx + w / 2, k - 0.5),
-                        (idx + w / 2, k + 0.5), (idx - w / 2, k + 0.5)]
-            else:
-                rect = [(k - 0.5, idx - w / 2), (k + 0.5, idx - w / 2),
-                        (k + 0.5, idx + w / 2), (k - 0.5, idx + w / 2)]
-            out.append((rect, vary(rng, cool if vert else warm, 26), k))
-        return out
-
-    # paint verticals, then horizontals, then re-paint vertical over-crossings
-    vribbons = {j: cells(True, j) for j in range(N)}
-    hribbons = {i: cells(False, i) for i in range(N)}
-    for j in range(N):
-        for rect, col, k in vribbons[j]:
-            polys.append((rect, col))
-    for i in range(N):
-        for rect, col, k in hribbons[i]:
-            polys.append((rect, col))
-    for j in range(N):
-        for rect, col, k in vribbons[j]:
-            if 0 <= k < N and (k + j) % 2 == 1:  # vertical on top
-                polys.append((rect, col))
+    for i in range(-1, N + 1):
+        for j in range(-1, N + 1):
+            if (i + j) % 2 == 1:   # vertical ribbon on top at this crossing
+                polys.append(([(i - half, j - arm), (i + half, j - arm),
+                               (i + half, j + arm), (i - half, j + arm)],
+                              vary(rng, cool, 26)))
+            else:                  # horizontal ribbon on top
+                polys.append(([(i - arm, j - half), (i + arm, j - half),
+                               (i + arm, j + half), (i - arm, j + half)],
+                              vary(rng, warm, 26)))
+            polys.append(([(i + half, j + half), (i + 1 - half, j + half),
+                           (i + 1 - half, j + 1 - half), (i + half, j + 1 - half)],
+                          vary(rng, knot, 20)))
     return polys, (-0.2, -0.2, N - 0.8, N - 0.8)
 
 

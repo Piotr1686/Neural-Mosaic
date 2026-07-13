@@ -1025,6 +1025,144 @@ def _gen_sunburst(engine, target_w, target_h, base_s):
         yield [(cx, cy)] + _sun_arc(r_in, a0, a1, cx, cy, seg)
 
 
+# --- Voderberg / escher_lizard / weave (last three Fable shapes) -----------
+# voderberg + escher_lizard are ported straight from gen_fable_shape_schemes.py
+# (image space, y-down, so the on-screen chirality matches the scheme PNGs);
+# only the hard-coded scheme scale is replaced by a base_s-driven one.
+def _gen_voderberg(engine, target_w, target_h, base_s):
+    """Voderberg-style spiral of bent slivers: concentric rings about the frame
+    centre, each ring split into its OWN wedge count (~2*pi*r_mid / tangential
+    size), so cells keep a constant size at every radius and the centre is a
+    ring of same-shaped slivers converging at the pole (the approved 'good
+    centre' pattern; ring 0 starts at r = 0, so `arc_in` is empty there).
+
+    Two scheme constants must become radius-relative in the engine, or they
+    break at frame scale: the radial edge bow was a fixed 5 deg (its lateral
+    size would then grow with r and the slivers would flatten into arcs), and
+    the ring radii were a fixed list. Here the ring thickness is constant
+    (sqrt(2)*base_s) and the bow is a fixed fraction of it, giving ~2:1 slivers
+    of area ~ base_s^2 everywhere. The two radial edges of a wedge are the same
+    curve shifted by one angular step, so they can never cross.
+
+    Ring boundaries are circles shared by rings with different wedge counts ->
+    T-junctions on the arcs, which is fine for a partition (the sunburst /
+    sierpinski-row precedent) as long as both sides polygonise the arc with the
+    same sub-pixel pitch: `_sun_arc`.
+    """
+    cx, cy = target_w / 2.0, target_h / 2.0
+    r_max = math.hypot(cx, cy) * 1.02
+    tang = base_s / math.sqrt(2.0)          # tangential cell size
+    thick = base_s * math.sqrt(2.0)         # radial ring thickness (2:1 sliver)
+    seg = max(4.0, base_s / 3.0)
+    nseg = max(6, int(thick / seg) + 1)     # radial edge polyline steps
+    base_off = 0.0
+    for m in range(int(math.ceil(r_max / thick))):
+        rin, rout = m * thick, (m + 1) * thick
+        r_mid = (rin + rout) / 2.0
+        nw = max(8, int(round(2.0 * math.pi * r_mid / tang)))
+        step = 2.0 * math.pi / nw
+        twist = step / 2.0                  # spiral shear, accumulates per ring
+        bow = min(0.5, 0.35 * thick / r_mid)
+
+        def radial(a):
+            pts = []
+            for i in range(nseg + 1):
+                t = i / nseg
+                r = rin + (rout - rin) * t
+                th = a + twist * t + bow * math.sin(math.pi * t)
+                pts.append((cx + r * math.cos(th), cy + r * math.sin(th)))
+            return pts
+
+        for k in range(nw):
+            a0 = base_off + k * step
+            a1 = a0 + step
+            arc_out = _sun_arc(rout, a0 + twist, a1 + twist, cx, cy, seg)[1:-1]
+            arc_in = ([] if rin == 0.0
+                      else _sun_arc(rin, a1, a0, cx, cy, seg)[1:-1])
+            yield radial(a0) + arc_out + list(reversed(radial(a1))) + arc_in
+        base_off += twist
+
+
+def _gen_escher(engine, target_w, target_h, base_s):
+    """Escher-style p1 'critter': a unit hexagon whose three independent edges
+    are deformed by a wavy polyline and copied, reversed and translated, onto
+    the three opposite edges (Conway criterion, translations only) -> an exact
+    tiling on the hex lattice. The deformation is area-preserving in the sense
+    that matters here: every tile is one lattice cell, so its area is the
+    hexagon's (3*sqrt(3)/2 units) and s = base_s / sqrt(3*sqrt(3)/2)."""
+    s = base_s / math.sqrt(1.5 * math.sqrt(3.0))
+    h = [cmath.exp(1j * math.radians(30 + 60 * k)) for k in range(6)]
+    off0 = [0.05, 0.20, 0.31, 0.29, 0.13, -0.09, -0.05]   # round head + neck dip
+    off1 = [0.13, -0.09, 0.17, -0.11, 0.11, -0.05]        # two stubby legs
+    off2 = [-0.09, -0.22, -0.15, 0.09, 0.25, 0.13]        # tail swoosh
+
+    def wavy(a, b, offsets):
+        v = b - a
+        n = v * 1j                      # left normal
+        m = len(offsets) + 1
+        return [a + v * (i / m) + n * off for i, off in enumerate(offsets, 1)]
+
+    e0 = [h[0]] + wavy(h[0], h[1], off0)
+    e1 = [h[1]] + wavy(h[1], h[2], off1)
+    e2 = [h[2]] + wavy(h[2], h[3], off2)
+    # each opposite edge = its partner reversed, translated by -(sum of the
+    # partner's endpoints): h[0]-(h[0]+h[1]) = -h[1] = h[4], etc.
+    boundary = e0 + e1 + e2
+    boundary += [z - (h[0] + h[1]) for z in reversed(e0 + [h[1]])][:-1]
+    boundary += [z - (h[1] + h[2]) for z in reversed(e1 + [h[2]])][:-1]
+    boundary += [z - (h[2] + h[3]) for z in reversed(e2 + [h[3]])][:-1]
+
+    t1 = complex(math.sqrt(3.0), 0) * s
+    t2 = complex(math.sqrt(3.0) / 2, 1.5) * s
+    m0, m1, n0, n1 = _lattice_mn_range(t1, t2, target_w, target_h,
+                                       pad=2.0 * s)   # critter bulge ~1.35 units
+    for m in range(m0, m1 + 1):
+        for n in range(n0, n1 + 1):
+            c = m * t1 + n * t2
+            yield [((c + z * s).real, (c + z * s).imag) for z in boundary]
+
+
+def _gen_weave(engine, target_w, target_h, base_s):
+    """Plain over/under basketweave, rebuilt as a TRUE partition.
+
+    The scheme (gen_fable_shape_schemes.gen_weave, rev 2026-07-13) drew whole
+    ribbon cells and faked the interlacing by paint order: crossing squares were
+    painted twice and the gaps between four ribbons stayed background. Both are
+    illegal in the engine (overlapping sectors = two photos fighting for the
+    same pixels; holes = black squares), so the cells are the VISIBLE pieces:
+
+      * ribbon width w = 0.74 * pitch; a ribbon is hidden exactly at its
+        under-crossings, so its visible piece runs from one under-crossing to
+        the next -> a w x (2*pitch - w) rectangle centred on the over-crossing
+        it covers. Parity (i + j) % 2 decides which ribbon is on top, so every
+        crossing square is claimed exactly once.
+      * the (pitch - w)^2 square left between four ribbons becomes a 'knot'
+        cell of its own (the small tile of a mixed tiling, as in rhombitrihex).
+
+    Dominant tile = the ribbon cell, area w*(2*pitch - w) = 0.9324*pitch^2, so
+    pitch = base_s / sqrt(0.9324) keeps it at ~ base_s^2.
+    """
+    pitch = base_s / math.sqrt(0.9324)
+    w = 0.74 * pitch
+    half = w / 2.0
+    arm = pitch - half                  # cell half-length along the ribbon
+    ni = int(target_w / pitch) + 3
+    nj = int(target_h / pitch) + 3
+    for i in range(-1, ni):
+        for j in range(-1, nj):
+            xc, yc = i * pitch, j * pitch
+            if (i + j) % 2 == 1:        # vertical ribbon on top here
+                yield [(xc - half, yc - arm), (xc + half, yc - arm),
+                       (xc + half, yc + arm), (xc - half, yc + arm)]
+            else:                       # horizontal ribbon on top here
+                yield [(xc - arm, yc - half), (xc + arm, yc - half),
+                       (xc + arm, yc + half), (xc - arm, yc + half)]
+            # knot: the square gap between the four ribbons up-right of (i, j)
+            yield [(xc + half, yc + half), (xc + pitch - half, yc + half),
+                   (xc + pitch - half, yc + pitch - half),
+                   (xc + half, yc + pitch - half)]
+
+
 @dataclass(frozen=True)
 class ShapeSpec:
     """Descriptor for one tile shape.
@@ -1080,6 +1218,9 @@ SHAPE_MODES = {
     "sunburst":                 ShapeSpec("polygon", _gen_sunburst, aa=4),
     "penrose":                  ShapeSpec("polygon", _gen_penrose, aa=4),
     "ammann_beenker":           ShapeSpec("polygon", _gen_ammann_beenker, aa=4),
+    "voderberg":                ShapeSpec("polygon", _gen_voderberg, aa=4),
+    "escher_lizard":            ShapeSpec("polygon", _gen_escher, aa=4),
+    "weave":                    ShapeSpec("polygon", _gen_weave, aa=4),
 }
 
 

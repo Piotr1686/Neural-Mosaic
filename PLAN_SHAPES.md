@@ -28,9 +28,9 @@ Pogrupowane po wspólnej maszynerii (nie po autorze propozycji):
 | S3 | penrose, ammann_beenker | multigrid de Bruijna (1 implementacja, N=5 i N=4) |
 | S4 | pinwheel, gosper, cairo, floret, pythagorean | czyste konstrukcje deterministyczne (substytucja/lattice) |
 | S5 | voronoi, phyllotaxis, poincare | zmienna wielkość komórek: seeded RNG + próg min-area |
-| S6 | sunburst, voderberg, trunc_square, trunc_hex, rhombitrihex | polar (polygonizacja łuków) + archimedesowe |
-| S7 | girih, escher_lizard | geometria „projektowana" (patrz wyzwania) |
-| S8 | truchet, truchet_hex (`_CurvedMask`), weave (z-order) | Tier B — nowa maszyneria maskowania/kompozycji |
+| S6 | sunburst, voderberg, trunc_square, trunc_hex, rhombitrihex | polar (polygonizacja łuków) + archimedesowe — **ZROBIONE** |
+| S7 | girih, escher_lizard | geometria „projektowana" (patrz wyzwania) — **escher_lizard ZROBIONY**; girih został |
+| S8 | truchet, truchet_hex, weave | ~~Tier B~~ — `_CurvedMask` odrzucony (2026-07-11), weave = partycja (2026-07-13, **ZROBIONY**); zostaje truchet ×2 jako zwykłe `polygon` |
 | S9 | docs (README EN+PL), montaż zbiorczy 20, mozaiki testowe dla usera | zamknięcie |
 
 ## Geometria — konkrety i pułapki per kształt
@@ -67,7 +67,7 @@ Pogrupowane po wspólnej maszynerii (nie po autorze propozycji):
 
 ### S8: Tier B
 - **truchet/truchet_hex:** przed budową `_CurvedMask` zrobić **prototyp 1 kafelka** i pokazać userowi — siła truchet to rysunek łuków, nie kształt maski; efekt fotomozaiki może rozczarować. Decyzja go/no-go po prototypie. `_CurvedMask` = maska z `ImageDraw.pieslice`/arc na supersamplu, ten sam kontrakt co `_LazyMask` (deterministyczna re-rasteryzacja przy kompozycie).
-- **weave:** NIE jest partycją — komórki wstęg nakładają się na skrzyżowaniach. Kolejność malarska: pionowe → poziome → łatki „nad" (parzystość (i+j)); kolejność MUSI być deterministyczna. Maski prostokątne (zwykłe), ale kompozycja sekwencyjna zamiast rozłącznej — sprawdzić, czy `alpha_composite` w obecnej pętli zachowuje kolejność `sectors_data` (zachowuje: iteracja listy). Cień/przerwa między wstęgami = parametr tła.
+- **weave — ROZSTRZYGNIĘTE 2026-07-13 (wdrożone):** pierwotny zapis („nie jest partycją, kompozycja sekwencyjna z-order, przerwa między wstęgami = tło") jest **UNIEWAŻNIONY** przez twardą regułę usera z 2026-07-03 (każdy kształt = prawdziwa teselacja brzeg-w-brzeg, bez nakładek i bez luk). W silniku nakładki = dwa zdjęcia walczące o piksele, a przerwy = czarne kwadraty. Wdrożona **partycja**: komórka = WIDOCZNY kawałek wstęgi (wstęga znika dokładnie na swoich skrzyżowaniach „pod", więc jej widoczny kawałek biegnie od jednego takiego skrzyżowania do następnego → prostokąt `w × (2·pitch − w)` wyśrodkowany na skrzyżowaniu „nad"; parzystość `(i+j)` przydziela każde skrzyżowanie dokładnie jednej wstędze) + **komórka-węzeł** `(pitch − w)²` w dziurze między czterema wstęgami (mały kafel teselacji mieszanej, jak trójkąty w rhombitrihex). Schemat `assets/shape_schemes/weave.png` zregenerowany z tej samej geometrii (`gen_weave`, rev 2026-07-13) — GUI pokazuje to, co silnik naprawdę renderuje. Dominujący kafel: `pitch = base_s/√0.9324`.
 
 ## Wyzwania przekrojowe (checklista przed każdym sprintem)
 
