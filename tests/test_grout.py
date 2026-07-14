@@ -9,6 +9,7 @@ deterministic seed replacement for hash().
 from PIL import Image, ImageDraw
 
 from src import grout
+from src.engine_smart import SmartEngine
 
 
 # ---------------------------------------------------------------------------
@@ -96,6 +97,42 @@ def test_scale_widths_is_proportional_and_at_least_one_px():
 
     tiny = grout.scale_widths("thin", 1.0)
     assert all(w >= 1 for w in tiny.values())           # never vanishes
+
+
+def test_min_level_drops_the_levels_below_it_not_above():
+    """Selecting a structure keeps the HIGHER levels, which is the whole point:
+    a kites hexagon's own border is level 2 where its neighbour sits in the same
+    7-flower and level 3 where it does not, so 'outline the hexagons' has to
+    keep level 3 too — otherwise every hexagon on a flower boundary would lose
+    part of its outline."""
+    full = grout.scale_widths("medium", grout.REFERENCE_TILE_PX, min_level=1)
+    groups = grout.scale_widths("medium", grout.REFERENCE_TILE_PX, min_level=2)
+    supers = grout.scale_widths("medium", grout.REFERENCE_TILE_PX, min_level=3)
+
+    assert all(full[lvl] > 0 for lvl in (1, 2, 3))
+    assert groups[1] == 0 and groups[2] > 0 and groups[3] > 0
+    assert supers[1] == 0 and supers[2] == 0 and supers[3] > 0
+    # the surviving levels keep their preset weight — only the selection changes
+    for lvl in (2, 3):
+        assert groups[lvl] == full[lvl]
+    assert supers[3] == full[3]
+
+
+def test_min_level_selects_the_kite_hexagon_and_flower_outlines():
+    """End to end on the real kites geometry: raising the level must strictly
+    shrink the drawn segment set (kite -> 6-kite hexagon -> 7-hexagon flower)."""
+    engine = SmartEngine(index_path="__none__.pkl")
+    cells = engine._grout_cells("kites", 620, 620, 46.0)
+    by_level = grout.classify_edges(cells)
+    assert by_level[1] and by_level[2] and by_level[3]
+
+    def drawn(min_level):
+        w = grout.scale_widths("medium", 46.0, min_level=min_level)
+        return sum(len(by_level[lvl]) for lvl in (1, 2, 3) if w[lvl] > 0)
+
+    assert drawn(1) > drawn(2) > drawn(3) > 0
+    assert drawn(1) == sum(len(by_level[lvl]) for lvl in (1, 2, 3))
+    assert drawn(3) == len(by_level[3])
 
 
 def test_scale_widths_rejects_unknown_preset():

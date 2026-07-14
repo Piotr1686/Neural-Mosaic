@@ -54,6 +54,12 @@ PRESETS = {
 }
 DEFAULT_PRESET = "medium"
 
+# The structures a user can ask to have outlined, lowest first. Only the shapes
+# in engine_smart._HIERARCHICAL_GROUT actually HAVE levels 2 and 3; the flat
+# ones own a single level and ignore the choice.
+LEVELS = (1, 2, 3)
+DEFAULT_MIN_LEVEL = 1
+
 # Tile edge (px) the preset widths above are tuned for. ``scale_widths`` keeps
 # grout width proportional to tile edge length so the same preset reads the
 # same at any tile scale.
@@ -65,16 +71,29 @@ def preset_names():
     return list(PRESETS.keys())
 
 
-def scale_widths(preset, tile_px, reference_tile_px=REFERENCE_TILE_PX):
+def scale_widths(preset, tile_px, reference_tile_px=REFERENCE_TILE_PX,
+                 min_level=1):
     """Return ``{level: width_px}`` for ``preset`` scaled to a tile of edge
     ``tile_px``. Widths stay proportional to tile edge length; each is at least
     1 px so a selected level never silently vanishes.
+
+    ``min_level`` — the LOWEST structure that gets an outline; levels below it
+    are given width 0, which :func:`draw_grout` skips. Note the direction: to
+    outline the 7-hex flowers you keep the HIGH levels, not the low ones. An
+    edge is classified as the highest level that separates two groups, so a
+    single hexagon's border is level 2 where its neighbour is in the same
+    flower and level 3 where it is not — asking for "flowers only" therefore
+    means "levels >= 2", never "levels <= 2".
+
+    min_level=1 : every tile outlined (a kite, a square, ...) — the default
+    min_level=2 : only the groups (kites: the 6-kite hexagon)
+    min_level=3 : only the super-groups (kites: the 7-hexagon flower)
     """
     if preset not in PRESETS:
         raise KeyError(f"unknown grout preset {preset!r}; "
                        f"choices: {preset_names()}")
     factor = float(tile_px) / float(reference_tile_px)
-    return {lvl: max(1, round(w * factor))
+    return {lvl: (max(1, round(w * factor)) if lvl >= min_level else 0)
             for lvl, w in PRESETS[preset].items()}
 
 

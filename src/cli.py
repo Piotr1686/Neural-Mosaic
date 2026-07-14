@@ -98,6 +98,14 @@ def _add_smart_args(p: argparse.ArgumentParser) -> None:
              "square/hexagon/triangle/kites; flat single-width for other shapes.",
     )
     sg.add_argument(
+        "--grout-level", type=int, default=1, choices=[1, 2, 3], metavar="N",
+        help="Smallest structure to outline: 1 = every tile (default), "
+             "2 = the tile group (kites: the 6-kite hexagon), 3 = the "
+             "super-group (kites: the 7-hexagon flower). Higher levels stay "
+             "drawn, so 2 still emphasises the flower boundaries. Only the "
+             "hierarchical shapes have levels 2-3; the rest ignore this.",
+    )
+    sg.add_argument(
         "--blend", type=float, default=0.0, metavar="FLOAT",
         help="Blend original image over mosaic, 0.0-0.3  (default: 0.0)",
     )
@@ -326,6 +334,7 @@ def _render_smart(engine, input_path: Path, output_path: Path, args: argparse.Na
         blend_strength=args.blend,
         tint_strength=args.tint,
         grout_preset=args.grout,
+        grout_level=args.grout_level,
         save_used_tiles=args.save_used_tiles,
     )
 
@@ -355,7 +364,8 @@ def _run_render(args: argparse.Namespace, log: logging.Logger) -> None:
         log.info(
             "  Shape=%s  Scale=%.2f  Border=%s  Grout=%s  Blend=%.2f  Tint=%.2f"
             "  Mirror=%s  EdgeAware=%s",
-            args.shape, args.scale, args.border, args.grout or "off",
+            args.shape, args.scale, args.border,
+            f"{args.grout}/L{args.grout_level}" if args.grout else "off",
             args.blend, args.tint, args.mirror, args.edge_aware,
         )
         engine = _load_smart_engine(args, log)
@@ -384,6 +394,10 @@ def _batch_output_path(output_dir: Path, stem: str, args: argparse.Namespace) ->
         suffix = f"_{args.shape}"
         if getattr(args, "grout", None):
             suffix += f"_grout-{args.grout}"
+            # level in the name only when it is not the default, so existing
+            # batch outputs keep matching skip-if-exists
+            if getattr(args, "grout_level", 1) != 1:
+                suffix += f"-L{args.grout_level}"
     else:
         suffix = f"_{args.mode}"
     return output_dir / f"{stem}_{args.engine}_{args.res}{suffix}{ext}"

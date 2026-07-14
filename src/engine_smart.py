@@ -1987,7 +1987,7 @@ class SmartEngine:
         print(f"Used-tiles report: {json_path.name} "
               f"({len(report)} unique tiles, {payload['total_placements']} placements)")
 
-    def create_mosaic(self, target_path, output_path, resolution_key, shape_mode, tile_scale, border_mode=False, blend_strength=0.0, tint_strength=0.0, grout_preset=None, save_used_tiles=False, progress_cb=None, cancel_event=None):
+    def create_mosaic(self, target_path, output_path, resolution_key, shape_mode, tile_scale, border_mode=False, blend_strength=0.0, tint_strength=0.0, grout_preset=None, grout_level=1, save_used_tiles=False, progress_cb=None, cancel_event=None):
         """Public API — resolves resolution_key and delegates to _do_render.
 
         ``grout_preset`` (None | "thin"/"medium"/"thick") is an independent
@@ -2009,7 +2009,7 @@ class SmartEngine:
         img_w, img_h = target.size
         scale_res = target_long / max(img_w, img_h)
         target = target.resize((int(img_w * scale_res), int(img_h * scale_res)), Image.Resampling.LANCZOS)
-        result = self._do_render(target, shape_mode, tile_scale, border_mode, blend_strength, tint_strength, grout_preset=grout_preset, progress_cb=progress_cb, cancel_event=cancel_event)
+        result = self._do_render(target, shape_mode, tile_scale, border_mode, blend_strength, tint_strength, grout_preset=grout_preset, grout_level=grout_level, progress_cb=progress_cb, cancel_event=cancel_event)
         save_kwargs = {"quality": 95}
         if str(output_path).lower().endswith((".jpg", ".jpeg")):
             # 4:4:4 chroma (no subsampling): a mosaic is thousands of hard
@@ -2023,7 +2023,8 @@ class SmartEngine:
             self._write_used_tiles(output_path, shape_mode)
 
     def render_preview(self, target_path, short_edge=512, shape_mode="hexagon_romb",
-                       tile_scale=1.0, border_mode=False, grout_preset=None):
+                       tile_scale=1.0, border_mode=False, grout_preset=None,
+                       grout_level=1):
         """Return a PIL Image preview at ~short_edge px short side — no file I/O."""
         if not self.paths:
             raise RuntimeError("Index not loaded.")
@@ -2033,7 +2034,7 @@ class SmartEngine:
         prev_w = max(1, int(img_w * scale))
         prev_h = max(1, int(img_h * scale))
         target = target.resize((prev_w, prev_h), Image.Resampling.LANCZOS)
-        return self._do_render(target, shape_mode, tile_scale, border_mode, 0.0, 0.0, grout_preset=grout_preset)
+        return self._do_render(target, shape_mode, tile_scale, border_mode, 0.0, 0.0, grout_preset=grout_preset, grout_level=grout_level)
 
     def _resolve_matching_modes(self):
         """Resolve edge_aware/allow_mirror, degrading on conflicts (warns on stdout).
@@ -2438,7 +2439,8 @@ class SmartEngine:
     # thick L3); every other supported shape draws flat single-width grout.
     _HIERARCHICAL_GROUT = ("square", "triangle", "hexagon", "kites")
 
-    def _apply_grout(self, mosaic_rgb, shape_mode, target_w, target_h, base_s, preset):
+    def _apply_grout(self, mosaic_rgb, shape_mode, target_w, target_h, base_s,
+                     preset, min_level=1):
         """Draw the grout overlay on the finished RGB mosaic.
 
         Hierarchical shapes (``_HIERARCHICAL_GROUT``) get graded widths from the
@@ -2446,24 +2448,33 @@ class SmartEngine:
         segments but draw every level at one uniform width (the preset's L1),
         including the frame-boundary edges (drawn, not suppressed). A no-op (with
         a note) for shapes still lacking any grouping.
+
+        ``min_level`` picks the smallest structure that gets an outline (kites:
+        1 = each kite, 2 = the 6-kite hexagon, 3 = the 7-hexagon flower). Flat
+        shapes own a single level, so for them the choice is ignored rather than
+        honoured — obeying it would erase their grout entirely and leave a bare
+        frame.
         """
         cells = self._grout_cells(shape_mode, target_w, target_h, base_s)
         if cells is None:
             print(f"Grout: '{shape_mode}' has no grouping yet — grout skipped.")
             return
-        widths = scale_widths(preset, base_s)
-        if shape_mode in self._HIERARCHICAL_GROUT:
-            level_w = widths
-            kind = "hierarchical"
+        hierarchical = shape_mode in self._HIERARCHICAL_GROUT
+        if hierarchical:
+            level_w = scale_widths(preset, base_s, min_level=min_level)
+            kind = f"hierarchical, from level {min_level}"
         else:
-            w = widths[1]
+            w = scale_widths(preset, base_s)[1]
             level_w = {1: w, 2: w, 3: w}
             kind = "flat"
+            if min_level > 1:
+                print(f"Grout: '{shape_mode}' has no tile grouping — "
+                      f"level {min_level} ignored, drawing every seam.")
         print(f"Grout: drawing {kind} borders '{preset}' over {len(cells)} cells...")
         by_level = classify_edges(cells)
         draw_grout(mosaic_rgb, by_level, level_w, color=(0, 0, 0))
 
-    def _do_render(self, target, shape_mode, tile_scale, border_mode=False, blend_strength=0.0, tint_strength=0.0, grout_preset=None, progress_cb=None, cancel_event=None):
+    def _do_render(self, target, shape_mode, tile_scale, border_mode=False, blend_strength=0.0, tint_strength=0.0, grout_preset=None, grout_level=1, progress_cb=None, cancel_event=None):
         """Core rendering kernel — accepts a pre-scaled PIL Image, returns PIL Image.
 
         ``progress_cb``, if given, is called ``progress_cb(done, total)`` after each
@@ -2983,7 +2994,7 @@ class SmartEngine:
         if grout_preset is not None:
             _check_cancel()
             self._apply_grout(mosaic_rgb, shape_mode, target_w, target_h, base_s,
-                              grout_preset)
+                              grout_preset, min_level=grout_level)
         # Expose which library tiles were placed (indexed like self.paths) so
         # create_mosaic can dump a used-tiles report for the hi-res upgrade
         # tool (Sprint 3). Kept in memory only; render_preview never writes it
