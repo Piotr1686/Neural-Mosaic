@@ -20,13 +20,17 @@ import math
 import cmath
 import json
 import threading
+import heapq
 from datetime import datetime
 from dataclasses import dataclass
 from pathlib import Path
 from PIL import Image, ImageOps, ImageDraw
 from tqdm import tqdm
 from scipy.spatial import cKDTree, Voronoi
+from scipy.ndimage import (label as nd_label, find_objects as nd_find_objects,
+                           binary_dilation)
 import skimage.color
+from skimage.measure import find_contours, approximate_polygon
 
 from .spectre_tiling import generate_spectre_tiling
 from .render_control import RenderCancelled
@@ -1268,6 +1272,398 @@ def _gen_truchet_hex(engine, target_w, target_h, base_s):
             yield middle
 
 
+# --- Girih (rosette quasi-lattice + greedy fill) ----------------------------
+# Ported from src/tools/gen_fable_shape_schemes.py::_girih_attempt, but the
+# scheme's algorithm does not survive being scaled up to a frame, and three of
+# its four pillars had to go (audit: src/tools/girih_audit.py):
+#   1. `commit()` rebuilt the ENTIRE occupancy raster after every tile. Harmless
+#      on a 572px scheme, hundreds of GB of memcpy at 16K. Now it ORs a
+#      bbox-sized buffer into the raster.
+#   2. The patch radius now follows the frame diagonal, so cell size tracks
+#      base_s at every resolution (invariant: dominant cell area ~ base_s^2).
+#   3. Convex-hull hole filling is gone: the holes are concave corridors, so
+#      their hulls swallowed whole neighbouring tiles (7-11% of the frame
+#      painted twice). Holes are now traced and emitted as they are.
+#   4. The decagons are SEEDED on a quasi-lattice instead of being discovered by
+#      the greedy, which is what finally made the shape look like girih at all
+#      (see the block by the seeding code) — and that in turn removed the last
+#      of the randomness, so there is no RNG and no frozen seed anywhere here.
+_GIRIH_RES = 26           # occupancy raster resolution (px per unit edge). A
+# coarser raster (16) fakes collisions between tiles that actually fit and
+# costs ~3 points of coverage; a finer one buys nothing. It is not a speed
+# knob — the raster work is negligible next to the growth loop.
+_GIRIH_CELL_AREA = 2.1266  # area of the girih hexagon: the cell that takes the
+# largest share of the picture, so it is the one the mixed-tiling scale rule
+# pins to base_s^2. The rosette kites (0.77) are the most NUMEROUS cell and are
+# deliberately finer — that is what makes a rosette read as a rosette.
+_GIRIH_MARGIN = 10.0      # units of patch grown BEYOND the frame corner. The
+# growth front is ragged (edges past rad-2 are dropped), so it must fall
+# outside the frame: at margin 3 the frame still caught 1-2 unit^2 holes.
+# Which tile gets first refusal when filling BETWEEN the rosettes. Bowtie-first
+# is not a taste call, it is what the lattice wants: a decagon pair one rhomb
+# edge apart is bridged by a hexagon, but every other gap the quasi-lattice
+# opens is bowtie-shaped, and letting hexagons grab those first strands the
+# leftovers. Measured over the whole frame (src/tools/girih_audit.py):
+#   bowtie-first : 95.3% real girih tiles, 3.1% traced leftovers
+#   hexagon-first: 84.5% real girih tiles, 11.3% traced leftovers
+# The order is FIXED, so girih carries no RNG and no frozen seed at all — the
+# plan budgeted for a seed sweep, and seeding the rosettes deterministically
+# made the whole question disappear.
+_GIRIH_ORDER = ("bowtie", "hexagon", "pentagon", "rhomb")
+_GIRIH_PROBE = 0.15       # dead-edge probe depth (< 0.81, the smallest inward
+# extent of any prototype at an edge midpoint), which makes the probe exact:
+# it rejects an edge only when a tile glued to it would provably overlap.
+
+
+def _girih_turtle(angles):
+    """Unit-edge polygon from its interior angles (degrees), CCW."""
+    pts = [complex(0.0, 0.0)]
+    heading = 0.0
+    for ang in angles[:-1]:
+        pts.append(pts[-1] + cmath.exp(1j * math.radians(heading)))
+        heading += 180.0 - ang
+    return pts
+
+
+# The five classic girih tiles (all edges of length 1).
+_GIRIH_PROTOS = {
+    "decagon":  _girih_turtle([144] * 10),
+    "pentagon": _girih_turtle([108] * 5),
+    "hexagon":  _girih_turtle([72, 144, 144, 72, 144, 144]),
+    "bowtie":   _girih_turtle([72, 72, 216, 72, 72, 216]),
+    "rhomb":    _girih_turtle([72, 108, 72, 108]),
+}
+_GIRIH_SHRINK = 0.90      # collision test: candidate shrunk toward its centroid
+_GIRIH_SEAL = 0.99        # commit: tile written to the raster nearly full size
+_GIRIH_HOLE_GROW = 1      # raster px a traced hole is dilated by (see below)
+
+
+def _girih_tables(shrink=_GIRIH_SHRINK):
+    """Precompute every (tile type, edge) candidate ONCE, in a frame where the
+    glued edge runs from 0 to 1. Gluing tile edge j onto the open edge (B, A)
+    is then the single affine map z -> z*(A - B) + B, so a candidate's vertices
+    are one complex multiply — and all 31 candidates can be built and tested
+    against the occupancy raster in a handful of numpy calls per edge.
+
+    Returns (order_index, verts, probes):
+      order_index : {tile name: (first_row, n_rows)}
+      verts       : list of (n,) complex arrays, one per row (the tile itself)
+      probes      : (31, C) complex array of interior sample points -- the
+                    shrunk vertices plus the centroid, padded by repeating a
+                    point (a duplicate sample is harmless, a ragged array is not)
+    """
+    index, verts, probes = {}, [], []
+    cmax = max(len(t) for t in _GIRIH_PROTOS.values()) + 1
+    for name, tpl in _GIRIH_PROTOS.items():
+        index[name] = (len(verts), len(tpl))
+        for j in range(len(tpl)):
+            pj, pj1 = tpl[j], tpl[(j + 1) % len(tpl)]
+            m = np.array([(z - pj) / (pj1 - pj) for z in tpl], dtype=complex)
+            c = m.mean()
+            s = np.concatenate([c + (m - c) * shrink, [c]])
+            verts.append(m)
+            probes.append(np.pad(s, (0, cmax - len(s)), mode="edge"))
+    return index, verts, np.array(probes)
+
+
+_GIRIH_INDEX, _GIRIH_VERTS, _GIRIH_PROBES = _girih_tables()
+
+
+def _girih_patch(rad, res=_GIRIH_RES, stats=None):
+    """Build a girih patch of radius `rad` (in unit edges) about the origin and
+    return its cells as polygons in unit space.
+
+    Two stages. First the decagon rosettes are laid on a 10-fold quasi-lattice
+    (see the seeding block). Then a greedy fills the space between them: take
+    the most boxed-in open edge, try the tile types in _GIRIH_ORDER, keep the
+    first that does not overlap the occupancy raster.
+
+    Every decagon is split into its 10 khatam kites — a whole decagon is several
+    times bigger than any other cell, which is the 'impractical centre' the user
+    rejected elsewhere — and whatever the greedy still fails to cover is traced
+    and emitted as its own cell, so the frame has no background holes.
+
+    Fully deterministic: same rad, same patch. `stats`: optional dict, filled
+    with tile counts / coverage / leftover count for src/tools/girih_audit.py.
+    """
+    res = float(res)
+    W = int(2.0 * rad * res) + 2
+    occ = np.zeros((W, W), dtype=bool)
+
+    def to_px(z):
+        return ((z.real + rad) * res, (z.imag + rad) * res)
+
+    def shrunk(poly, f):
+        c = sum(poly) / len(poly)
+        return [c + (z - c) * f for z in poly]
+
+    def raster(poly, f):
+        """(x0, y0, mask) for the f-shrunk polygon, or None if out of bounds."""
+        pts = [to_px(z) for z in shrunk(poly, f)]
+        x0 = int(min(p[0] for p in pts)) - 1
+        y0 = int(min(p[1] for p in pts)) - 1
+        x1 = int(max(p[0] for p in pts)) + 2
+        y1 = int(max(p[1] for p in pts)) + 2
+        if x0 < 0 or y0 < 0 or x1 > W or y1 > W:
+            return None
+        buf = Image.new("L", (x1 - x0, y1 - y0), 0)
+        ImageDraw.Draw(buf).polygon([(px - x0, py - y0) for px, py in pts],
+                                    fill=255)
+        return x0, y0, np.asarray(buf, dtype=bool)
+
+    def free_at(z):
+        px, py = to_px(z)
+        ix, iy = int(px), int(py)
+        if ix < 0 or iy < 0 or ix >= W or iy >= W:
+            return False
+        return not occ[iy, ix]
+
+    def fits(poly):
+        r = raster(poly, _GIRIH_SHRINK)
+        if r is None:
+            return False
+        x0, y0, m = r
+        h, w = m.shape
+        return not np.any(occ[y0:y0 + h, x0:x0 + w] & m)
+
+    def commit(poly):
+        r = raster(poly, _GIRIH_SEAL)
+        if r is None:
+            return
+        x0, y0, m = r
+        h, w = m.shape
+        occ[y0:y0 + h, x0:x0 + w] |= m
+
+    placed = []
+    open_edges = []
+    seq = [0]
+
+    def pocket_score(A, B):
+        """How boxed-in this edge is: how many of the probe points just beyond
+        its two ENDS are already covered. An edge with both ends walled in sits
+        in a pocket that only shrinks — if the front closes over it before it is
+        tried, the pocket becomes dead space. Serving the most boxed-in edges
+        first is the classic most-constrained-first heuristic."""
+        d = (B - A) / abs(B - A)
+        nrm = -1j * d
+        return sum(not free_at(p) for p in
+                   (A + nrm * 0.25 - d * 0.15, B + nrm * 0.25 + d * 0.15,
+                    (A + B) / 2.0 + nrm * 0.60))
+
+    def push(A, B):
+        seq[0] += 1
+        heapq.heappush(open_edges, (-pocket_score(A, B), seq[0], B, A))
+
+    def place(name, poly):
+        placed.append((name, poly))
+        commit(poly)
+        n = len(poly)
+        for i in range(n):
+            # push(A, B) with A, B in polygon order: the tile glued to this edge
+            # is then built on (B, A), i.e. REVERSED, so it grows OUTWARD
+            push(poly[i], poly[(i + 1) % n])
+
+    # ---- the rosettes are the WARP, not something the greedy grows into ----
+    # Letting the greedy discover decagons does not work: it was offered one on
+    # 1610 edges and had room on 10 of them. Edge-by-edge growth never leaves a
+    # virgin pocket the size of a decagon, so the patch came out as a field of
+    # hexagons — girih without its khatam rosettes, which is the one thing the
+    # shape exists for.
+    #
+    # Real girih is laid out the other way round: the decagons sit on a 10-fold
+    # quasi-lattice and the small tiles fill what is left between them. Penrose
+    # P3 vertices ARE that lattice, and the two constructions lock together
+    # exactly. With rhomb edge d = apothem / sin(18deg):
+    #   * neighbours one rhomb EDGE apart (distance d) leave a gap of exactly
+    #     the girih hexagon's width between two parallel edges (1.902), so a
+    #     hexagon bridges them;
+    #   * neighbours across a thin rhomb's SHORT DIAGONAL (0.618*d, the golden
+    #     ratio) land at exactly 2 apothems, so those two decagons meet
+    #     edge-to-edge.
+    # Both are legal girih adjacencies, so every decagon pair the lattice
+    # produces is one the tile set can actually resolve. The rhombs' edges run
+    # along 36k degrees while a decagon's edge normals run along 18+36k, hence
+    # the 18-degree turn.
+    apo = abs((_GIRIH_PROTOS["decagon"][0] + _GIRIH_PROTOS["decagon"][1]) / 2.0
+              - sum(_GIRIH_PROTOS["decagon"]) / 10.0)
+    d_lat = apo / math.sin(math.pi / 10.0)
+    zeta = [cmath.exp(2j * math.pi * k / 5) for k in range(5)]
+    gamma = [0.05, 0.15, 0.25, 0.35, 0.20]     # canonical class, sums to 1
+    seeds = set()
+    for rhomb in _multigrid_dual(5, zeta, gamma, 2.0 * rad, 2.0 * rad, d_lat):
+        for x, y in rhomb:
+            seeds.add((round(x - rad, 6), round(y - rad, 6)))
+
+    dec = [z * cmath.exp(1j * math.radians(18.0))
+           for z in _GIRIH_PROTOS["decagon"]]
+    dec = [z - sum(dec) / len(dec) for z in dec]          # centred on origin
+    for x, y in sorted(seeds, key=lambda p: p[0] * p[0] + p[1] * p[1]):
+        c = complex(x, y)
+        if abs(c) > rad - 2.0:
+            continue
+        rosette = [z + c for z in dec]
+        if fits(rosette):
+            place("decagon", rosette)
+
+    while open_edges:
+        negscore, _, B, A = heapq.heappop(open_edges)
+        mid = (A + B) / 2.0
+        if abs(mid) > rad - 2.0:
+            continue
+        # lazy re-prioritisation: the edge may have been walled in further since
+        # it was pushed. Scores only ever rise (occupancy never shrinks) and are
+        # capped at 3, so an edge can bounce at most three times.
+        score = pocket_score(A, B)
+        if score > -negscore:
+            heapq.heappush(open_edges, (-score, seq[0], B, A))
+            seq[0] += 1
+            continue
+        # O(1) dead-edge test: anything glued to this edge would cover the
+        # point just outside its midpoint (see _GIRIH_PROBE)
+        d = B - A
+        if not free_at(mid - 1j * d / abs(d) * _GIRIH_PROBE):
+            continue
+        # Test all 31 candidates at once: sample the interior points of each
+        # (shrunk vertices + centroid) against the occupancy raster. A sample
+        # point lies inside the shrunk candidate, so an occupied sample proves
+        # the raster test would reject it — this is a pre-filter, not a
+        # different rule, and it turns ~25 python polygon builds per edge into
+        # four numpy calls.
+        pts = _GIRIH_PROBES * (A - B) + B
+        ix = ((pts.real + rad) * res).astype(np.int32)
+        iy = ((pts.imag + rad) * res).astype(np.int32)
+        inb = (ix >= 0) & (iy >= 0) & (ix < W) & (iy < W)
+        free = inb & ~occ[np.where(inb, iy, 0), np.where(inb, ix, 0)]
+        cand_ok = free.all(axis=1)
+
+        hit = False
+        for name in _GIRIH_ORDER:
+            first, n = _GIRIH_INDEX[name]
+            for k in range(first, first + n):
+                if not cand_ok[k]:
+                    continue
+                cand = list(_GIRIH_VERTS[k] * (A - B) + B)
+                if fits(cand):
+                    place(name, cand)
+                    hit = True
+                    break
+            if hit:
+                break
+
+    cells = []
+    for name, poly in placed:
+        if name == "decagon":
+            c = sum(poly) / len(poly)
+            n = len(poly)
+            mids = [(poly[i] + poly[(i + 1) % n]) / 2.0 for i in range(n)]
+            for i in range(n):
+                cells.append([(z.real, z.imag)
+                              for z in (c, mids[(i - 1) % n], poly[i], mids[i])])
+        else:
+            cells.append([(z.real, z.imag) for z in poly])
+
+    # Close the slivers greedy growth leaves behind (~5-9% of the patch): label
+    # the empty raster, drop the component touching the border (that is the
+    # outside), and emit each interior hole as one more cell.
+    #
+    # The scheme emitted the hole's CONVEX HULL, inflated by 1.10. Neither is
+    # usable here. Dropping the inflation was not enough: the holes are
+    # concave, corridor-shaped leftovers, so their convex hulls swallow whole
+    # neighbouring tiles — measured 7-11% of the frame painted twice, i.e. two
+    # photographs fighting for the same pixels (the greedy tiles on their own
+    # rasterise as an exact partition: 0.001% overlap). The scheme got away
+    # with it because it painted the hulls last, under black outlines.
+    #
+    # So the hole is emitted as the hole: marching squares on its raster, then
+    # polyline simplification. The cell is exactly the leftover region, which
+    # keeps the tiling a partition — no double-painted pixels, no background.
+    #
+    # Holes are searched for inside the USABLE DISC only (the frame plus a
+    # little), never by asking whether a component touches the raster border.
+    # The scheme's border rule says "the component that reaches the edge is the
+    # outside" — but the empty space percolates: a corridor can run from a hole
+    # in the middle of the patch out to the ragged growth front, and then the
+    # whole component, interior included, is written off as outside. That is
+    # how salts 12/26/48 came out of the sweep with 6-9 unit^2 of bare
+    # background. Clipping to the disc instead cannot leak: every empty pixel
+    # the frame can see gets a cell, whatever the corridor does past the edge.
+    n_tiles = len(cells)
+    fill_r = (rad - _GIRIH_MARGIN + 2.0) * res
+    yy, xx = np.ogrid[:W, :W]
+    usable = (xx - W / 2.0) ** 2 + (yy - W / 2.0) ** 2 <= fill_r ** 2
+    lab, nlab = nd_label(~occ & usable)
+    if nlab:
+        min_px = max(8, int(0.10 * res * res))     # ignore sub-cell seam dust
+        # find_objects gives each label its bounding box, so a hole is scanned
+        # inside its own bbox. (Scanning `lab == li` over the FULL raster once
+        # per label is O(labels x frame) — the same shape of mistake as the
+        # scheme's commit(), and it cost 8.9 s of an 11.2 s patch.)
+        for li, sl in enumerate(nd_find_objects(lab), start=1):
+            if sl is None:
+                continue
+            sub = lab[sl] == li
+            if int(sub.sum()) < min_px:
+                continue
+            # Grow the hole by one raster pixel before tracing it. The tiles
+            # were sealed into the raster at _GIRIH_SEAL, so the empty run
+            # between two tiles is a hair wider than the true seam and a
+            # traced contour would sit just INSIDE the hole, leaving a thin
+            # background seam. Better to have the hole cell bite ~1 raster
+            # pixel into its neighbours (invisible: the cell is painted over
+            # ~140 px of tile at 16K) than to leave background showing.
+            # The zero pad MUST stay wider than the dilation: a grown mask that
+            # reaches the array edge gives find_contours an open, clipped curve
+            # instead of a closed ring, and the cell comes out as garbage.
+            grown = binary_dilation(np.pad(sub, _GIRIH_HOLE_GROW + 1),
+                                    iterations=_GIRIH_HOLE_GROW)
+            contours = find_contours(grown.astype(float), 0.5)
+            if not contours:
+                continue
+            outline = approximate_polygon(max(contours, key=len), tolerance=0.75)
+            if len(outline) < 4:               # closed ring: first point repeats
+                continue
+            off = _GIRIH_HOLE_GROW + 1
+            x_off, y_off = sl[1].start - off, sl[0].start - off
+            cells.append([((x + x_off) / res - rad, (y + y_off) / res - rad)
+                          for y, x in outline[:-1]])
+
+    if stats is not None:
+        counts = {}
+        for name, _ in placed:
+            counts[name] = counts.get(name, 0) + 1
+        # Greedy coverage of the inscribed DISC of radius rad-3 — the engine
+        # inscribes the frame rectangle in that disc, so this is the region a
+        # render actually uses. (A square window of half-width rad-3 would
+        # reach 1.41x(rad-3) at its corners — far outside the grown patch —
+        # and understate the coverage by the empty corner area.)
+        c = W / 2.0
+        rr = np.sqrt((xx - c) ** 2 + (yy - c) ** 2) / res      # radius in units
+        disc = rr <= (rad - 3.0)
+        stats["counts"] = counts
+        stats["greedy_coverage"] = float(occ[disc].mean())
+        # how the greedy holds up as the patch grows outward
+        edges = np.linspace(0.0, rad - 3.0, 8)
+        stats["profile"] = [
+            (float(a), float(b), float(occ[(rr >= a) & (rr < b)].mean()))
+            for a, b in zip(edges[:-1], edges[1:])]
+        stats["leftover_cells"] = len(cells) - n_tiles
+        stats["cells"] = len(cells)
+    return cells
+
+
+def _gen_girih(engine, target_w, target_h, base_s):
+    """Girih: the five Persian strapwork tiles grown edge-to-edge, decagons
+    split into khatam kites. The patch is built once in unit space (radius from
+    the frame diagonal) and mapped to the frame by a single scale — so the cell
+    size is set by base_s alone and a preview shows the very pattern the full
+    render will have."""
+    u = base_s / math.sqrt(_GIRIH_CELL_AREA)          # px per unit edge
+    rad = math.hypot(target_w, target_h) / (2.0 * u) + _GIRIH_MARGIN
+    cx, cy = target_w / 2.0, target_h / 2.0
+    for poly in _girih_patch(rad):
+        yield [(cx + x * u, cy + y * u) for x, y in poly]
+
+
 @dataclass(frozen=True)
 class ShapeSpec:
     """Descriptor for one tile shape.
@@ -1328,6 +1724,7 @@ SHAPE_MODES = {
     "weave":                    ShapeSpec("polygon", _gen_weave, aa=4),
     "truchet":                  ShapeSpec("polygon", _gen_truchet, aa=4),
     "truchet_hex":              ShapeSpec("polygon", _gen_truchet_hex, aa=4),
+    "girih":                    ShapeSpec("polygon", _gen_girih, aa=4),
 }
 
 

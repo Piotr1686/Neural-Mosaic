@@ -29,7 +29,7 @@ Pogrupowane po wspólnej maszynerii (nie po autorze propozycji):
 | S4 | pinwheel, gosper, cairo, floret, pythagorean | czyste konstrukcje deterministyczne (substytucja/lattice) |
 | S5 | voronoi, phyllotaxis, poincare | zmienna wielkość komórek: seeded RNG + próg min-area |
 | S6 | sunburst, voderberg, trunc_square, trunc_hex, rhombitrihex | polar (polygonizacja łuków) + archimedesowe — **ZROBIONE** |
-| S7 | girih, escher_lizard | geometria „projektowana" (patrz wyzwania) — **escher_lizard ZROBIONY**; girih został |
+| S7 | girih, escher_lizard | geometria „projektowana" (patrz wyzwania) — **ZROBIONE 2026-07-14** (girih = rozety na quasi-sieci Penrose'a, bez RNG) |
 | S8 | truchet, truchet_hex, weave | ~~Tier B~~ — **ZROBIONE 2026-07-13**: `_CurvedMask` odrzucony (2026-07-11), weave = partycja, truchet ×2 = zwykłe `polygon` |
 | S9 | docs (README EN+PL), montaż zbiorczy 20, mozaiki testowe dla usera | zamknięcie |
 

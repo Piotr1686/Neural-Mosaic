@@ -119,6 +119,12 @@ GOLDEN = {
     ("truchet", True): "40e5f0463098e046b349f16a1c2cb7b9f9986ab5376cae6211858f893e128556",
     ("truchet_hex", False): "5637078ccaafc47f70a62902eff96e3b8aed89231082f20a7c42e70c949e1d36",
     ("truchet_hex", True): "4ee3a40ab8a4dbe8fbf43983113d52522f0fb0fe196cb215270d326add23b0f1",
+    # girih (2026-07-14): decagon rosettes seeded on a Penrose-vertex
+    # quasi-lattice, greedy fill between them, leftovers traced. Carries NO RNG
+    # and no frozen seed (the plan expected one), so these hashes are stable
+    # across processes — verified in two separate interpreters.
+    ("girih", False): "99dc1692e6ae6ba29fa785091d49b380b7aba825d1f3620a7b5c2f81aa0abc4a",
+    ("girih", True): "d0fd5e9f6906fbd8b9271155fccc3d96f9d86d9c2702af856249cd7addcd0ab2",
 }
 
 
