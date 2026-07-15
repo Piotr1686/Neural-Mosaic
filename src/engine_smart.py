@@ -21,6 +21,7 @@ import cmath
 import json
 import threading
 import heapq
+from collections import deque
 from datetime import datetime
 from dataclasses import dataclass
 from pathlib import Path
@@ -1664,6 +1665,202 @@ def _gen_girih(engine, target_w, target_h, base_s):
         yield [(cx + x * u, cy + y * u) for x, y in poly]
 
 
+# ==========================================
+# POINCARE {7,3} — hyperbolic band model
+# ==========================================
+# The Poincare disk maps conformally onto an infinite horizontal strip by
+# w = (2/pi)*log((1+z)/(1-z))  (|Im w| < 1), so the same {7,3} tiling runs
+# left-right forever with no circular horizon; cell size depends only on the
+# distance from the strip midline (factor ~cos(pi*y/2)), and capping the
+# window at |y| <= _POINCARE_W bounds the smallest cells at ~1/3 of the
+# centre row. Reflections stay in the DISK (circle inversions are cheap and
+# exact); only the keep/expand test is mapped to band coordinates. The scheme
+# tool's disk-space cutoffs do NOT survive wide frames: at band-x = 3.2 (a
+# 4:1 panorama) centre-row heptagons sit at |z| ~ 0.987 where their disk
+# diameter ~0.0155 already falls below the tool's old `diam < 0.02` cutoff,
+# i.e. the cutoff was culling REAL tiles — it is deliberately absent here.
+# (Plan (b++) 2026-07-15; source geometry: gen_fable_shape_schemes.py.)
+
+_POINCARE_W = 0.80        # band window half-height (|y| <= W maps to frame)
+_POINCARE_MARGIN = 0.25   # band-units bbox inflation for the keep/expand
+                          # test — covers geodesic edges bowing toward the
+                          # midline slightly outside the vertex bbox
+
+
+def _poincare_band(z):
+    """Disk -> band strip, conformal: w = (2/pi) log((1+z)/(1-z))."""
+    return (2.0 / math.pi) * cmath.log((1.0 + z) / (1.0 - z))
+
+
+def _poincare_geo_circle(z1, z2):
+    """Circle through z1, z2 orthogonal to the unit circle (the support of
+    the disk geodesic). None -> the geodesic is a diameter (straight line)."""
+    a1, b1, c1 = 2 * z1.real, 2 * z1.imag, abs(z1) ** 2 + 1
+    a2, b2, c2 = 2 * z2.real, 2 * z2.imag, abs(z2) ** 2 + 1
+    det = a1 * b2 - a2 * b1
+    if abs(det) < 1e-9:
+        return None
+    cx = (c1 * b2 - c2 * b1) / det
+    cy = (a1 * c2 - a2 * c1) / det
+    c = complex(cx, cy)
+    r2 = abs(c) ** 2 - 1
+    if r2 <= 0.0:
+        # only reachable for (near-)degenerate input (z1 ~ z2): a true
+        # orthogonal circle always has |c| > 1 — fall back to the line case
+        return None
+    return c, math.sqrt(r2)
+
+
+def _poincare_reflect(z, circ):
+    """Inversion in the geodesic circle (hyperbolic reflection)."""
+    c, r = circ
+    return c + r * r / (z - c).conjugate()
+
+
+def _poincare_edge_arc(z1, z2, n):
+    """n samples of the geodesic arc z1 -> z2 at t = 0 .. (n-1)/n (t = 1 is
+    excluded: the next edge's t = 0 supplies that vertex). Sampling is uniform
+    in arc angle, so the sample SET is direction-independent — the neighbour
+    traversing the shared edge z2 -> z1 polygonises it through the very same
+    points (exact partition). n must be EVEN so index n//2 is the t = 0.5
+    edge midpoint where the khatam kite split lands."""
+    circ = _poincare_geo_circle(z1, z2)
+    if circ is None:
+        return [z1 + (z2 - z1) * t / n for t in range(n)]
+    c, r = circ
+    a1 = cmath.phase(z1 - c)
+    a2 = cmath.phase(z2 - c)
+    if a2 - a1 > math.pi:
+        a2 -= 2 * math.pi
+    if a1 - a2 > math.pi:
+        a2 += 2 * math.pi
+    return [c + r * cmath.exp(1j * (a1 + (a2 - a1) * t / n)) for t in range(n)]
+
+
+def _poincare_heptagons(x_max):
+    """Reflection BFS of the {7,3} tiling, pruned in BAND space.
+
+    Runs entirely in the disk; a tile is kept AND expanded iff its band-space
+    vertex bbox intersects the window [-x_max, x_max] x [-W, W] inflated by
+    _POINCARE_MARGIN. The window is geodesically convex (the band metric
+    factor 1/cos(pi*y/2) is smallest on the midline, so geodesics bow toward
+    it and never leave the box spanned by their endpoints), hence every tile
+    that meets the window is reachable from the centre through kept tiles —
+    this prune is exact, not heuristic, and it turns the otherwise
+    exponential BFS (~3.6M tiles at depth 14) into a set linear in the window
+    area. {7,3} has NO translational symmetry along the band axis (7 is odd),
+    so a wide window genuinely requires the full BFS — a panorama cannot be
+    stitched from copies of one segment.
+
+    Returns [(7 disk vertices, disk hyperbolic centre)], deterministic order
+    (deque BFS, zero RNG); the central heptagon is first. Dedup keys are disk
+    centroids rounded to 1e-4 — distinct tiles stay >= ~1e-3 apart out to
+    band-x ~ 7 (aspect ~8.7:1), far beyond any real frame."""
+    p, q = 7, 3
+    # hyperbolic circumradius from the characteristic right triangle:
+    # cosh R = cot(pi/p) * cot(pi/q)
+    coshR = 1.0 / (math.tan(math.pi / p) * math.tan(math.pi / q))
+    r0 = math.tanh(math.acosh(coshR) / 2.0)
+    central = [r0 * cmath.exp(1j * (math.pi / 2 + 2 * math.pi * k / p))
+               for k in range(p)]
+    W = _POINCARE_W
+    m = _POINCARE_MARGIN
+    # The y margin must stay strictly below the |y| = 1 horizon: tiles shrink
+    # to dust as |y| -> 1, so a keep-band reaching the horizon would let the
+    # BFS chase degenerate slivers until the depth cap (W + 0.25 = 1.05 > 1
+    # disabled the y prune entirely on the first run — sqrt domain error in
+    # _poincare_geo_circle on a collapsed edge).
+    m_y = min(m, 0.5 * (1.0 - W))
+    # Belt-and-braces depth cap (the band prune already bounds the patch):
+    # hyperbolic distance to the frame corner is (pi/2)*x_max + ~1.85 for
+    # W = 0.80; adjacent heptagon centres sit 2*r_in ~ 1.09 apart; x2 covers
+    # the staircase path, +6 is cushion. 4:3 -> 13, 4:1 panorama -> 19.
+    d_max = (math.pi / 2.0) * x_max + 1.85
+    depth_cap = int(math.ceil(d_max / 1.09 * 2.0)) + 6
+
+    out = []
+    seen = set()
+    queue = deque([(central, 0j, 0)])
+    while queue:
+        poly, hc, depth = queue.popleft()
+        ctr = sum(poly) / p
+        key = (round(ctr.real, 4), round(ctr.imag, 4))
+        if key in seen:
+            continue
+        seen.add(key)
+        b = [_poincare_band(v) for v in poly]
+        if (min(v.real for v in b) > x_max + m or
+                max(v.real for v in b) < -x_max - m or
+                min(v.imag for v in b) > W + m_y or
+                max(v.imag for v in b) < -W - m_y):
+            continue
+        out.append((poly, hc))
+        if depth >= depth_cap:
+            continue
+        for k in range(p):
+            z1, z2 = poly[k], poly[(k + 1) % p]
+            circ = _poincare_geo_circle(z1, z2)
+            if circ is None:
+                # diameter geodesic: reflect across the line through z1
+                # with direction u
+                u = (z2 - z1) / abs(z2 - z1)
+                newp = [z1 + ((z - z1) / u).conjugate() * u for z in poly]
+                newc = z1 + ((hc - z1) / u).conjugate() * u
+            else:
+                newp = [_poincare_reflect(z, circ) for z in poly]
+                newc = _poincare_reflect(hc, circ)
+            queue.append((newp, newc, depth + 1))
+    return out
+
+
+def _gen_poincare(engine, target_w, target_h, base_s):
+    """Poincare {7,3} in the band model: heptagons split into 7 khatam kites
+    [hyperbolic centre, edge-mid k-1, vertex k, edge-mid k]. The centre is
+    carried through the reflections in the BFS; the edge mids are the t = 0.5
+    samples of the geodesic arcs, identical from both sides of every edge,
+    so the split is an exact partition (same mechanism as the girih decagon
+    khatam split).
+
+    Step 1 of plan (b++): whole kites, no subdivision yet — the cell count is
+    fixed by the window geometry (~230-310 kites per 4:3 frame at ANY
+    resolution), and base_s only drives the arc polygonisation pitch
+    (~base_s/3 per segment, the sunburst precedent). Step 2 adds the
+    hyperbolic-polar subdivision that brings cells down to ~base_s."""
+    W = _POINCARE_W
+    scale = target_h / (2.0 * W)              # px per band unit
+    x_max = (target_w / 2.0) / scale          # = W * aspect
+    cx, cy = target_w / 2.0, target_h / 2.0
+    p = 7
+
+    hepts = _poincare_heptagons(x_max)
+
+    # One global, EVEN arc-sample count per render: a per-edge count could
+    # flicker across a threshold between two float-identical copies of the
+    # same edge and open a T-junction; one shared value cannot. Sized from
+    # the longest edge of the central heptagon (the centre row has the
+    # largest band-space cells).
+    c0 = [_poincare_band(v) for v in hepts[0][0]]
+    lmax = max(abs(c0[k] - c0[(k + 1) % p]) for k in range(p))
+    seg = max(4.0, base_s / 3.0)              # px per polyline segment
+    n = max(6, 2 * int(math.ceil(lmax * scale / (2.0 * seg))))
+    half = n // 2
+
+    for poly, hc in hepts:
+        arcs = [_poincare_edge_arc(poly[k], poly[(k + 1) % p], n)
+                for k in range(p)]
+        wc = _poincare_band(hc)
+        for k in range(p):
+            half_prev = arcs[(k - 1) % p][half:]
+            half_next = arcs[k][:half + 1]
+            kite = [wc] + [_poincare_band(z) for z in half_prev + half_next]
+            xs = [cx + v.real * scale for v in kite]
+            ys = [cy + v.imag * scale for v in kite]
+            if (min(xs) > target_w or max(xs) < 0.0 or
+                    min(ys) > target_h or max(ys) < 0.0):
+                continue                      # kite fully off-frame
+            yield list(zip(xs, ys))
+
+
 @dataclass(frozen=True)
 class ShapeSpec:
     """Descriptor for one tile shape.
@@ -1674,8 +1871,8 @@ class ShapeSpec:
                 each poly a list of (x, y) vertices in image space (y down).
                 None for grid shapes.
     aa        : anti-aliasing supersample for the polygon mask (1 = native).
-    seeded    : reserved for future variable-cell shapes that need a
-                deterministic RNG seed (voronoi/phyllotaxis/poincare, S5).
+    seeded    : reserved for variable-cell shapes that need a deterministic
+                RNG seed (voronoi; poincare turned out fully deterministic).
     """
     kind: str
     generator: object = None
@@ -1725,6 +1922,7 @@ SHAPE_MODES = {
     "truchet":                  ShapeSpec("polygon", _gen_truchet, aa=4),
     "truchet_hex":              ShapeSpec("polygon", _gen_truchet_hex, aa=4),
     "girih":                    ShapeSpec("polygon", _gen_girih, aa=4),
+    "poincare":                 ShapeSpec("polygon", _gen_poincare, aa=4),
 }
 
 
