@@ -1,100 +1,99 @@
 # last_session.md
 
-**Sesja:** 2026-07-15 · ~11:15-12:20
+**Sesja:** 2026-07-15 · ~21:00-22:25
 **Status:** ✓ Zakończona poprawnie
-**Punkt odniesienia (git):** f26c3aa @ main (zsynchronizowane z origin/main)
+**Punkt odniesienia (git):** 5390546 @ main (zsynchronizowane z origin/main)
 
 ---
 
 ## ▸ NASTĘPNY KROK (zacznij tutaj)
 
-**Krok 3 planu (b++): `_grout_cells_poincare`** w `src/engine_smart.py`:
+**Krok 5 planu (b++): pomiar peak-RAM panoramy 4:1 → decyzja o hero DZI.**
+To OSTATNI krok planu poincare. Kolejność (measure-before-promise, inwariant A1):
 
-1. Nowa metoda obok `_grout_cells_kites` (~l. 2390+): re-yield
-   `_poincare_cells(w, h, base_s)` jako `(poly, g2=hi*7+k, g3=hi)` —
-   `_poincare_cells` JUŻ zwraca `(poly, hept_idx, kite_idx)`, więc to
-   ~10 linii. L1=subkomórka, L2=latawiec, L3=heptagon (kwiat 7 siatek).
-2. Wpis `"poincare"` do `_HIERARCHICAL_GROUT` (~l. 2550) i `GROUT_HIERARCHICAL`
-   (~l. 53) — bez tego generyczny fallthrough polygon daje TYLKO płaski grout.
-   Sprawdzić, że gałąź dedykowana odpala PRZED generycznym fallthrough
-   w `_grout_cells` (wzorzec kites).
-3. +2 testy w `tests/test_grout_engine.py`: (a) hierarchia — 7 komórek
-   z tym samym g2 na latawiec... UWAGA: g2 grupuje SUBKOMÓRKI latawca
-   (nd² sztuk), a 7 latawców dzieli g3; wzorzec asercji z
-   `test_kites_cells` dostosować; (b) poziomy `--grout-level` na realnej
-   geometrii poincare (pułapka kierunku: selekcja `>= N`).
-4. Bramka: render 2K `0013.jpg` `--grout thin --grout-level 1/2/3` —
-   L3 ma pokazać kwiaty heptagonów, L2 latawce; pełny pytest.
+1. Zlokalizuj `PeakRAMSampler` (`grep -n "PeakRAMSampler" src/engine_smart.py`)
+   i sposób jego użycia w renderze 16K (wzorzec z A1, commit z 2026-06-27).
+2. Zbuduj target 4:1 (np. ~36000×9000 px lub proporcjonalnie mniejszy do
+   ekstrapolacji) — poincare jest NIEokresowy wzdłuż pasma, więc panoramy nie
+   da się skleić z kopii, trzeba render całości.
+3. Uruchom `_do_render(target, "poincare", ...)` owinięty w `PeakRAMSampler`;
+   zmierz peak. Szacunek: ~58k komórek `_LazyMask` @36000×9000.
+4. BRAMKA: peak ≤ inwariant A1 (**3.9 GB @16K**)? → eksport `make_dzi` jako
+   hero panorama (przycisk „Export Deep Zoom" / CLI `dzi` już istnieją).
+   Jeśli przekracza budżet → NIE obiecuj hero; rozważyć streaming/tiling renderu
+   PRZED eksportem.
 
-Kontekst: kroki 1-2 (b++) WDROŻONE i wypchnięte (da891fc, f26c3aa) — BFS w dysku
-+ prune w paśmie + subdywizja hiperboliczna quad-mesh do ~base_s; partycja
-zweryfikowana (0 niesparowanych segmentów wewnętrznych na 5 kadrach). Grout
-hierarchiczny to ostatni element wizualny przed goldenami (krok 4) — bez niego
-struktura hiperboliczna jest na renderze subtelna.
+Kontekst: kroki 1-4 (b++) WDROŻONE i wypchnięte (da891fc, f26c3aa, 40174bd,
+5390546; rejestr=39; 377 testów). Poincare jest kompletny jako kształt (geometria
++ subdywizja + grout hierarchiczny + goldeny + schemat + formalny test partycji).
+Krok 5 to jedyny pozostały element i dotyczy WYDAJNOŚCI/prezentacji, nie
+poprawności — stąd twarda bramka pomiaru przed obietnicą.
 
 ---
 
 ## Co zrobiono w tej sesji
 
-- ✓ **Analiza planu + druga opinia `architect`** (adwersarialna, na prośbę usera)
-  → plan **(b++)** ZATWIERDZONY: subdywizja do base_s + grout 3-poziomowy +
-  hero-panorama DZI; szczegóły MEMORY.md [2026-07-15]. Tasks #1-5 założone.
-- ✓ **Krok 1 (da891fc): port BFS poincare do silnika** — rejestr SHAPE_MODES=39.
-  BFS odbić w DYSKU, akceptacja/prune w PAŚMIE; `diam<0.02` usunięty; depth-cap
-  z okna (4:3→13, 4:1→19). **Bug złapany audytem:** margines y prune 0.25
-  przekraczał horyzont pasma (0.8+0.25=1.05>1) → prune po y martwy → BFS gonił
-  pył do zdegenerowanych krawędzi (sqrt domain error). Fix: `m_y=min(m,(1-W)/2)`
-  + guard `r2<=0` w `_poincare_geo_circle`.
-- ✓ **Krok 2 (f26c3aa): subdywizja hiperboliczna** — `_poincare_hyp_frac`
-  (Möbius) + `_poincare_cells`: siatka quad transfinita per latawiec, `nd`
-  per heptagon. DWIE zmiany vs szkic architekta: (1) quad-mesh zamiast
-  biegunowej (biegunowa = szpic 4.5:1 przy C); (2) anty-T-junction
-  KONSTRUKCYJNY — podziały łuków snapowane do globalnej siatki próbek,
-  komórki emitują wszystkie próbki jako wierzchołki → segmenty pasują przy
-  różnych nd sąsiadów; maszyneria „conforming subdivision" (2-2.5 d wyceny)
-  okazała się zbędna.
-- ✓ **Bramki:** audyt pokrycia ss=4 × 6 kadrów (w tym 4:1 panorama) — max
-  szczelina 1 subpx, zero dziur geometrycznych; smoke-test partycji
-  `classify_edges` × 5 kadrów — 0 niesparowanych segmentów wewnętrznych;
-  2× pełny pytest **367/367**; 2 rendery 2K `0013.jpg` (przed/po subdywizji:
-  201 → 1378 komórek); t_gen ≤ 0.11 s, BFS 2-25 ms.
-- ✓ Oba commity wypchnięte na origin (`da891fc`, `f26c3aa`).
+- ✓ **Krok 3 (b++) — grout hierarchiczny poincare (40174bd, push):**
+  `_grout_cells_poincare` re-yielduje `_poincare_cells` jako
+  `(poly, g2=(hi,k), g3=hi)` (L1=subkomórka quad / L2=latawiec khatam /
+  L3=heptagon). Gałąź dedykowana w `_grout_cells` PRZED generycznym fallthrough
+  polygon; `poincare` dopisane do `_HIERARCHICAL_GROUT` i `GROUT_HIERARCHICAL`.
+  +3 testy (`test_grout_engine.py`): hierarchia g2/g3, wszystkie 3 poziomy
+  zapełnione (anti-collapse), dispatcher hierarchiczny≠flat. Bramka wizualna 2K
+  `0013.jpg` L1/L2/L3 — near-black monotonicznie **609k → 483k → 295k**;
+  L3 pokazuje kwiaty heptagonów z dystorsją hiperboliczną.
+- ✓ **Routing Fable (fd5f641, push):** `MODEL_ROUTING.md` — trzeci alias
+  **MID = `claude-fable-5`** jako tryb SUGEROWANY dla zadań generatywno-
+  dywergencyjnych (brainstorm kształtów, „daj N pomysłów", copy portfolio).
+  Nowa sekcja 🟪 macierzy; reguła nadrzędna/protokół/lista komend rozszerzone
+  o MID; doprecyzowana granica HIGH (trade-offy, jedna odpowiedź) vs MID
+  (dywergencja) i przejście MID→HIGH gdy pomysł staje się implementacją.
+  Brak komendy `/fable` — przełączenie przez `/model fable`.
+- ✓ **Krok 4 (b++) — goldeny + schemat + test partycji (5390546, push):**
+  (a) goldeny `(poincare,False/True)` zablokowane, hashe zweryfikowane bit-w-bit
+  w DWÓCH procesach (overlay hi-res = no-op, bo `tile_NNN.png` ≠ `coco_*.jpg`);
+  (b) `src/tools/gen_poincare_scheme.py` + regenerowany `poincare.png` z
+  `_poincare_cells` (model pasmowy) — zastąpił mylący dysk z `gen_fable`
+  (pułapka „schemat ≠ silnik" jak w girih); kolor per heptagon (kąt złoty HSV)
+  + odcień per latawiec; (c) formalny test partycji parametryzowany ×5 kadrów
+  (jednorodne grupowanie → niesparowany szew z oboma końcami wewnątrz = T-junction;
+  **zero** wszędzie). Pełny pytest **377/377**.
+- ✓ **Tryb pracy:** ustalono uczenie usera przez inżynierię wsteczną NA BIEŻĄCO
+  (komentarz przy każdej czynności, nie wykład po fakcie) — po sprostowaniu usera.
 
 ## Co zostało (backlog sesji)
 
-- ⟳ **Krok 3 (b++):** `_grout_cells_poincare` (NASTĘPNY KROK).
-- ⟳ **Krok 4 (b++):** goldeny ×2 procesy + schemat PNG z geometrii silnika
-  (`gen_poincare_scheme.py` wzorem girih) + formalny test partycji w pytest
-  (zero `len(adj)==1` we wnętrzu; smoke-test w scratchpadzie sesji był zielony).
-- ⟳ **Krok 5 (b++):** pomiar peak-RAM panoramy 4:1 → hero DZI (dopiero po pomiarze).
+- ⟳ **Krok 5 (b++):** peak-RAM panoramy 4:1 → hero DZI (NASTĘPNY KROK).
 - ⟳ Po poincare: pula extra 21-43 → selekcja finalna usera → galeria 16K.
-- ⟳ (przeniesione) PLAN_FRACTAL F1a; escher_lizard sylwetka; README --grout/--grout-level.
-- ⟳ Tasks w harness: #3/#4/#5 (pending) odpowiadają krokom 3/4/5.
+- ⟳ (przeniesione) PLAN_FRACTAL F1a; escher_lizard sylwetka;
+  README `--grout`/`--grout-level`.
+- ⟳ Tasks w harness: #5 (pending) odpowiada krokowi 5; #3/#4 zamknięte.
 
 ## Aktywne pliki
 
-- `src/engine_smart.py` — blok POINCARE po `_gen_girih`: `_POINCARE_W/_MARGIN`,
-  `_poincare_band/_geo_circle/_reflect/_edge_arc/_heptagons/_hyp_frac/_cells`
-  + `_gen_poincare` + wpis SHAPE_MODES (39). Krok 3 doda `_grout_cells_poincare`
-  + wpisy `_HIERARCHICAL_GROUT`/`GROUT_HIERARCHICAL`.
-- Scratchpad sesji (poza repo): `audit_poincare.py` (audyt pokrycia ss=4,
-  6 kadrów), `smoke_partition.py` (detektor T-junctions) — do kroku 4 warto
-  przenieść logikę partycji do pytest.
-- `output/0013_smart_2K_poincare.jpg` — render weryfikacyjny (nadpisywany).
+- `src/engine_smart.py` — blok POINCARE (`_poincare_*` + `_gen_poincare` +
+  `_grout_cells_poincare` + wpisy hierarchiczne). Krok 5: pomiar przez
+  `PeakRAMSampler` (bez zmian w geometrii — tylko instrumentacja/render).
+- `tests/test_golden_shapes.py` — goldeny poincare ×2.
+- `tests/test_grout_engine.py` — testy groutu poincare + test partycji ×5.
+- `src/tools/gen_poincare_scheme.py` — generator schematu (regeneracja PNG).
+- `MODEL_ROUTING.md` — routing z MID (Fable).
 
 ## Otwarte pytania
 
-- **Peak-RAM panoramy 4:1** (krok 5): ~58k komórek @36000×9000 — zmierzyć
-  PRZED obietnicą hero (inwariant A1 3.9 GB @16K).
+- **Peak-RAM panoramy 4:1** (krok 5): ~58k komórek `_LazyMask` @36000×9000 —
+  zmierzyć PRZED obietnicą hero (inwariant A1 3.9 GB @16K). To główna niewiadoma.
 - **Preview vs render:** nd zależy od skali px → podgląd ma grubszą siatkę niż
-  finalny render (analogia: seeded voronoi). Zaakceptowane milcząco — jeśli
-  user zauważy, rozważyć nd z rozdzielczości docelowej.
+  finalny render. Zaakceptowane milcząco; jeśli user zauważy — nd z rozdzielczości
+  docelowej.
 - Selekcja finalna kształtów przez usera — po wdrożeniu wszystkich (bez zmian).
 
 ## Do MEMORY.md (przeniesiono)
 
-- Repo MEMORY.md: wpis **[2026-07-15b]** — kroki 1-2 wdrożone: bug marginesu
-  ponad horyzontem, quad-mesh zamiast biegunowej, snapping = anty-T-junction
-  konstrukcyjny, wyniki bramek, `_poincare_cells` zwraca grupy dla kroku 3.
-- (z /save w tej sesji) wpis **[2026-07-15]** — plan (b++) + auto-memory
-  `project_poincare_bpp_plan.md`.
+- `feedback_teach_while_working.md` (NOWY) — user uczy się przez inżynierię
+  wsteczną NA BIEŻĄCO (komentuj przy każdej czynności co+dlaczego); doprecyzowane
+  po sprostowaniu (nie wykład po fakcie).
+- `project_poincare_bpp_plan.md` — status zaktualizowany na **kroki 1-4 WDROŻONE**
+  (+ commity 40174bd/5390546, 377 testów); został tylko krok 5.
+- Routing Fable NIE dostał osobnego wpisu — jest self-documenting w
+  `MODEL_ROUTING.md` (ładowanym co sesję przez CLAUDE.md).
