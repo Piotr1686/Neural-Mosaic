@@ -251,6 +251,12 @@
 - **Hero portfolio:** panorama 4:1 (~36000×9000) → DZI (jedyny kształt, dla którego ultra-szeroki kadr to naturalna własność geometrii). 80-150k komórek, generacja 20-45 s (2-4× girih); PRZED obietnicą zmierzyć peak-RAM (inwariant A1 3.9 GB @16K vs 80-150k `_LazyMask`). NOWA bramka: audyt pokrycia na aspekcie panoramicznym (tryby awarii aspect-driven).
 - Liczby referencyjne: heptagon ~0.74 j. pasma ≈ 8300 px @16K square; koszt ~5-5.5 d (prune-pas 0.5 + subdywizja 2-2.5 + grout 1 + golden/schemat/rejestr→39/test partycji 1.5).
 
+[2026-07-15b] **POINCARE: kroki 1-2 planu (b++) WDROŻONE** (commity `da891fc`, `f26c3aa`; rejestr SHAPE_MODES=39; 367 testów; na origin/main)
+- **Krok 1 (BFS+prune):** BFS w dysku, akceptacja/prune w paśmie, `diam<0.02` usunięty, depth-cap z okna. ⚠ BUG złapany audytem: margines y prune ponad horyzontem pasma (`W+0.25=1.05>1`) wyłączał prune po y → BFS gonił pył |y|→1 do zdegenerowanych krawędzi (sqrt domain error). Fix: `m_y=min(m,(1-W)/2)` + guard `r2<=0` w `_poincare_geo_circle`. LEKCJA: każde odcięcie w paśmie musi respektować |y|<1.
+- **Krok 2 (subdywizja):** `_poincare_hyp_frac` (frakcja po geodezyjnej, Möbius) + `_poincare_cells` — siatka QUAD transfinita per latawiec (nd×nd, węzły frakcjami hiperbolicznymi), `nd = round(kite_px/base_s)` per HEPTAGON. Dwie zmiany vs szkic architekta: (1) quad-mesh ZAMIAST biegunowej — biegunowa ma szpic 4.5:1 przy C (łamie wzorzec „dobrego środka"); w quad C = róg 1 subkomórki, 7 zbiega się w C (mini-kwiat pod L2); (2) **anty-T-junction KONSTRUKCYJNY**, mocniejszy niż „per-edge function": podziały łuków SNAPOWANE do globalnej siatki próbek kroku 1 + komórki emitują WSZYSTKIE próbki na swoim odcinku jako wierzchołki → `classify_edges` dopasowuje per-SEGMENT i różne nd sąsiadów nie otwierają szczelin (zero progów do flickerowania). „Conforming subdivision" (wycena 2-2.5 d) okazała się zbędna.
+- **Bramki:** audyt pokrycia ss=4 × 6 kadrów (z panoramą 4:1) — max szczelina 1 subpx (szum scanline, NIE geometria; bramkować na SZEROKOŚĆ dziury, nie pole); smoke partycji `classify_edges` × 5 kadrów = 0 niesparowanych segmentów wewnętrznych; 1378 komórek @2K 4:3 (vs 201 same latawce); t_gen ≤ 0.11 s, BFS 2-25 ms (obawa „najdroższy kształt" ostatecznie obalona empirycznie).
+- **Dla kroku 3:** `_poincare_cells` zwraca `(poly, hept_idx, kite_idx)` → `_grout_cells_poincare` = re-yield z `g2=hi*7+k, g3=hi` + wpisy `_HIERARCHICAL_GROUT`/`GROUT_HIERARCHICAL`. Preview ma grubszą siatkę niż render (nd zależy od skali px) — zaakceptowane milcząco.
+
 ---
 
 ## Odrzucone podejścia
