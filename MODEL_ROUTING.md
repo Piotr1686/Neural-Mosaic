@@ -10,11 +10,17 @@
 
 | Alias w tym dokumencie | Model ID                | Rola                                     |
 |------------------------|-------------------------|------------------------------------------|
-| **HIGH**               | `claude-opus-4-8`       | Adaptive thinking — trudne, kreatywne    |
+| **HIGH**               | `claude-opus-4-8`       | Adaptive thinking — trudne, precyzyjne   |
+| **MID**                | `claude-fable-5`        | Generatywne, dywergencyjne — pomysły     |
 | **LOW**                | `claude-sonnet-4-6`     | Rutyna, tłumaczenia, proste edycje       |
 
 Domyślny model sesji: **LOW** (`claude-sonnet-4-6`).
 Eskalacja do HIGH następuje tylko wtedy, gdy zadanie spełnia kryteria niżej.
+Przełączenie na MID (Fable) jest **sugerowane** dla zadań czysto twórczych/
+dywergencyjnych (patrz sekcja 🟪) — Claude proponuje `/model fable` i czeka na
+decyzję, tak samo jak przy eskalacji LOW → HIGH. HIGH ≠ MID: HIGH to trudność
+i precyzja (jedna poprawna odpowiedź, trade-offy), MID to szeroki wachlarz
+pomysłów bez jednej poprawnej odpowiedzi.
 
 ---
 
@@ -25,9 +31,14 @@ Eskalacja do HIGH następuje tylko wtedy, gdy zadanie spełnia kryteria niżej.
 1. **Klasyfikuj zadanie** według macierzy poniżej (sekcja "Macierz decyzyjna").
 2. Jeśli aktualny model nie pasuje do klasyfikacji:
    - **Nie wykonuj zadania jeszcze.**
-   - Wypisz jedną linię: `🔁 ROUTING: [LOW → HIGH | HIGH → LOW] — powód: <jedno zdanie>`
-   - Zasugeruj użytkownikowi komendę: `/model opus` lub `/model sonnet`.
+   - Wypisz jedną linię: `🔁 ROUTING: [LOW → HIGH | HIGH → LOW | * → MID] — powód: <jedno zdanie>`
+   - Zasugeruj użytkownikowi komendę: `/model opus`, `/model sonnet` lub `/model fable`.
    - Poczekaj na potwierdzenie **lub** na wyraźne "jedź dalej bez zmiany".
+
+   Zadanie generatywno-dywergencyjne (kryteria z sekcji 🟪) traktuj tak samo jak
+   eskalację: zaproponuj `/model fable` i czekaj. Gdy z pomysłu robi się
+   implementacja (kod, geometria, testy, refactor) — MID przestaje pasować,
+   wracasz do klasyfikacji HIGH/LOW.
 
 Wyjątki od tej procedury:
 - Jeśli zadanie zajmuje < 5 linii odpowiedzi → pomijasz routing, działasz na bieżącym modelu.
@@ -67,11 +78,14 @@ Zadanie trafia na HIGH, jeśli spełnia **co najmniej jeden** z poniższych:
 - "Kod wygląda dobrze, ale nie działa" — klasyczny sygnał, że trzeba głębiej.
 - Błąd, który pojawia się tylko w CI/produkcji, ale nie lokalnie.
 
-#### Kreatywność i otwartość problemu
+#### Kreatywność z trade-offami (rozumowanie, nie dywergencja)
 - Generowanie wariantów architektury (≥ 2 alternatywy z trade-offami).
 - Projektowanie API lub kontraktu między modułami.
 - Review architektoniczne, pre-publish audit, RFC.
 - Zadania z luźnym opisem wymagające dopytania ("zrób coś z X, żeby było lepiej").
+> To NIE jest to samo co dywergencja twórcza z sekcji 🟪 (MID). Tutaj liczy się
+> jedna dobrze uzasadniona odpowiedź z trade-offami → HIGH. Gdy zadanie to
+> „daj mi szeroki wachlarz pomysłów bez jednej poprawnej odpowiedzi" → MID.
 
 #### Kontekst i stawka
 - Zużycie context window **> 60%** — na LOW jakość syntezy spada szybciej.
@@ -87,6 +101,31 @@ Zadanie trafia na HIGH, jeśli spełnia **co najmniej jeden** z poniższych:
   ale traktujemy to jako sygnał ostrzegawczy. Druga dopytka → HIGH.
 - Użytkownik używa słów: "wciąż nie działa", "to nie to", "głębiej", "nie rozumiem
   dlaczego to ma sens", "spróbuj inaczej", "weź to poważniej".
+
+---
+
+### 🟪 Zaproponuj MID (`claude-fable-5`)
+
+Zadanie trafia na MID (tryb **sugerowany** — proponujesz `/model fable` i czekasz),
+jeśli jest **czysto generatywne/dywergencyjne**: chodzi o szeroki wachlarz pomysłów,
+a nie o jedną poprawną, precyzyjną odpowiedź.
+
+- Brainstorm nowych kształtów / wariantów teselacji przed wdrożeniem
+  (rola dotychczasowego `gen_fable_shape_schemes.py` — stąd propozycje girih,
+  escher_lizard, poincare).
+- „Daj mi N pomysłów / propozycji / wariantów X" — gdzie N > 1 i nie ma jednej
+  poprawnej odpowiedzi.
+- Copy do galerii / portfolio, nazwy, opisy narracyjne, tagline'y.
+- Wariacje estetyczne, palety, nastroje — eksploracja przestrzeni wizualnej.
+
+**Granica MID → HIGH/LOW:** gdy pomysł przechodzi w realizację (kod, geometria,
+partycje, testy, refactor, debug), MID przestaje pasować — klasyfikuj od nowa
+wg macierzy HIGH/LOW. Fable generuje kierunek; Opus/Sonnet go wykonują.
+
+**Anti-pattern:** nie proponuj MID dla zadań precyzyjnych tylko dlatego, że
+brzmią „twórczo" (projekt API, review architektoniczne, dobór algorytmu z
+trade-offami → to HIGH, patrz 🟥). MID nie ponosi odpowiedzialności za
+poprawność — używasz go tam, gdzie błąd nie istnieje, bo nie ma jednej prawdy.
 
 ---
 
@@ -144,6 +183,8 @@ Zawsze ten sam format, jedna linia, prefiks emoji dla szybkiego wychwycenia wzro
 ```
 🔁 ROUTING: LOW → HIGH — zmiana dotyka @vram_safe i OOMStrategy (architectural law).
 🔁 ROUTING: HIGH → LOW — pozostał tylko opis zmian w CHANGELOG.md.
+🔁 ROUTING: HIGH → MID — brainstorm 10 wariantów nowego kształtu, brak jednej poprawnej odpowiedzi.
+🔁 ROUTING: MID → HIGH — pomysł zaakceptowany, teraz implementacja geometrii i testów.
 🔁 ROUTING: pozostaję na LOW — zadanie mieści się w <50 LOC, jeden plik.
 🔁 ROUTING: pozostaję na HIGH — druga dopytka użytkownika o ten sam problem.
 ```
@@ -178,6 +219,8 @@ Zobacz [`MODEL_ROUTING.md`](./MODEL_ROUTING.md). Reguły obowiązują bezwyjątk
 
 - `/opus` — przełącz na HIGH z uzasadnieniem.
 - `/sonnet` — przełącz na LOW z uzasadnieniem.
+- `/model fable` — przełącz na MID (brak dedykowanej komendy `/fable`; używasz
+  wbudowanego `/model fable`). Claude proponuje to sam dla zadań z sekcji 🟪.
 - `/route <opis zadania>` — analiza tekstowa bez wykonywania; rekomendacja modelu.
 - `/architect` — komenda z wymuszonym HIGH (architektura/złożony refactor).
 - `/quick` — komenda z wymuszonym LOW (edycja rutynowa).
