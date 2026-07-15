@@ -83,6 +83,57 @@ def test_kites_level2_is_parent_hexagon_of_six():
     assert max(l2.values()) == 6            # 6 kites per hexagon
 
 
+def test_poincare_hierarchy_g2_is_kite_g3_is_heptagon():
+    # Poincare grout re-yields the step-2 hyperbolic quad mesh: L1 = quad
+    # sub-cell, L2 = khatam kite (g2 = (hi, k)), L3 = 7-kite heptagon (g3 = hi).
+    # KEY distinction vs kites: g2 groups the nd^2 SUB-cells of a kite (not the
+    # kite itself), and the 7 kites of a heptagon share one g3. Assert on the
+    # central heptagon (hi == 0), which is always fully on-frame.
+    base_s = 60
+    cells = _engine()._grout_cells_poincare(600, 450, base_s)
+    assert cells and all(len(poly) >= 3 for poly, _, _ in cells)
+
+    central = [(g2, g3) for _, g2, g3 in cells if g3 == 0]
+    assert central, "central heptagon (hi=0) missing"
+    # one g3, seven kites
+    assert {g3 for _, g3 in central} == {0}
+    kite_counts = Counter(g2 for g2, _ in central)
+    assert len(kite_counts) == 7, f"expected 7 kites, got {len(kite_counts)}"
+    # g2 must be the (hi, k) pair, k in 0..6
+    assert {g2 for g2, _ in central} == {(0, k) for k in range(7)}
+    # every kite carries the same nd^2 sub-cells, and nd^2 > 1 proves g2 groups
+    # sub-cells rather than tagging a single kite polygon
+    counts = set(kite_counts.values())
+    assert len(counts) == 1, f"kites have unequal sub-cell counts: {kite_counts}"
+    nsq = counts.pop()
+    assert nsq > 1 and int(nsq ** 0.5) ** 2 == nsq, f"nd^2 not a square >1: {nsq}"
+
+
+def test_poincare_grout_all_three_levels_populated():
+    # On real poincare geometry classify_edges must return non-empty L1, L2 AND
+    # L3. This is the anti-collapse check: if the constructive snapping failed to
+    # make adjacent cells emit identical seam segments, shared interior seams
+    # would fragment into frame boundaries (L3) and L1/L2 would be near-empty.
+    # (The formal zero-unpaired-interior-segment partition proof is step 4.)
+    cells = _engine()._grout_cells_poincare(600, 450, 60)
+    by_level = classify_edges(cells)
+    assert by_level[1], "no L1 sub-cell seams — snapping likely broken"
+    assert by_level[2], "no L2 kite seams — kites not sharing edges"
+    assert by_level[3], "no L3 heptagon/frame boundaries"
+
+
+def test_poincare_grout_via_dispatcher_is_hierarchical():
+    # The dedicated branch must fire from _grout_cells BEFORE the generic polygon
+    # fallthrough (which would hand back flat (0, 0) cells), and poincare must be
+    # registered hierarchical so graded L1<L2<L3 widths apply.
+    e = _engine()
+    cells = e._grout_cells("poincare", 600, 450, 60)
+    assert cells
+    assert {(g2, g3) for _, g2, g3 in cells} != {(0, 0)}, (
+        "poincare fell through to the flat generic branch")
+    assert "poincare" in e._HIERARCHICAL_GROUT
+
+
 def test_unsupported_shapes_return_none():
     e = _engine()
     # only shapes absent from the SHAPE_MODES registry hit the dispatcher's

@@ -50,7 +50,7 @@ HIRES_DIR = Path(__file__).resolve().parents[1] / "data" / "tiles_hires"
 # Shapes whose sub7/block grouping was reviewed and approved (2026-07-05): the
 # grout pass draws hierarchical L1/L2/L3 lines for these. Other shapes fall
 # back to flat single-level grout (follow-up) or skip the pass.
-GROUT_HIERARCHICAL = ("square", "hexagon", "triangle", "kites")
+GROUT_HIERARCHICAL = ("square", "hexagon", "triangle", "kites", "poincare")
 
 # Must match EDGE_WEIGHT in indexer_smart.py.
 EDGE_WEIGHT = 2.0
@@ -2492,6 +2492,8 @@ class SmartEngine:
             return self._grout_cells_hexagon(target_w, target_h, base_s)
         if shape_mode == "kites":
             return self._grout_cells_kites(target_w, target_h, base_s)
+        if shape_mode == "poincare":
+            return self._grout_cells_poincare(target_w, target_h, base_s)
         if shape_mode == "spectre":
             return self._grout_cells_flat_spectre(target_w, target_h, base_s)
         if shape_mode == "romb":
@@ -2619,6 +2621,20 @@ class SmartEngine:
                             cells.append((img_poly, (q, r), g3))
         return cells
 
+    def _grout_cells_poincare(self, target_w, target_h, base_s):
+        # Re-yield the step-2 hyperbolic quad mesh (_poincare_cells already emits
+        # image-space polys plus its own grouping) as hierarchical grout cells:
+        #   L1 = the quad sub-cell (nd^2 per kite),
+        #   L2 = the parent khatam kite  -> g2 = (hi, k),
+        #   L3 = the 7-kite heptagon     -> g3 = hi.
+        # The constructive anti-T-junction snapping (arc splits pinned to the
+        # global step-1 grid, every cell emitting all its arc samples as
+        # vertices) means adjacent cells hand classify_edges identical seam
+        # segments even with differing nd, so shared seams stay at L1/L2 instead
+        # of being promoted to frame boundaries (L3). Deterministic, no RNG.
+        return [(list(poly), (hi, k), hi)
+                for poly, hi, k in _poincare_cells(target_w, target_h, base_s)]
+
     def _grout_cells_flat_spectre(self, target_w, target_h, base_s):
         # Flat (non-hierarchical) grout: every spectre monotile shares one group
         # id, so classify_edges keeps the interior seams at L1 and closes the
@@ -2725,7 +2741,7 @@ class SmartEngine:
 
     # Shapes with an approved multi-level grouping get graded widths (thin L1 ->
     # thick L3); every other supported shape draws flat single-width grout.
-    _HIERARCHICAL_GROUT = ("square", "triangle", "hexagon", "kites")
+    _HIERARCHICAL_GROUT = ("square", "triangle", "hexagon", "kites", "poincare")
 
     def _apply_grout(self, mosaic_rgb, shape_mode, target_w, target_h, base_s,
                      preset, min_level=1):
