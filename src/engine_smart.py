@@ -1813,19 +1813,50 @@ def _poincare_heptagons(x_max):
     return out
 
 
-def _gen_poincare(engine, target_w, target_h, base_s):
-    """Poincare {7,3} in the band model: heptagons split into 7 khatam kites
-    [hyperbolic centre, edge-mid k-1, vertex k, edge-mid k]. The centre is
-    carried through the reflections in the BFS; the edge mids are the t = 0.5
-    samples of the geodesic arcs, identical from both sides of every edge,
-    so the split is an exact partition (same mechanism as the girih decagon
-    khatam split).
+def _poincare_hyp_frac(z1, z2, t):
+    """Point at hyperbolic fraction t of the geodesic z1 -> z2 (disk coords).
 
-    Step 1 of plan (b++): whole kites, no subdivision yet — the cell count is
-    fixed by the window geometry (~230-310 kites per 4:3 frame at ANY
-    resolution), and base_s only drives the arc polygonisation pitch
-    (~base_s/3 per segment, the sunburst precedent). Step 2 adds the
-    hyperbolic-polar subdivision that brings cells down to ~base_s."""
+    Mobius-translate z1 to the origin, walk tanh(t * atanh(r)) of the image
+    radius (hyperbolic distance from 0 is 2*atanh(r), so this is exactly the
+    fraction t of the distance), translate back. Exact and cheap; the same
+    (z1, z2, t) triple always yields the same point, which is what the shared
+    subdivision rays rely on."""
+    a = (z2 - z1) / (1.0 - z1.conjugate() * z2)
+    r = abs(a)
+    if r < 1e-15:
+        return z1
+    w = a / r * math.tanh(t * math.atanh(r))
+    return (w + z1) / (1.0 + z1.conjugate() * w)
+
+
+def _poincare_cells(target_w, target_h, base_s):
+    """Yield (pixel polygon, heptagon index, kite index) for the subdivided
+    {7,3} band tiling — step 2 of plan (b++).
+
+    Every kite [C, M_prev, V, M_next] carries an nd x nd transfinite quad
+    mesh built with hyperbolic fractions (_poincare_hyp_frac), so the band
+    map's conformality keeps the sub-cells near-isotropic at every |y|. A
+    quad mesh has no pole: C is the corner of ONE sub-cell per kite (7 meet
+    there across the heptagon — the approved 'good centre' pattern), unlike
+    a polar fan whose innermost wedges thin toward 4:1.
+
+    nd adapts PER HEPTAGON (largest kite radial extent / base_s), so every
+    cell lands near base_s at any resolution. Differing nd between
+    neighbouring heptagons cannot open T-junctions by construction:
+
+      * outer arcs — the mesh splits an arc only AT samples of the global
+        step-1 grid (indices snapped via round(j*half/nd)), and every cell
+        emits ALL grid samples along its arc stretch as vertices, so both
+        sides of an edge yield the identical segment set even with different
+        nd (segment-level matching beats the per-edge-count rule: there is
+        no count threshold left to flicker);
+      * rays C -> M — shared only between kites of the SAME heptagon, both
+        sides evaluate _poincare_hyp_frac on the same float endpoints with
+        the same nd;
+      * interior nodes are private to their kite.
+
+    Cell count ~ frame_area / base_s^2 (e.g. ~24k at 16K 16:9, under girih's
+    51k); zero RNG, deterministic emission order (BFS, k, i, j)."""
     W = _POINCARE_W
     scale = target_h / (2.0 * W)              # px per band unit
     x_max = (target_w / 2.0) / scale          # = W * aspect
@@ -1834,31 +1865,90 @@ def _gen_poincare(engine, target_w, target_h, base_s):
 
     hepts = _poincare_heptagons(x_max)
 
-    # One global, EVEN arc-sample count per render: a per-edge count could
-    # flicker across a threshold between two float-identical copies of the
-    # same edge and open a T-junction; one shared value cannot. Sized from
-    # the longest edge of the central heptagon (the centre row has the
-    # largest band-space cells).
+    # One global, EVEN arc-sample count per render, sized from the longest
+    # edge of the central heptagon (the centre row has the largest band-space
+    # cells): ~base_s/3 px per polyline segment, the sunburst precedent.
     c0 = [_poincare_band(v) for v in hepts[0][0]]
     lmax = max(abs(c0[k] - c0[(k + 1) % p]) for k in range(p))
     seg = max(4.0, base_s / 3.0)              # px per polyline segment
     n = max(6, 2 * int(math.ceil(lmax * scale / (2.0 * seg))))
     half = n // 2
 
-    for poly, hc in hepts:
-        arcs = [_poincare_edge_arc(poly[k], poly[(k + 1) % p], n)
-                for k in range(p)]
-        wc = _poincare_band(hc)
+    def to_px(z):
+        w = _poincare_band(z)
+        return (cx + w.real * scale, cy + w.imag * scale)
+
+    for hi, (poly, hc) in enumerate(hepts):
+        # edge sample lists INCLUDING the far endpoint: n + 1 points
+        edges = []
         for k in range(p):
-            half_prev = arcs[(k - 1) % p][half:]
-            half_next = arcs[k][:half + 1]
-            kite = [wc] + [_poincare_band(z) for z in half_prev + half_next]
-            xs = [cx + v.real * scale for v in kite]
-            ys = [cy + v.imag * scale for v in kite]
-            if (min(xs) > target_w or max(xs) < 0.0 or
-                    min(ys) > target_h or max(ys) < 0.0):
-                continue                      # kite fully off-frame
-            yield list(zip(xs, ys))
+            e = _poincare_edge_arc(poly[k], poly[(k + 1) % p], n)
+            e.append(poly[(k + 1) % p])
+            edges.append(e)
+        mids = [edges[k][half] for k in range(p)]
+
+        wc_band = _poincare_band(hc)
+        kite_px = max(abs(_poincare_band(m) - wc_band) for m in mids) * scale
+        nd = max(1, int(round(kite_px / base_s)))
+        nd = min(nd, half)        # snapped arc splits must stay strictly
+                                  # increasing (half >= ~3*nd in practice)
+
+        for k in range(p):
+            e_prev = edges[(k - 1) % p]       # ... -> V = e_prev[n]
+            e_next = edges[k]                 # V = e_next[0] -> ...
+            m_prev, m_next = mids[(k - 1) % p], mids[k]
+
+            # (nd+1)^2 node lattice over the kite quad:
+            # N[0][0]=C, N[nd][0]=M_prev, N[0][nd]=M_next, N[nd][nd]=V
+            N = [[None] * (nd + 1) for _ in range(nd + 1)]
+            for i in range(nd + 1):
+                N[i][0] = _poincare_hyp_frac(hc, m_prev, i / nd)
+            for j in range(nd + 1):
+                N[0][j] = _poincare_hyp_frac(hc, m_next, j / nd)
+            # arc rows overwrite the i=nd / j=nd lattice lines with the
+            # canonical shared grid samples (snapped indices)
+            ap = [half + round(j * half / nd) for j in range(nd + 1)]
+            for j in range(nd + 1):
+                N[nd][j] = e_prev[ap[j]]
+            an = [half - round(i * half / nd) for i in range(nd + 1)]
+            for i in range(nd + 1):
+                N[i][nd] = e_next[an[i]]
+            for i in range(1, nd):
+                for j in range(1, nd):
+                    N[i][j] = _poincare_hyp_frac(N[i][0], N[i][nd], j / nd)
+
+            for i in range(nd):
+                for j in range(nd):
+                    pts = [N[i][j], N[i + 1][j]]
+                    if i + 1 == nd:           # east side runs along e_prev
+                        pts += [e_prev[t]
+                                for t in range(ap[j] + 1, ap[j + 1] + 1)]
+                    else:
+                        pts.append(N[i + 1][j + 1])
+                    if j + 1 == nd:           # north side runs along e_next
+                        pts += [e_next[t]
+                                for t in range(an[i + 1] + 1, an[i] + 1)]
+                    else:
+                        pts.append(N[i][j + 1])
+
+                    cell = [to_px(z) for z in pts]
+                    xs = [q[0] for q in cell]
+                    ys = [q[1] for q in cell]
+                    if (min(xs) > target_w or max(xs) < 0.0 or
+                            min(ys) > target_h or max(ys) < 0.0):
+                        continue              # cell fully off-frame
+                    yield cell, hi, k
+
+
+def _gen_poincare(engine, target_w, target_h, base_s):
+    """Poincare {7,3} in the band model: heptagons split into 7 khatam kites
+    [hyperbolic centre, edge-mid k-1, vertex k, edge-mid k] (centre carried
+    through the BFS reflections, mids = the t = 0.5 arc samples shared by
+    both sides — exact partition, the girih khatam mechanism), and each kite
+    subdivided to ~base_s cells by the hyperbolic quad mesh of
+    _poincare_cells."""
+    for cell, _hi, _k in _poincare_cells(target_w, target_h, base_s):
+        yield cell
 
 
 @dataclass(frozen=True)
