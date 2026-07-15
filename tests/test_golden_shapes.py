@@ -125,6 +125,14 @@ GOLDEN = {
     # across processes — verified in two separate interpreters.
     ("girih", False): "99dc1692e6ae6ba29fa785091d49b380b7aba825d1f3620a7b5c2f81aa0abc4a",
     ("girih", True): "d0fd5e9f6906fbd8b9271155fccc3d96f9d86d9c2702af856249cd7addcd0ab2",
+    # poincare (2026-07-15, krok 4 b++): {7,3} band tiling, heptagons split into
+    # 7 khatam kites, each subdivided by a hyperbolic transfinite quad mesh. BFS
+    # over disc reflections + pure geometry, NO RNG and no frozen seed — hashes
+    # verified byte-identical across two separate interpreters (like girih). The
+    # tmp golden library (tile_NNN.png) shares no basename with data/tiles_hires
+    # (coco_*.jpg), so the hi-res overlay is a no-op here and the hash is portable.
+    ("poincare", False): "d8dad4aa080306dbe56068578232fc327e1730334c8fa239666d11a1681cb68d",
+    ("poincare", True): "c51950e0aee13e7e40feddf1a08ed0eb2d0af72d7d1e7f068a39f3bee48044f8",
 }
 
 

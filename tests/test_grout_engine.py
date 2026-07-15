@@ -14,9 +14,10 @@ import threading
 from collections import Counter
 
 import numpy as np
+import pytest
 from PIL import Image
 
-from src.engine_smart import SmartEngine
+from src.engine_smart import SmartEngine, _poincare_cells
 from src.grout import classify_edges
 from tests.test_golden_shapes import _build_library, _make_target
 
@@ -120,6 +121,35 @@ def test_poincare_grout_all_three_levels_populated():
     assert by_level[1], "no L1 sub-cell seams — snapping likely broken"
     assert by_level[2], "no L2 kite seams — kites not sharing edges"
     assert by_level[3], "no L3 heptagon/frame boundaries"
+
+
+@pytest.mark.parametrize("w,h,base_s", [
+    (600, 450, 60),      # 4:3
+    (900, 400, 60),      # wide band
+    (400, 700, 60),      # tall
+    (384, 288, 100),     # the golden frame
+    (1920, 480, 75),     # 4:1 panorama slice
+])
+def test_poincare_is_an_exact_partition(w, h, base_s):
+    # THE anti-T-junction proof (step 2's constructive snapping, now locked in
+    # CI). Collapse all cells to one group so classify_edges routes EVERY
+    # unpaired seam to level 3 (an edge with a single owner). A T-junction or a
+    # float mismatch between two heptagons of different nd would leave an
+    # interior seam unpaired — a level-3 segment with BOTH endpoints well inside
+    # the frame. Unpaired seams that touch the frame edge are legitimate (the
+    # band tiling is clipped there, cells extend past the border), so only
+    # strictly-interior unpaired segments count as failures. Must be zero.
+    PAD = 2.0
+    cells = [(list(poly), 0, 0)
+             for poly, _, _ in _poincare_cells(w, h, base_s)]
+    by_level = classify_edges(cells)
+    interior_unpaired = [
+        (a, b) for a, b in by_level[3]
+        if all(PAD < p[0] < w - PAD and PAD < p[1] < h - PAD for p in (a, b))
+    ]
+    assert not interior_unpaired, (
+        f"{len(interior_unpaired)} interior T-junction(s) at {w}x{h} "
+        f"base_s={base_s}: {interior_unpaired[:3]}")
 
 
 def test_poincare_grout_via_dispatcher_is_hierarchical():
