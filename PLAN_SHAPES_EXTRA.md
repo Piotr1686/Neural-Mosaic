@@ -1,17 +1,43 @@
-# PLAN_SHAPES_EXTRA.md — Wdrożenie puli extra (17 kształtów, rejestr 39 → 56)
+# PLAN_SHAPES_EXTRA.md — Wdrożenie puli extra (17 kształtów, rejestr 39 → 56; E1+E2 zamknięte, rejestr=42, zostaje 14)
 
 **Status:** ZATWIERDZONY przez usera 2026-07-16. Kanoniczny plan puli extra. Kontynuacja `PLAN_SHAPES.md` (S3-S8 ZAMKNIĘTE — 39 kształtów w silniku, ostatni `poincare` 2026-07-15/16).
 **Decyzja finalna:** bez zmian — po wdrożeniu WSZYSTKICH kształtów user generuje mozaiki testowe i dopiero wtedy decyduje, które zostają. Nie usuwać żadnego przed tą decyzją.
 
 ## Zakres
 
-17 kształtów ma **schemat PNG w `assets/shape_schemes/`, ale NIE MA implementacji w silniku**. Weryfikacja 2026-07-16 (rejestr vs PNG): 39 w silniku, 57 schematów, 18 brakujących, **0 sierot** (każdy kształt w silniku ma schemat).
+16 kształtów pozostało (E1+E2 zamknięte). Pierwotnie 17 miało **schemat PNG w `assets/shape_schemes/`, ale NIE MA implementacji w silniku**. Weryfikacja 2026-07-16 (rejestr vs PNG): 39 w silniku, 57 schematów, 18 brakujących, **0 sierot** (każdy kształt w silniku ma schemat).
 
 ```
 bloom  braid  dragon  gereh  koch_island  koch_snowflake  moire
 nautilus  pebbles  penrose_p2  rosette  rosette_fractal  scales
 sierpinski  sierpinski_carpet  sierpinski_d  stagger_tri
 ```
+
+## ⚠ AUDYT KONSTRUKCJI (2026-07-17) — czytaj przed każdym sprintem
+
+Pula powstała jako **schematy**, gdzie różnicę niósł KOLOR. Pod zdjęciami kolor znika, więc każde rozróżnienie „tylko paletą" zapada się w duplikat. Trzy trafienia (`kepler_ty`, `bloom`, `stagger_tri`) ⇒ jednorazowy audyt konstrukcji wszystkich pozostałych, wykonany 2026-07-17. **Wynik jest wiążący — nie powtarzać analizy per sprint.**
+
+**Duplikaty (różnica tylko w palecie):**
+- `kepler_ty` — identyczne `(N, zeta, gamma)` co `penrose` → **USUNIĘTY** (`1e53982`).
+- `bloom` — identyczna krata co `phyllotaxis` (kąt złoty, `r=c√i`, stała `(√2+0.45)`); motyw „21 ramion" był kolorem `i mod 21` → **ZRÓŻNICOWANY kątem Lucasa** (decyzja usera; `3990cfa`).
+- `stagger_tri` — geometria = zwykła krata trójkątów naprzemiennych (= tryb `triangle`); flaga `on = (ci & rj) == 0` wybiera TYLKO paletę → **do zróżnicowania geometrycznego w E3** (decyzja usera: realne przesunięcie rzędów o pół trójkąta; T-junctions na granicach rzędów legalne w partycji).
+
+**Sprawdzone i ODRĘBNE** (dzielą maszynerię, ale różnią się KOMÓRKĄ — planować bez obaw; zweryfikować wizualnie po wdrożeniu):
+
+| kształt | dzieli z | różnica w komórce |
+|---|---|---|
+| `gereh` | `trunc_square` (4.8.8) | ośmiokąt rozbity na 8+8 latawców |
+| `rosette` | `trunc_hex` (3.12.12) | dwunastokąt rozbity na 12+12+12 komórek |
+| `nautilus` | `sunburst` (log-polar) | biegun POZA kadrem (nie w środku) |
+| `rosette_fractal` | `sunburst` (log-polar) | podwajanie sektorów co m pierścieni + trójkątne liście |
+| `braid` | `brick_wall` | basketweave (naprzemienne pary 2:1), nie wozówkowy |
+| `sierpinski_carpet` | `square` | kwadraty WIELU rozmiarów (tło 1/81, dziury od 1/27) |
+
+**Bezspornie odrębne:** `moire` (wierzchołki wyginane polem interferencji — ostrzeżenie „≡ square" NIEAKTUALNE), `dragon`, `koch_island`, `koch_snowflake`, `scales`, `sierpinski`, `sierpinski_d`, `pebbles`.
+
+**REGUŁA:** przed wdrożeniem porównuj **KONSTRUKCJĘ** z tym, co silnik ma — nie nazwę i nie docstring. Statystyki potrafią NIE wystarczyć: `bloom` i `phyllotaxis` mają identyczny rozkład pól (wspólne promienie `r=c√n`), różni je tylko kąt ⇒ porównuj współrzędne.
+
+---
 
 **`kepler_ty` USUNIĘTY z puli (decyzja usera 2026-07-16)** — był **geometrycznie identyczny z wdrożonym `penrose`**: ta sama konstrukcja dualna pentagrid, `N=5`, `zeta=e^(2πik/5)`, `gamma=[0.05,0.15,0.25,0.35,0.20]`. Konstrukcja jest w pełni zdeterminowana przez `(N, zeta, gamma)` ⇒ ta sama teselacja; różniły je wyłącznie paleta (`pal_fat`/`pal_thin`) i okno, a kolor pod zdjęciami znika. Klasyczny tryb awarii „`moire` ≡ `square`”. Chronologia: schemat `kepler_ty` powstał 2026-07-03/04, `penrose` trafił do silnika 2026-07-10 tą samą maszynerią i unieważnił go po cichu. PNG skasowany. **Lekcja: przed wdrożeniem kształtu z puli porównaj jego KONSTRUKCJĘ z tym, co silnik już ma — nie nazwę.**
 
@@ -26,8 +52,8 @@ sierpinski  sierpinski_carpet  sierpinski_d  stagger_tri
 
 | Sprint | Kształty | Wspólny mianownik | Ryzyko |
 |---|---|---|---|
-| **E1** | `penrose_p2` | deflacja P3 + konwersja Robinsona (`kepler_ty` wypadł — duplikat `penrose`) | średnie |
-| **E2** | `bloom`, `pebbles` | Voronoi + próg min-area — reużycie `_gen_voronoi` | niskie |
+| ~~**E1**~~ | ~~`penrose_p2`~~ | **ZAMKNIĘTY** `b3e725c` (rejestr=40) | — |
+| ~~**E2**~~ | ~~`bloom`, `pebbles`~~ | **ZAMKNIĘTY** `3990cfa` (rejestr=42) | — |
 | **E3** | `braid`, `moire`, `stagger_tri` | czyste lattice'y wielokątne, rdzeń `_polygon_sector` | niskie |
 | **E4** | `dragon`, `koch_island`, `koch_snowflake` | rep-tile / Koch (geometria gotowa w gen_extra) | średnie |
 | **E5** | `gereh`, `rosette` | islamskie partycje gwiaździste — wzorzec `girih` | średnie |
@@ -43,9 +69,12 @@ Kolejność E1→E3 najpierw celowo: same reużywają istniejącą maszynerię, 
 - `penrose_p2`: **NIE wyprowadzać substytucji P2 ręcznie** — dwukrotnie dała T-junctions. Jedyna działająca droga: deflacja P3 (Preshing, `_p3_half_deflate:539`) + relacje Robinsona **BS=AL, BL=AL+AS** (cięcie połówki grubego rombu w U: `|BU|=ramię`; kierunek `|CU|` daje 410 niesparowanych!), potem scalanie połówek lustrzanych: para = ten sam rodzaj + wspólne ramię + WSPÓLNY apex (bez testu chiralności z etykiet — odrzuca prawdziwych bliźniaków); cykle przy słońcach/gwiazdach rozwiązuje matching stopień-1-najpierw.
 - ⚠ **Okno vs `base_s`:** schemat `gen_penrose_p2` produkuje STAŁY kwadrat jednostkowy (sun `Rd=2.2`, depth 6). W silniku głębokość musi wynikać z `base_s`: skala `k ≥ półprzekątna_kadru / 2.09` (2.09 = inradius dekagonu sun), głębokość `d = log(k·Rd/base_s)/log(φ)`. Liczba kafli rośnie ~`φ^(2d)` (@16K, base_s=100: d≈9, ~58k trójkątów) — mieści się w modelu RAM, ale sprawdzić `PeakRAMSampler` przy gęstych ustawieniach.
 
-### E2 — Voronoi
-- Seed = `f(base_s, target_w, target_h)` przez `np.random.default_rng`, NIGDY globalny `random` (`seeded=True` w rejestrze). Inna geometria w preview niż w renderze jest OK (tak działa spectre), ale MUSI być powtarzalna dla tych samych wymiarów.
-- `bloom` = Voronoi ziaren phyllotaxis (kąt złoty, `r=c√i` ⇒ komórki ~równopolowe). `pebbles` = Voronoi o zmiennej gęstości (blob-y gaussowskie + rejection sampling). Próg min-area `(base_s/4)²`.
+### E2 — Voronoi (ZAMKNIĘTY, `3990cfa`) — lekcje dla kolejnych sprintów
+- Seed = `f(base_s, target_w, target_h)` przez `np.random.default_rng`, NIGDY globalny `random` (`seeded=True`).
+- ⚠ **Liczenie ziaren:** `voronoi` skaluje sumę marginesem, bo jednorodne ziarna dzielą się w stałej proporcji. Przy NIEjednorodnej gęstości to zawodzi — zatrzymuj się na liczbie ziaren WEWNĄTRZ kadru.
+- ⚠ **Partia przestrzeliwuje:** akceptacja ~11% ⇒ jedna partia 4096 daje ~450 ziaren i mały kadr dostaje stałe 425 kafli w KAŻDEJ rozdzielczości. Ucinaj prefiks na n-tym ziarnie w kadrze (prefiks próby i.i.d. = próba i.i.d.).
+- ⚠ **Ucięcie zagładza margines** ⇒ komórki brzegowe nieograniczone ⇒ odrzucone ⇒ **5,3% dziur**. Potrzebne rusztowanie: jednorodny pierścień ziaren poza kadrem (rola `freeze_r` z `voronoi`). Trim i pierścień testować RAZEM.
+- ⚠ **Znaleziona wada w istniejącym `voronoi`** (NIE naprawiona, poza zakresem E2): przy 384×288 `base_s=100` daje **12,8% dziur** — wchodzi podłoga `max(16, ...)` i 16 ziaren nie pokrywa kadru. Dotyczy skrajnie zgrubnych ustawień.
 
 ### E3 — lattice'y
 - `moire`: ⚠ **Historyczne ostrzeżenie „moire ≡ square" jest NIEAKTUALNE** — schemat po rewizji 2026-07-04 pokazuje prawdziwe moiré geometryczne (2 obrócone siatki → komórki = przecięcia, zmienny kształt). Zweryfikowano wizualnie 2026-07-16. Ale zasada nadrzędna zostaje: **kształt ma sens TYLKO gdy geometria komórki różni się od kwadratu** — po wdrożeniu sprawdzić na prawdziwym renderze, czy nie zdegenerował się do `square`.
