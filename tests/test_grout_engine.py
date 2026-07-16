@@ -15,9 +15,9 @@ from collections import Counter
 
 import numpy as np
 import pytest
-from PIL import Image
+from PIL import Image, ImageDraw
 
-from src.engine_smart import SmartEngine, _poincare_cells
+from src.engine_smart import SmartEngine, _poincare_cells, _gen_penrose_p2
 from src.grout import classify_edges
 from tests.test_golden_shapes import _build_library, _make_target
 
@@ -142,6 +142,52 @@ def test_poincare_is_an_exact_partition(w, h, base_s):
     PAD = 2.0
     cells = [(list(poly), 0, 0)
              for poly, _, _ in _poincare_cells(w, h, base_s)]
+    by_level = classify_edges(cells)
+    interior_unpaired = [
+        (a, b) for a, b in by_level[3]
+        if all(PAD < p[0] < w - PAD and PAD < p[1] < h - PAD for p in (a, b))
+    ]
+    assert not interior_unpaired, (
+        f"{len(interior_unpaired)} interior T-junction(s) at {w}x{h} "
+        f"base_s={base_s}: {interior_unpaired[:3]}")
+
+
+@pytest.mark.parametrize("w,h,base_s", [
+    (800, 600, 60),      # 4:3
+    (1200, 300, 50),     # wide band
+    (640, 640, 80),      # square — the case that exposed the unmatched-rim holes
+    (500, 500, 40),      # dense
+    (384, 288, 100),     # the golden frame
+])
+def test_penrose_p2_covers_the_frame(w, h, base_s):
+    # Halves with no mirror twin are dropped, and EVERY boundary makes them —
+    # the sun's own rim and the prune box alike. Sizing the sun to just cover
+    # the frame (3 px of margin) put that rim inside it: a 42 px band of holes
+    # along one edge that the tile counts and areas looked perfectly fine
+    # through. Only rasterised coverage catches it, so it is locked here.
+    acc = np.zeros((h, w), dtype=np.uint16)
+    for poly in _gen_penrose_p2(None, w, h, base_s):
+        m = Image.new("L", (w, h), 0)
+        ImageDraw.Draw(m).polygon(poly, fill=1)
+        acc += np.asarray(m, dtype=np.uint16)
+    holes = int((acc == 0).sum())
+    assert holes == 0, f"{holes} uncovered px at {w}x{h} base_s={base_s}"
+
+
+@pytest.mark.parametrize("w,h,base_s", [
+    (800, 600, 60),
+    (1200, 300, 50),
+    (640, 640, 80),
+])
+def test_penrose_p2_is_an_exact_partition(w, h, base_s):
+    # P2 is edge-to-edge, so no interior seam may be unpaired. Same collapse
+    # trick as the poincare proof: one group => classify_edges routes every
+    # unpaired seam to level 3. Seams near the frame edge are legitimate (the
+    # cull keeps tiles overlapping the border), so only strictly-interior ones
+    # count. Guards the Robinson cut direction: the mirror cut |CU| would leave
+    # hundreds of unmatched halves instead of zero.
+    PAD = 2.0
+    cells = [(list(poly), 0, 0) for poly in _gen_penrose_p2(None, w, h, base_s)]
     by_level = classify_edges(cells)
     interior_unpaired = [
         (a, b) for a, b in by_level[3]

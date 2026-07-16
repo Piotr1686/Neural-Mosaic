@@ -963,6 +963,157 @@ def _gen_penrose(engine, target_w, target_h, base_s):
                                1.1 * base_s)
 
 
+_PHI = (1 + math.sqrt(5)) / 2
+
+
+def _p3_half_deflate(tris):
+    """One P3 Robinson-triangle deflation step (Preshing scheme).
+
+    (colour, A, B, C): 0 = half-THIN rhomb (acute 36-72-72, apex A, legs
+    AB=AC=L, base BC=L/phi), 1 = half-FAT rhomb (gnomon 36-36-108, apex A,
+    legs AB=AC=L, base BC=L*phi). Every child leg is a fixed fraction of a
+    parent leg, so edge split points agree across parent boundaries -- this
+    is why the P3 route is used instead of a hand-derived P2 substitution,
+    which produced T-junctions in two earlier attempts (2026-07-04).
+    """
+    out = []
+    for colour, A, B, C in tris:
+        if colour == 0:
+            P = A + (B - A) / _PHI
+            out += [(0, C, P, B), (1, P, C, A)]
+        else:
+            Q = B + (A - B) / _PHI
+            R_ = B + (C - B) / _PHI
+            out += [(1, R_, C, A), (1, Q, R_, B), (0, R_, Q, A)]
+    return out
+
+
+def _gen_penrose_p2(engine, target_w, target_h, base_s):
+    """Penrose P2 (5-fold): whole KITES and DARTS -- deliberately distinct
+    from `penrose`, which is P3 rhombs from the pentagrid.
+
+    P2 and P3 are mutually locally derivable via Robinson A/B-tiles
+    (BS = AL, BL = AL + AS): deflate the P3 'sun', then convert B-halves to
+    A-halves -- every half-thin IS a half-kite; every half-fat splits at U
+    (|BU| = leg) into half-kite + half-dart. That cut direction is the one
+    consistent with the P2 matching rules; the mirror cut |CU| leaves 410
+    unmatched halves. Halves merge into whole tiles by mirror-twin matching
+    (same kind + shared leg + common apex); matching degree-1 vertices first
+    resolves the even cycles at sun/star vertices. Exact edge-to-edge
+    partition: no gaps, no overlaps, no background.
+
+    Depth follows base_s rather than being fixed: the sun must cover the
+    frame (its decagon inradius is Rd*cos(pi/10)), and ceil() on the depth
+    keeps the leg exact while never under-covering. Triangles are pruned
+    against the frame after every deflation -- children stay inside their
+    parent, so dropping a parent that misses the frame is safe and keeps the
+    tile count proportional to the frame, not to the whole sun.
+
+    Mean tile area over the kite/dart mix is leg^2/2, so the leg is
+    base_s*sqrt(2) to honour the registry-wide convention that a cell
+    averages base_s^2 (measured: penrose 3536, cairo 3600 at base_s=60).
+
+    ⚠ Halves with no twin are dropped, and every boundary creates them --
+    both the sun's own rim and the prune box. The scheme could ignore this
+    (sun 2.2 vs a drawn square reaching 1.41), but sizing the sun to *just*
+    cover the frame puts that unmatched rim inside it: a 3 px coverage
+    margin left a 42 px band of holes along one edge. Hence PRUNE_LEGS
+    (rim lands well outside the frame) > CULL_LEGS (keep tiles overlapping
+    the frame edge), and the sun must cover the prune box, not the frame.
+    """
+    Rd = 2.2
+    PRUNE_LEGS, CULL_LEGS = 3.0, 1.0
+    leg = base_s * math.sqrt(2.0)
+    cos10 = math.cos(math.pi / 10)
+    prune_pad = PRUNE_LEGS * leg
+    half_diag = math.hypot(target_w / 2.0 + prune_pad, target_h / 2.0 + prune_pad)
+    k_min = half_diag / (Rd * cos10)
+    depth = max(1, math.ceil(math.log(k_min * Rd / leg) / math.log(_PHI)))
+    k = leg * _PHI ** depth / Rd
+
+    # prune box (generous) and cull box (tight), both in scheme units
+    hw = (target_w / 2.0 + prune_pad) / k
+    hh = (target_h / 2.0 + prune_pad) / k
+    cw = (target_w / 2.0 + CULL_LEGS * leg) / k
+    ch = (target_h / 2.0 + CULL_LEGS * leg) / k
+
+    def _hits_frame(A, B, C):
+        return not (min(A.real, B.real, C.real) > hw or
+                    max(A.real, B.real, C.real) < -hw or
+                    min(A.imag, B.imag, C.imag) > hh or
+                    max(A.imag, B.imag, C.imag) < -hh)
+
+    tris = []
+    for i in range(10):
+        B = cmath.rect(Rd, (2 * i - 1) * math.pi / 10)
+        C = cmath.rect(Rd, (2 * i + 1) * math.pi / 10)
+        if i % 2 == 0:
+            B, C = C, B          # mirror alternate halves -> consistent pairs
+        tris.append((0, 0j, B, C))
+    for _ in range(depth):
+        tris = _p3_half_deflate(tris)
+        tris = [t for t in tris if _hits_frame(t[1], t[2], t[3])]
+
+    # B-tiles -> A-tiles: 0 = AL half-kite, 1 = AS half-dart
+    a_tiles = []
+    for colour, A, B, C in tris:
+        if colour == 0:
+            a_tiles.append((0, A, B, C))
+        else:
+            U = B + (C - B) / _PHI
+            a_tiles.append((0, B, A, U))
+            a_tiles.append((1, U, C, A))
+
+    def rp(z):
+        return (round(z.real, 6), round(z.imag, 6))
+
+    cand = {}
+    for idx, (kind, A, B, C) in enumerate(a_tiles):
+        for other in (B, C):
+            cand.setdefault((kind,) + tuple(sorted((rp(A), rp(other)))), []).append(idx)
+    alive = {}
+    for ids in cand.values():
+        if len(ids) == 2:
+            i, j = ids
+            if rp(a_tiles[i][1]) == rp(a_tiles[j][1]):
+                alive.setdefault(i, set()).add(j)
+                alive.setdefault(j, set()).add(i)
+    pairs = []
+
+    def commit(i, j):
+        pairs.append((i, j))
+        for x in (i, j):
+            for nb in alive.pop(x, set()):
+                if nb in alive:
+                    alive[nb] -= {i, j}
+
+    while alive:
+        deg1 = [i for i, ps in alive.items() if len(ps) == 1]
+        if deg1:
+            i = deg1[0]
+            commit(i, next(iter(alive[i])))
+            continue
+        iso = [i for i, ps in alive.items() if not ps]
+        if iso:
+            for i in iso:
+                alive.pop(i)
+            continue
+        i = next(iter(alive))    # only sun/star cycles remain: any choice valid
+        commit(i, next(iter(alive[i])))
+
+    cx, cy = target_w / 2.0, target_h / 2.0
+    for i, j in pairs:
+        kind, A, B, C = a_tiles[i]
+        pts_j = {rp(a_tiles[j][1]), rp(a_tiles[j][2]), rp(a_tiles[j][3])}
+        X = B if rp(B) in pts_j else C            # shared leg = tile axis
+        t1 = C if X is B else B
+        t2 = next(v for v in a_tiles[j][2:] if rp(v) not in (rp(A), rp(X)))
+        ctr = (A + X) / 2
+        if abs(ctr.real) > cw or abs(ctr.imag) > ch:
+            continue
+        yield [(cx + k * v.real, cy + k * v.imag) for v in (A, t1, X, t2)]
+
+
 def _gen_pythagorean(engine, target_w, target_h, base_s):
     """Pythagorean tiling: axis-aligned big (b) and small (b/2) squares in the
     classic staircase pattern, lattice t1=(b, s), t2=(-s, b). Mean tile area
@@ -2005,6 +2156,7 @@ SHAPE_MODES = {
     "pythagorean":              ShapeSpec("polygon", _gen_pythagorean, aa=4),
     "sunburst":                 ShapeSpec("polygon", _gen_sunburst, aa=4),
     "penrose":                  ShapeSpec("polygon", _gen_penrose, aa=4),
+    "penrose_p2":               ShapeSpec("polygon", _gen_penrose_p2, aa=4),
     "ammann_beenker":           ShapeSpec("polygon", _gen_ammann_beenker, aa=4),
     "voderberg":                ShapeSpec("polygon", _gen_voderberg, aa=4),
     "escher_lizard":            ShapeSpec("polygon", _gen_escher, aa=4),

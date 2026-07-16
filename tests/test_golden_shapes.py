@@ -133,6 +133,12 @@ GOLDEN = {
     # (coco_*.jpg), so the hi-res overlay is a no-op here and the hash is portable.
     ("poincare", False): "d8dad4aa080306dbe56068578232fc327e1730334c8fa239666d11a1681cb68d",
     ("poincare", True): "c51950e0aee13e7e40feddf1a08ed0eb2d0af72d7d1e7f068a39f3bee48044f8",
+    # penrose_p2 (2026-07-16, sprint E1): P2 kites & darts via P3 deflation +
+    # Robinson B->A conversion + mirror-twin merge. No RNG; the merge iterates
+    # dicts/int-sets only, so order is process-independent — hashes verified
+    # identical across two interpreters, one with PYTHONHASHSEED=1.
+    ("penrose_p2", False): "e6d9874805f1bd79ff9777387ac88b7655018022a4a9c2943924bbb9e0a8df07",
+    ("penrose_p2", True): "ae1a8d87c18fee77a959b12393fc798a9d459d9d1c6b594eaa72755c8fdaff76",
 }
 
 
