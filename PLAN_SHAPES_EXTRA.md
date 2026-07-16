@@ -5,13 +5,17 @@
 
 ## Zakres
 
-16 kształtów pozostało (E1+E2 zamknięte). Pierwotnie 17 miało **schemat PNG w `assets/shape_schemes/`, ale NIE MA implementacji w silniku**. Weryfikacja 2026-07-16 (rejestr vs PNG): 39 w silniku, 57 schematów, 18 brakujących, **0 sierot** (każdy kształt w silniku ma schemat).
+Punkt wyjścia (weryfikacja 2026-07-16, rejestr vs PNG): 39 kształtów w silniku, 57 schematów ⇒ **18 bez implementacji, 0 sierot**. Po usunięciu `kepler_ty` (duplikat) pula = **17**.
+
+**ZOSTAJE 14** (rejestr=42 po E1+E2):
 
 ```
-bloom  braid  dragon  gereh  koch_island  koch_snowflake  moire
-nautilus  pebbles  penrose_p2  rosette  rosette_fractal  scales
-sierpinski  sierpinski_carpet  sierpinski_d  stagger_tri
+braid  dragon  gereh  koch_island  koch_snowflake  moire  nautilus
+rosette  rosette_fractal  scales  sierpinski  sierpinski_carpet
+sierpinski_d  stagger_tri
 ```
+
+Wdrożone: `penrose_p2` (E1, `b3e725c`) · `bloom`, `pebbles` (E2, `3990cfa`). Cel końcowy: **rejestr 56**.
 
 ## ⚠ AUDYT KONSTRUKCJI (2026-07-17) — czytaj przed każdym sprintem
 
@@ -43,8 +47,9 @@ Pula powstała jako **schematy**, gdzie różnicę niósł KOLOR. Pod zdjęciami
 
 ## Kontekst dla wykonawcy
 
-- **`src/tools/gen_extra_shape_schemes.py` (1148 l.) zawiera działającą, zweryfikowaną wizualnie geometrię wszystkich 18 — PRZENOŚ ją, nie wymyślaj od nowa.** To ta sama zasada, która zadziałała dla puli Fable. Mapa funkcji: `gen_sierpinski:82`, `_sierp4:121`, `_gen_sierpinski_variant:132`, `gen_sierpinski_d:174`, `_carpet_cells:189`, `gen_sierpinski_carpet:211`, `gen_stagger_tri:237`, `gen_kepler_ty:267`, `gen_gereh:321`, `_twindragon_boundary:362`, `gen_dragon:413`, `_koch_edge:443`, `_snowflake:454`, `gen_koch_snowflake:462`, `_turtle_string:497`, `gen_koch_island:516`, `_p3_half_deflate:539`, `gen_penrose_p2:561`, `gen_rosette:669`, `gen_nautilus:740`, `gen_moire:792`, `gen_braid:835`, `gen_bloom:859`, `gen_scales:899`, `gen_pebbles:941`, `gen_rosette_fractal:987`.
-- **Maszyneria silnika już istnieje** — nie budować od zera: `_polygon_sector:2408` (rdzeń), `_multigrid_dual:895` (Penrose/AB), `_gen_voronoi:628`, `_gen_penrose:957`, `_arc_pitch:1184` (łuki).
+- **`src/tools/gen_extra_shape_schemes.py` zawiera działającą, zweryfikowaną wizualnie geometrię wszystkich pozostałych — PRZENOŚ ją, nie wymyślaj od nowa.** To ta sama zasada, która zadziałała dla puli Fable. Mapa funkcji (odświeżona 2026-07-17 po usunięciu `gen_kepler_ty` — numery się przesunęły, zweryfikuj grepem po każdej edycji tego pliku):
+  `gen_sierpinski:84` · `_sierp4:123` · `_gen_sierpinski_variant:134` · `gen_sierpinski_d:176` · `_carpet_cells:191` · `gen_sierpinski_carpet:213` · `gen_stagger_tri:239` · `gen_gereh:269` · `_twindragon_boundary:310` · `gen_dragon:361` · `_koch_edge:391` · `_snowflake:402` · `gen_koch_snowflake:410` · `_turtle_string:445` · `gen_koch_island:464` · `gen_rosette:617` · `gen_nautilus:688` · `gen_moire:740` · `gen_braid:783` · `gen_scales:847` · `gen_rosette_fractal:935`
+- **Maszyneria silnika już istnieje** — nie budować od zera: `_polygon_sector` (rdzeń), `_multigrid_dual` (Penrose/AB), `_gen_voronoi` + `_emit_cells` + `_shape_seed` (Voronoi), `_graded_sunflower`/`_vogel_points` (Vogel, z parametrem `angle`), `_arc_pitch` (łuki — OBOWIĄZKOWY dla `scales`), `_lattice_mn_range` (lattice'y).
 - **Wzorzec wdrożenia jednego kształtu** (ustalony przez 23 poprzednie): generator `_gen_<nazwa>` → wpis w `SHAPE_MODES` (single source of truth; GUI/CLI czytają przez `shape_names()`, nic nie hardkodować) → golden test (OBA border_mode) → test pokrycia rasteryzacją → **regeneracja schematu PNG z silnika**.
 - User zatwierdza PO KAŻDYM sprincie. Po każdym sprincie: `pytest` zielony + commit.
 
@@ -59,9 +64,9 @@ Pula powstała jako **schematy**, gdzie różnicę niósł KOLOR. Pod zdjęciami
 | **E5** | `gereh`, `rosette` | islamskie partycje gwiaździste — wzorzec `girih` | średnie |
 | **E6** | `scales`, `nautilus`, `rosette_fractal` | łuki + radialne (`_arc_pitch`, „dobry środek") | średnie |
 | **E7** | `sierpinski`, `sierpinski_d`, `sierpinski_carpet` | rodzina sierpińskiego — wszystkie 3 warianty (decyzja usera 2026-07-16) | średnie |
-| **E8** | docs + montaż zbiorczy 57 + mozaiki testowe | zamknięcie → selekcja finalna usera → galeria 16K | — |
+| **E8** | docs + montaż zbiorczy 56 + mozaiki testowe | zamknięcie → selekcja finalna usera → galeria 16K | — |
 
-Kolejność E1→E3 najpierw celowo: same reużywają istniejącą maszynerię, więc dają szybki, tani postęp i potwierdzają, że generyczny dispatch `polygon` zniesie +18 wpisów bez regresji.
+Kolejność E1→E3 najpierw celowo: same reużywają istniejącą maszynerię, więc dają szybki, tani postęp i potwierdzają, że generyczny dispatch `polygon` zniesie kolejne wpisy bez regresji (potwierdzone: E1 i E2 nie wymagały ANI JEDNEJ edycji GUI/CLI — `shape_names()` podchwycił wszystko sam).
 
 ## Pułapki per grupa (lekcje już opłacone — nie odkrywać ponownie)
 
@@ -77,6 +82,7 @@ Kolejność E1→E3 najpierw celowo: same reużywają istniejącą maszynerię, 
 - ⚠ **Znaleziona wada w istniejącym `voronoi`** (NIE naprawiona, poza zakresem E2): przy 384×288 `base_s=100` daje **12,8% dziur** — wchodzi podłoga `max(16, ...)` i 16 ziaren nie pokrywa kadru. Dotyczy skrajnie zgrubnych ustawień.
 
 ### E3 — lattice'y
+- ⚠ `stagger_tri` **WYMAGA ZRÓŻNICOWANIA GEOMETRYCZNEGO** (decyzja usera 2026-07-17): jego obecna geometria to zwykła krata trójkątów naprzemiennych = tryb `triangle`; „stagger" z nazwy dotyczył PASM KOLORU (`on = (ci & rj) == 0` wybiera tylko paletę). Wdrożyć realne przesunięcie rzędów o pół trójkąta (T-junctions na poziomych granicach rzędów są legalne w partycji — precedens `sierpinski`). **Bramka: test porównujący współrzędne z `triangle` musi wykazać różnicę** (wzorzec: `test_bloom_geometry_differs_from_phyllotaxis`).
 - `moire`: ⚠ **Historyczne ostrzeżenie „moire ≡ square" jest NIEAKTUALNE** — schemat po rewizji 2026-07-04 pokazuje prawdziwe moiré geometryczne (2 obrócone siatki → komórki = przecięcia, zmienny kształt). Zweryfikowano wizualnie 2026-07-16. Ale zasada nadrzędna zostaje: **kształt ma sens TYLKO gdy geometria komórki różni się od kwadratu** — po wdrożeniu sprawdzić na prawdziwym renderze, czy nie zdegenerował się do `square`.
 - `braid`: basketweave (pary prostokątów 2:1, naprzemienna orientacja). Zweryfikowano 2026-07-16: to NIE jest duplikat `weave` (tam wstęgi + komórki-węzły) ani `brick_wall`. Płaski przeplot bez nad/pod — over-under = nakładanie, złamałoby regułę teselacji.
 
@@ -112,8 +118,8 @@ Kolejność E1→E3 najpierw celowo: same reużywają istniejącą maszynerię, 
 
 ## Definicja ukończenia (E8)
 
-- 17 kształtów renderuje z CLI i GUI (`python -m src.cli render ... --shape <mode>`), rejestr = **56**,
+- 14 pozostałych kształtów renderuje z CLI i GUI (`python -m src.cli render ... --shape <mode>`), rejestr = **56**,
 - golden testy + pełny `pytest` zielone,
-- schematy PNG wszystkich 17 zregenerowane Z SILNIKA,
+- schematy PNG wszystkich zregenerowane Z SILNIKA,
 - README EN+PL: tabela kształtów + montaż zbiorczy 56,
 - seria mozaik testowych (batch CLI po wszystkich kształtach) → **user wybiera finalny zestaw** → galeria 16K.
