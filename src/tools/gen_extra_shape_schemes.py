@@ -11,7 +11,6 @@ kept shapes; every cell is part of the tessellation itself:
   - bloom          -> Voronoi diagram of a sunflower phyllotaxis (golden angle)
   - dragon         -> twindragon rep-tile partition (base 1+i digit squares)
   - gereh          -> 4.8.8 partition into quads only (star split into 8 kites)
-  - kepler_ty      -> Penrose-like rhombic tiling (de Bruijn pentagrid, N=5)
   - koch_snowflake -> two-size Koch snowflake tessellation (ratio 1/sqrt(3))
   - sierpinski     -> brick-staggered rows, holes = photo cells by level
   - nautilus       -> log-spiral rings, pole OUTSIDE the frame (no singularity);
@@ -24,7 +23,10 @@ kept shapes; every cell is part of the tessellation itself:
   - pebbles        -> NEW (user image): variable-density Voronoi pebble mosaic
   - penrose_p2     -> replaces hirotaka (last ETAP-A placeholder, resolved
                       2026-07-04): true Penrose P2 kites & darts by Robinson
-                      deflation - distinct from kepler_ty (P3 rhombs)
+                      deflation - distinct from the engine's `penrose` (P3
+                      rhombs from the pentagrid). kepler_ty REMOVED 2026-07-16:
+                      same (N, zeta, gamma) as `penrose` => same tiling; only
+                      its palette differed, and colour vanishes under photos.
 
 ETAP A fully resolved - no shape uses a background grid any more.
 
@@ -258,60 +260,6 @@ def gen_stagger_tri():
             on = (ci & rj) == 0
             polys.append(([bl, br, tp], vary(rng, pal_on[rj % 2] if on else pal_off[(ci + rj) % 3], 10)))
             polys.append(([br, tp, tr], vary(rng, pal_off[(ci + rj + 1) % 3], 10)))
-    return polys, (-R, -R, R, R)
-
-
-# ==========================================
-# 22. KEPLER 'Ty' (Penrose rhombs, pentagrid)  [natywne wypelnienie]
-# ==========================================
-def gen_kepler_ty():
-    """Kepler-like 5-fold tiling done EXACTLY: de Bruijn pentagrid (N=5) dual ->
-    Penrose-type rhombic tiling (fat 72 + thin 36 rhombs). Gap-free and
-    overlap-free by construction; the fat/thin colouring brings out the 5-fold
-    stars and decagon rosettes of Kepler's Harmonices Mundi patterns, while
-    every cell stays a photo-friendly rhombus (same family as the `romb` mode).
-    Same validated Cramer/K-vector construction as gen_ammann_beenker (N=4)."""
-    rng = np.random.default_rng(22)
-    N = 5
-    zeta = [cmath.exp(2j * math.pi * k / N) for k in range(N)]
-    gamma = [0.05, 0.15, 0.25, 0.35, 0.20]     # sum = 1.0 (canonical class)
-    RANGE = 9
-    pal_fat = [(214, 152, 64), (188, 96, 74)]
-    pal_thin = (74, 92, 122)
-    polys = []
-    for k in range(N):
-        for l in range(k + 1, N):
-            for m in range(-RANGE, RANGE + 1):
-                for n in range(-RANGE, RANGE + 1):
-                    ak = zeta[k].conjugate()
-                    al = zeta[l].conjugate()
-                    det = ak.real * al.imag - ak.imag * al.real
-                    if abs(det) < 1e-12:
-                        continue
-                    bk, bl = m + gamma[k], n + gamma[l]
-                    px = (bk * al.imag - bl * ak.imag) / det
-                    py = (bk * al.real - bl * ak.real) / det
-                    p = complex(px, py)
-                    if abs(p) > RANGE:
-                        continue
-                    K = [0] * N
-                    for j in range(N):
-                        if j == k or j == l:
-                            continue
-                        K[j] = math.ceil((p * zeta[j].conjugate()).real - gamma[j])
-                    basev = sum(K[j] * zeta[j] for j in range(N) if j not in (k, l))
-                    verts = []
-                    for a, b in [(0, 0), (1, 0), (1, 1), (0, 1)]:
-                        verts.append(basev + (m + a) * zeta[k] + (n + b) * zeta[l])
-                    ctr = sum(verts) / 4
-                    if abs(ctr) > 8.0:
-                        continue
-                    if (l - k) % N in (1, 4):      # 72-degree fat rhombs
-                        col = vary(rng, pal_fat[k % 2], 12)
-                    else:                          # 36-degree thin rhombs
-                        col = vary(rng, pal_thin, 10)
-                    polys.append((c2t(verts), col))
-    R = 5.2
     return polys, (-R, -R, R, R)
 
 
@@ -561,8 +509,8 @@ def _p3_half_deflate(tris):
 def gen_penrose_p2():
     """TRUE Penrose P2 (kites & darts) - replaces the hirotaka pentaflake
     placeholder (pentaflake does NOT tile; last ETAP-A slot, resolved
-    2026-07-04). Deliberately DISTINCT from kepler_ty (P3 rhombs from the
-    pentagrid): cells here are full KITES and DARTS.
+    2026-07-04). Deliberately DISTINCT from the engine's `penrose` (P3 rhombs
+    from the pentagrid): cells here are full KITES and DARTS.
 
     Construction (P2 and P3 are mutually locally derivable via Robinson
     A/B-tiles, BS = AL and BL = AL + AS): deflate the P3 'sun' 6x, then
@@ -1087,7 +1035,6 @@ def gen_rosette_fractal():
 SHAPES = [
     ("sierpinski", gen_sierpinski, "21. TROJKAT SIERPINSKIEGO", "[B] cegielkowy rozklad dziur, kazdy trojkat=foto"),
     ("sierpinski_d", gen_sierpinski_d, "21d. SIERPINSKI SZACHOWNICA", "[B] dziury co drugi trojkat w rzedzie, +1 co rzad"),
-    ("kepler_ty", gen_kepler_ty, "22. KEPLER 'Ty' (Penrose)", "[B] pentagrid de Bruijna, romby 5-krotne"),
     ("gereh", gen_gereh, "23. GEREH (partycja)", "[B] same czworokaty: 8 rombow gwiazdy + latawce"),
     ("dragon", gen_dragon, "24. TWINDRAGON (reptile)", "[B] smoki kafelkuja plaszczyzne, zero nakladania"),
     ("koch_snowflake", gen_koch_snowflake, "25. PLATEK KOCHA (2 rozmiary)", "[B] duze+male platki brzeg-w-brzeg"),

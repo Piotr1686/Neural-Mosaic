@@ -1,17 +1,19 @@
-# PLAN_SHAPES_EXTRA.md — Wdrożenie puli extra (18 kształtów, rejestr 39 → 57)
+# PLAN_SHAPES_EXTRA.md — Wdrożenie puli extra (17 kształtów, rejestr 39 → 56)
 
 **Status:** ZATWIERDZONY przez usera 2026-07-16. Kanoniczny plan puli extra. Kontynuacja `PLAN_SHAPES.md` (S3-S8 ZAMKNIĘTE — 39 kształtów w silniku, ostatni `poincare` 2026-07-15/16).
 **Decyzja finalna:** bez zmian — po wdrożeniu WSZYSTKICH kształtów user generuje mozaiki testowe i dopiero wtedy decyduje, które zostają. Nie usuwać żadnego przed tą decyzją.
 
 ## Zakres
 
-18 kształtów ma **schemat PNG w `assets/shape_schemes/`, ale NIE MA implementacji w silniku**. Weryfikacja 2026-07-16 (rejestr vs PNG): 39 w silniku, 57 schematów, 18 brakujących, **0 sierot** (każdy kształt w silniku ma schemat).
+17 kształtów ma **schemat PNG w `assets/shape_schemes/`, ale NIE MA implementacji w silniku**. Weryfikacja 2026-07-16 (rejestr vs PNG): 39 w silniku, 57 schematów, 18 brakujących, **0 sierot** (każdy kształt w silniku ma schemat).
 
 ```
-bloom  braid  dragon  gereh  kepler_ty  koch_island  koch_snowflake  moire
+bloom  braid  dragon  gereh  koch_island  koch_snowflake  moire
 nautilus  pebbles  penrose_p2  rosette  rosette_fractal  scales
 sierpinski  sierpinski_carpet  sierpinski_d  stagger_tri
 ```
+
+**`kepler_ty` USUNIĘTY z puli (decyzja usera 2026-07-16)** — był **geometrycznie identyczny z wdrożonym `penrose`**: ta sama konstrukcja dualna pentagrid, `N=5`, `zeta=e^(2πik/5)`, `gamma=[0.05,0.15,0.25,0.35,0.20]`. Konstrukcja jest w pełni zdeterminowana przez `(N, zeta, gamma)` ⇒ ta sama teselacja; różniły je wyłącznie paleta (`pal_fat`/`pal_thin`) i okno, a kolor pod zdjęciami znika. Klasyczny tryb awarii „`moire` ≡ `square`”. Chronologia: schemat `kepler_ty` powstał 2026-07-03/04, `penrose` trafił do silnika 2026-07-10 tą samą maszynerią i unieważnił go po cichu. PNG skasowany. **Lekcja: przed wdrożeniem kształtu z puli porównaj jego KONSTRUKCJĘ z tym, co silnik już ma — nie nazwę.**
 
 ## Kontekst dla wykonawcy
 
@@ -24,7 +26,7 @@ sierpinski  sierpinski_carpet  sierpinski_d  stagger_tri
 
 | Sprint | Kształty | Wspólny mianownik | Ryzyko |
 |---|---|---|---|
-| **E1** | `penrose_p2`, `kepler_ty` | multigrid/deflacja — reużycie `_multigrid_dual` i `_gen_penrose` | niskie |
+| **E1** | `penrose_p2` | deflacja P3 + konwersja Robinsona (`kepler_ty` wypadł — duplikat `penrose`) | średnie |
 | **E2** | `bloom`, `pebbles` | Voronoi + próg min-area — reużycie `_gen_voronoi` | niskie |
 | **E3** | `braid`, `moire`, `stagger_tri` | czyste lattice'y wielokątne, rdzeń `_polygon_sector` | niskie |
 | **E4** | `dragon`, `koch_island`, `koch_snowflake` | rep-tile / Koch (geometria gotowa w gen_extra) | średnie |
@@ -37,9 +39,9 @@ Kolejność E1→E3 najpierw celowo: same reużywają istniejącą maszynerię, 
 
 ## Pułapki per grupa (lekcje już opłacone — nie odkrywać ponownie)
 
-### E1 — multigrid
+### E1 — deflacja P3
 - `penrose_p2`: **NIE wyprowadzać substytucji P2 ręcznie** — dwukrotnie dała T-junctions. Jedyna działająca droga: deflacja P3 (Preshing, `_p3_half_deflate:539`) + relacje Robinsona **BS=AL, BL=AL+AS** (cięcie połówki grubego rombu w U: `|BU|=ramię`; kierunek `|CU|` daje 410 niesparowanych!), potem scalanie połówek lustrzanych: para = ten sam rodzaj + wspólne ramię + WSPÓLNY apex (bez testu chiralności z etykiet — odrzuca prawdziwych bliźniaków); cykle przy słońcach/gwiazdach rozwiązuje matching stopień-1-najpierw.
-- `kepler_ty`: pentagrid de Bruijna N=5 = kopia zwalidowanego kodu `ammann_beenker`; γ suma=1. ⚠ Znak w Cramerze dla `py` — wzorzec w `gen_fable_shape_schemes.py::gen_ammann_beenker`. RANGE ≈ okno+3, inaczej dziury przy brzegach.
+- ⚠ **Okno vs `base_s`:** schemat `gen_penrose_p2` produkuje STAŁY kwadrat jednostkowy (sun `Rd=2.2`, depth 6). W silniku głębokość musi wynikać z `base_s`: skala `k ≥ półprzekątna_kadru / 2.09` (2.09 = inradius dekagonu sun), głębokość `d = log(k·Rd/base_s)/log(φ)`. Liczba kafli rośnie ~`φ^(2d)` (@16K, base_s=100: d≈9, ~58k trójkątów) — mieści się w modelu RAM, ale sprawdzić `PeakRAMSampler` przy gęstych ustawieniach.
 
 ### E2 — Voronoi
 - Seed = `f(base_s, target_w, target_h)` przez `np.random.default_rng`, NIGDY globalny `random` (`seeded=True` w rejestrze). Inna geometria w preview niż w renderze jest OK (tak działa spectre), ale MUSI być powtarzalna dla tych samych wymiarów.
@@ -81,8 +83,8 @@ Kolejność E1→E3 najpierw celowo: same reużywają istniejącą maszynerię, 
 
 ## Definicja ukończenia (E8)
 
-- 18 kształtów renderuje z CLI i GUI (`python -m src.cli render ... --shape <mode>`), rejestr = **57**,
+- 17 kształtów renderuje z CLI i GUI (`python -m src.cli render ... --shape <mode>`), rejestr = **56**,
 - golden testy + pełny `pytest` zielone,
-- schematy PNG wszystkich 18 zregenerowane Z SILNIKA,
-- README EN+PL: tabela kształtów + montaż zbiorczy 57,
+- schematy PNG wszystkich 17 zregenerowane Z SILNIKA,
+- README EN+PL: tabela kształtów + montaż zbiorczy 56,
 - seria mozaik testowych (batch CLI po wszystkich kształtach) → **user wybiera finalny zestaw** → galeria 16K.
