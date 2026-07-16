@@ -17,7 +17,9 @@ import numpy as np
 import pytest
 from PIL import Image, ImageDraw
 
-from src.engine_smart import SmartEngine, _poincare_cells, _gen_penrose_p2
+from src.engine_smart import (SmartEngine, _poincare_cells, _gen_penrose_p2,
+                              _gen_pebbles, _gen_bloom, _gen_phyllotaxis,
+                              _GOLDEN_ANGLE, _LUCAS_ANGLE)
 from src.grout import classify_edges
 from tests.test_golden_shapes import _build_library, _make_target
 
@@ -196,6 +198,63 @@ def test_penrose_p2_is_an_exact_partition(w, h, base_s):
     assert not interior_unpaired, (
         f"{len(interior_unpaired)} interior T-junction(s) at {w}x{h} "
         f"base_s={base_s}: {interior_unpaired[:3]}")
+
+
+@pytest.mark.parametrize("w,h,base_s", [
+    (800, 600, 60),
+    (1200, 300, 50),
+    (640, 640, 80),      # the case that exposed the empty-margin holes (5.3%)
+    (500, 500, 40),
+])
+def test_pebbles_covers_the_frame(w, h, base_s):
+    # The blobs live inside the frame, so the density leaves the margin nearly
+    # empty; without the uniform scaffold ring the border cells come out
+    # unbounded, get dropped, and open holes. Trimming the batch to the n-th
+    # in-frame seed (needed for cell size) is what starves the margin, so the
+    # ring and the trim must be tested together — this is that test.
+    acc = np.zeros((h, w), dtype=np.uint16)
+    for poly in _gen_pebbles(None, w, h, base_s):
+        m = Image.new("L", (w, h), 0)
+        ImageDraw.Draw(m).polygon([tuple(p) for p in poly], fill=1)
+        acc += np.asarray(m, dtype=np.uint16)
+    holes = int((acc == 0).sum())
+    assert holes <= 64, f"{holes} uncovered px at {w}x{h} base_s={base_s}"
+
+
+def test_pebbles_cell_sizes_vary_more_than_uniform_voronoi():
+    # The whole point of pebbles: density varies, so cell SIZE varies — that is
+    # what survives photo substitution. If a refactor ever flattened the blobs,
+    # pebbles would silently become `voronoi` (the kepler_ty/bloom failure).
+    from src.engine_smart import _gen_voronoi
+
+    def _spread(gen):
+        areas = []
+        for poly in gen(None, 800, 600, 60):
+            a = 0.0
+            for i in range(len(poly)):
+                x1, y1 = poly[i]
+                x2, y2 = poly[(i + 1) % len(poly)]
+                a += x1 * y2 - x2 * y1
+            areas.append(abs(a) / 2)
+        mean = sum(areas) / len(areas)
+        var = sum((a - mean) ** 2 for a in areas) / len(areas)
+        return math.sqrt(var) / mean
+
+    assert _spread(_gen_pebbles) > _spread(_gen_voronoi) * 1.3
+
+
+def test_bloom_geometry_differs_from_phyllotaxis():
+    # bloom exists only because its divergence angle differs: the scheme drew
+    # the same lattice as phyllotaxis and carried the motif in COLOUR, which is
+    # nothing once photos replace it (the kepler_ty failure). Radii are shared
+    # (r = c*sqrt(n)), so cell-area stats CANNOT tell them apart — the seed
+    # angles must be compared instead.
+    assert _LUCAS_ANGLE != _GOLDEN_ANGLE
+    a = [tuple(round(v, 6) for v in p)
+         for poly in _gen_bloom(None, 400, 400, 40) for p in poly]
+    b = [tuple(round(v, 6) for v in p)
+         for poly in _gen_phyllotaxis(None, 400, 400, 40) for p in poly]
+    assert a != b, "bloom reproduced phyllotaxis — the Lucas angle is not applied"
 
 
 def test_poincare_grout_via_dispatcher_is_hierarchical():

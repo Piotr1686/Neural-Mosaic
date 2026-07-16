@@ -139,6 +139,15 @@ GOLDEN = {
     # identical across two interpreters, one with PYTHONHASHSEED=1.
     ("penrose_p2", False): "e6d9874805f1bd79ff9777387ac88b7655018022a4a9c2943924bbb9e0a8df07",
     ("penrose_p2", True): "ae1a8d87c18fee77a959b12393fc798a9d459d9d1c6b594eaa72755c8fdaff76",
+    # E2 (2026-07-17). bloom: Lucas-angle Vogel lattice — the `angle` parameter
+    # defaults to the golden angle, so all eight sunflower goldens above stay
+    # bit-identical (verified). pebbles: variable-density Voronoi, seeded from
+    # dimensions via _shape_seed. Both verified across two interpreters, one
+    # with PYTHONHASHSEED=1.
+    ("bloom", False): "c65bcb4a6ff6df9b6722c7bad4fc6f67b6da99531943cd713c01d2c525d1c0d7",
+    ("bloom", True): "3b16cef41605f943bf7e9cacfcaf485d843e027a7a1a7c83f1c57cc7b41f1db8",
+    ("pebbles", False): "ed4f1f3ea203a442d19ea5008a6d9caf5e725ed36b50b7829afc898653ac7279",
+    ("pebbles", True): "28868e8dc325fa6cb9fcb2770ac9a6702c6a7a2e0050e9571e3c67e6549fedf9",
 }
 
 

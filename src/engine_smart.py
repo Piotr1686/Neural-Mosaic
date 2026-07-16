@@ -163,14 +163,25 @@ def _gen_spectre(engine, target_w, target_h, base_s):
 # is ported -- the scheme's per-cell colour (vary/palette) is a scheme-only
 # concern, so preview and render stay a pure function of (w, h, base_s), no RNG.
 _GOLDEN_ANGLE = math.pi * (3.0 - math.sqrt(5.0))   # 137.508 deg
+# Lucas divergence: the continued fraction [0;3,1,1,1,...] instead of the
+# golden angle's [0;2,1,1,1,...]. Both are noble, but this one grows Lucas
+# parastichies (1,3,4,7,11,18) rather than Fibonacci (1,2,3,5,8,13,21) -- a
+# visibly different spiral-arm count, which is geometry, not colour.
+_LUCAS_ANGLE = 2.0 * math.pi / (3.0 + 2.0 / (1.0 + math.sqrt(5.0)))  # 99.502 deg
 
 
-def _vogel_points(n_pts, c, power):
-    """Vogel phyllotaxis lattice r = c*n**power, theta = n*golden angle.
-    Returns a list of (x, y) tuples in world space (y up)."""
+def _vogel_points(n_pts, c, power, angle=_GOLDEN_ANGLE):
+    """Vogel phyllotaxis lattice r = c*n**power, theta = n*`angle`.
+    Returns a list of (x, y) tuples in world space (y up).
+
+    `angle` defaults to the golden angle, so every existing caller is
+    bit-identical; `bloom` passes the Lucas angle instead, which is the one
+    phyllotaxis axis no other sunflower variant occupies (they all differ by
+    `power` or Lloyd passes).
+    """
     idx = np.arange(1, n_pts + 1, dtype=np.float64)
     rr = c * idx ** power
-    aa = idx * _GOLDEN_ANGLE
+    aa = idx * angle
     return list(zip(rr * np.cos(aa), rr * np.sin(aa)))
 
 
@@ -300,13 +311,14 @@ def _emit_cells(pts, target_w, target_h, R=1.0):
         yield [((x + R) * sx, (R - y) * sy) for x, y in cl]
 
 
-def _graded_sunflower(target_w, target_h, base_s, power, lloyd_iters=0):
+def _graded_sunflower(target_w, target_h, base_s, power, lloyd_iters=0,
+                      angle=_GOLDEN_ANGLE):
     """Shared body of the Vogel-lattice sunflowers: r = c*n^power seeds
     (optionally Lloyd-relaxed) -> Voronoi cells mapped to the frame. Fully
     deterministic (no RNG) so preview and render agree for equal dimensions."""
     n = _sunflower_n_seeds(target_w, target_h, base_s)
     c = (math.sqrt(2.0) + 0.45) / (n ** power)
-    pts = _vogel_points(n, c, power=power)
+    pts = _vogel_points(n, c, power=power, angle=angle)
     if lloyd_iters:
         pts = _lloyd_relax(pts, lloyd_iters)
     yield from _emit_cells(pts, target_w, target_h)
@@ -641,11 +653,91 @@ def _gen_voronoi(engine, target_w, target_h, base_s):
     yield from _emit_cells(pts, target_w, target_h)
 
 
+def _gen_pebbles(engine, target_w, target_h, base_s):
+    """Organic pebble mosaic: a Voronoi partition whose seed DENSITY varies
+    smoothly across the frame (sum of 6 Gaussian blobs, rejection-sampled), so
+    clusters of small cells sit against patches of big ones. Distinct from
+    `voronoi`, which Lloyd-relaxes uniform seeds into even cells: here the
+    multi-scale density is the motif, and it survives photo substitution
+    because the cell SIZE varies, not just a palette.
+
+    Rejection sampling is vectorised in batches rather than looped per point:
+    dmax is ~1+sum(weights) (up to ~49) while the mean density is near 1, so a
+    per-point Python loop would burn ~750k trials x 6 exp() at 16K. The RNG
+    stream is consumed in a fixed batch order, so the geometry stays a pure
+    function of (base_s, w, h) like every other seeded shape.
+
+    Seeding stops on the count INSIDE the frame, not on a total scaled by the
+    margin. `voronoi` can use the latter because uniform seeds split between
+    frame and margin in a fixed ratio; here the blobs sit inside the frame, so
+    a fixed total over-fills it (measured: cells 0.62*base_s^2 instead of the
+    family's ~0.84). Counting the in-frame seeds is self-correcting whatever
+    the blobs do — but the batch must then be TRIMMED to the n-th in-frame
+    seed: acceptance runs ~11% (the blobs lift the mean density to ~3.6
+    against dmax ~32.5), so one batch overshoots a small frame several times
+    over (measured: a constant 425 cells at every size). A prefix of an i.i.d.
+    sample is still an i.i.d. sample, so trimming preserves the density.
+    """
+    n = max(16, int(target_w * target_h / (base_s * base_s)))
+    margin = 1.60          # generate past the frame edge so border cells bound
+    rng = np.random.default_rng(_shape_seed(base_s, target_w, target_h))
+
+    centres = rng.uniform(-1.0, 1.0, size=(6, 2))
+    sigmas = rng.uniform(0.22, 0.5, size=6)
+    weights = rng.uniform(2.5, 8.0, size=6)
+    dmax = 1.0 + float(weights.sum())
+
+    def _density(xy):
+        d = np.ones(len(xy), dtype=np.float64)
+        for c, s, w in zip(centres, sigmas, weights):
+            d2 = ((xy - c) ** 2).sum(axis=1)
+            d += w * np.exp(-d2 / (2.0 * s * s))
+        return d
+
+    pts = np.empty((0, 2), dtype=np.float64)
+    while int((np.abs(pts) <= 1.0).all(axis=1).sum()) < n:
+        cand = rng.uniform(-margin, margin, size=(4096, 2))
+        keep = cand[rng.uniform(0.0, dmax, size=4096) < _density(cand)]
+        pts = np.vstack((pts, keep))
+    in_frame = (np.abs(pts) <= 1.0).all(axis=1)
+    cut = int(np.searchsorted(np.cumsum(in_frame), n)) + 1
+    pts = pts[:cut]
+
+    # Scaffold ring: the blobs live inside the frame, so the density leaves the
+    # margin nearly empty and border cells come out unbounded -> dropped ->
+    # holes (5.3% at 640x640). Pad the margin with uniform seeds at the frame's
+    # mean density; they only bound the border cells, which are clipped anyway
+    # (same job as the frozen outer ring in `voronoi`).
+    ring_area = (2.0 * margin) ** 2 - 4.0
+    n_ring = max(8, int(n / 4.0 * ring_area))
+    ring = rng.uniform(-margin, margin, size=(n_ring * 3, 2))
+    ring = ring[~(np.abs(ring) <= 1.0).all(axis=1)][:n_ring]
+    pts = np.vstack((pts, ring))
+    yield from _emit_cells([tuple(p) for p in pts], target_w, target_h)
+
+
 def _gen_phyllotaxis(engine, target_w, target_h, base_s):
     """Canonical golden-angle phyllotaxis: Voronoi of r = c*sqrt(n) Vogel seeds
     (area-uniform cells) with no relaxation, so the raw spiral courses stay
     crisp -- distinct from sunflower_soft (Lloyd-rounded) and _rings (snapped)."""
     yield from _graded_sunflower(target_w, target_h, base_s, power=0.5)
+
+
+def _gen_bloom(engine, target_w, target_h, base_s):
+    """Lucas-angle phyllotaxis: same area-uniform r = c*sqrt(n) Vogel lattice
+    as `phyllotaxis`, but seeds diverge by the Lucas angle (99.502 deg), so the
+    head grows Lucas parastichies (…4, 7, 11, 18 arms) instead of Fibonacci
+    ones (…5, 8, 13, 21) -- a different visible spiral-arm count.
+
+    The scheme drew this motif in COLOUR (i mod 21 arms) over a lattice
+    identical to `phyllotaxis` — same golden angle, same c = (sqrt(2)+0.45)/
+    sqrt(N) — which under photos is no shape at all (the `kepler_ty` failure).
+    `power` was not an option either: 0.40/0.50/0.66/0.75 are all taken by the
+    sunflower family, so any value between them just clones a neighbour. The
+    divergence angle is the one axis none of them use.
+    """
+    yield from _graded_sunflower(target_w, target_h, base_s, power=0.5,
+                                 angle=_LUCAS_ANGLE)
 
 
 # --- Deterministic Fable tessellations (pinwheel/cairo/floret/gosper) -------
@@ -2145,7 +2237,9 @@ SHAPE_MODES = {
     "rhombs_funnel":            ShapeSpec("polygon", _gen_rhombs_funnel, aa=4),
     "rhombs_star":              ShapeSpec("polygon", _gen_rhombs_star, aa=4),
     "voronoi":                  ShapeSpec("polygon", _gen_voronoi, aa=4, seeded=True),
+    "pebbles":                  ShapeSpec("polygon", _gen_pebbles, aa=4, seeded=True),
     "phyllotaxis":              ShapeSpec("polygon", _gen_phyllotaxis, aa=4),
+    "bloom":                    ShapeSpec("polygon", _gen_bloom, aa=4),
     "pinwheel":                 ShapeSpec("polygon", _gen_pinwheel, aa=4),
     "cairo":                    ShapeSpec("polygon", _gen_cairo, aa=4),
     "floret":                   ShapeSpec("polygon", _gen_floret, aa=4),
