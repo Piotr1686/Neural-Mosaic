@@ -82,6 +82,14 @@ def test_max_level_cap_downscales(tmp_path):
     assert max(levels) == 5
 
 
+def test_decompression_bomb_limit_disabled():
+    # Pillow's default guard is 89.5 Mpx (hard error at 2x = 179 Mpx). Our own
+    # renders exceed it: a 16K mosaic is 133 Mpx (warning) and a 4:1 panorama is
+    # 324 Mpx -- which raised DecompressionBombError on the CLI/GUI export path
+    # until the module disabled the limit, as make_matrices/make_zoom_gif do.
+    assert Image.MAX_IMAGE_PIXELS is None
+
+
 def test_progress_cb_contract(tmp_path):
     src = _make_image(tmp_path, 300, 200)
     out = tmp_path / "dzi"

@@ -21,6 +21,8 @@ from pathlib import Path
 
 from PIL import Image
 
+Image.MAX_IMAGE_PIXELS = None  # allow 16K mosaics and 4:1 panoramas (324 Mpx)
+
 TILE_SIZE = 256
 OVERLAP = 1
 JPEG_QUALITY = 70
