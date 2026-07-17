@@ -148,6 +148,13 @@ GOLDEN = {
     ("bloom", True): "3b16cef41605f943bf7e9cacfcaf485d843e027a7a1a7c83f1c57cc7b41f1db8",
     ("pebbles", False): "ed4f1f3ea203a442d19ea5008a6d9caf5e725ed36b50b7829afc898653ac7279",
     ("pebbles", True): "28868e8dc325fa6cb9fcb2770ac9a6702c6a7a2e0050e9571e3c67e6549fedf9",
+    # E3 (2026-07-17). stagger_tri: triangle rows at a constant x-phase, so the
+    # rows slip and every row line is a T-junction seam. NOT `triangle`, which
+    # shifts the phase by half a base each row via its (c+r)%2 flip rule — see
+    # the translation-invariant gate in test_grout_engine. Pure arithmetic, no
+    # RNG; verified across two interpreters, one with PYTHONHASHSEED=1.
+    ("stagger_tri", False): "cee4b15ccb044f46d3e5c7ab4935a56773ccff7e4bc414dfb699a447b56aec72",
+    ("stagger_tri", True): "97524a19731c816d29c497f97530ddabf7d488ca9c5725bb942b29369104970b",
 }
 
 

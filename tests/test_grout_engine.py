@@ -19,7 +19,7 @@ from PIL import Image, ImageDraw
 
 from src.engine_smart import (SmartEngine, _poincare_cells, _gen_penrose_p2,
                               _gen_pebbles, _gen_bloom, _gen_phyllotaxis,
-                              _GOLDEN_ANGLE, _LUCAS_ANGLE)
+                              _gen_stagger_tri, _GOLDEN_ANGLE, _LUCAS_ANGLE)
 from src.grout import classify_edges
 from tests.test_golden_shapes import _build_library, _make_target
 
@@ -255,6 +255,154 @@ def test_bloom_geometry_differs_from_phyllotaxis():
     b = [tuple(round(v, 6) for v in p)
          for poly in _gen_phyllotaxis(None, 400, 400, 40) for p in poly]
     assert a != b, "bloom reproduced phyllotaxis — the Lucas angle is not applied"
+
+
+# --- stagger_tri vs the triangle lattice ------------------------------------
+# stagger_tri is the triangle cell stacked at a CONSTANT row phase. The only
+# thing separating it from the `triangle` grid mode is that phase, so the gate
+# has to be translation-invariant: shifting the phase by s/2 instead rebuilds
+# `triangle` exactly but displaced by s/2, and a raw coordinate diff (the
+# bloom/phyllotaxis pattern above) would call that "different" — every single
+# coordinate does differ. Hence _max_overlap over candidate translations.
+
+def _tri_strips(target_w, target_h, s, phase):
+    """Triangle rows of side `s`; `phase(r)` is row r's x-offset."""
+    h = s * math.sqrt(3) / 2.0
+    for r in range(-2, int(target_h / h) + 3):
+        y0 = r * h
+        y1 = y0 + h
+        off = phase(r)
+        for c in range(-2, int(target_w / s) + 3):
+            x = c * s + off
+            yield [(x, y0), (x + s, y0), (x + s / 2, y1)]
+            yield [(x + s, y0), (x + s / 2, y1), (x + 3 * s / 2, y1)]
+
+
+def _canon(poly, dx=0.0, dy=0.0):
+    return tuple(sorted((round(x + dx, 3), round(y + dy, 3)) for x, y in poly))
+
+
+def _max_overlap(a_cells, b_cells, window):
+    """Largest fraction of `a_cells` inside `window` reproduced by `b_cells`
+    under ANY translation.
+
+    Exhaustive without scanning a grid of offsets: a translation that matches
+    the two tilings must carry one fixed cell of A onto some cell of B, so the
+    candidate offsets are exactly the centroid differences from that anchor.
+    B is generated past the window on every side, so a shifted B still covers
+    it and the count is free of border bias.
+    """
+    x0, y0, x1, y1 = window
+    a_win = [p for p in a_cells if x0 <= _centroid(p)[0] <= x1
+             and y0 <= _centroid(p)[1] <= y1]
+    assert len(a_win) >= 40, "window too small to be evidence"
+    anchor = _centroid(a_win[0])
+    best = 0.0
+    for b in b_cells:
+        cb = _centroid(b)
+        dx, dy = cb[0] - anchor[0], cb[1] - anchor[1]
+        shifted = {_canon(p, dx, dy) for p in b_cells}
+        hit = sum(1 for p in a_win if _canon(p) in shifted)
+        best = max(best, hit / len(a_win))
+    return best
+
+
+def test_triangle_grid_shifts_phase_half_a_base_every_row():
+    # Anchors the claim below in the engine rather than in the test's own
+    # re-derivation: `triangle` looks phase-constant (offset_odd_row_x stays 0)
+    # and carries the shift in its (c+r)%2 flip rule instead. On the (a*w/2,
+    # b*h) vertex lattice that shows up as the parity of `a` alternating line
+    # to line — i.e. the regular vertex-to-vertex lattice, no T-junctions.
+    w, h = 60.0, float(int(60 * 0.866))
+    cells = _engine()._grout_cells_triangle(600, 600, 60)
+    lines = {}
+    for poly, _own, _sub in cells:
+        for (x, y) in poly:
+            lines.setdefault(round(y / h), set()).add(round(x / (w / 2)) % 2)
+    interior = sorted(k for k in lines if 1 <= k <= 8)
+    parities = [lines[k] for k in interior]
+    assert all(len(p) == 1 for p in parities), (
+        "a triangle row line carries both vertex parities — the grid would have "
+        "T-junctions and would not be the regular lattice")
+    assert all(parities[i] != parities[i + 1] for i in range(len(parities) - 1)), (
+        "vertex parity does not alternate — triangle is not phase-shifting rows")
+
+
+def test_stagger_tri_rows_slip_and_are_not_triangle_under_any_translation():
+    # The gate the pool turns on. `stagger_tri` holds the phase constant, so
+    # every row line is a slip line carrying BOTH parities (T-junctions) and no
+    # translation can turn it into the regular lattice.
+    base_s = 60
+    s = 2.0 * base_s / (3.0 ** 0.25)
+    h = s * math.sqrt(3) / 2.0
+    stagger = [list(p) for p in _gen_stagger_tri(None, 900, 900, base_s)]
+
+    lines = {}
+    for poly in stagger:
+        for (x, y) in poly:
+            lines.setdefault(round(y / h), set()).add(round(x / (s / 2)) % 2)
+    assert all(len(lines[k]) == 2 for k in range(1, 8)), (
+        "a stagger_tri row line carries a single vertex parity — the rows "
+        "interlock, so this is the regular lattice, not a slip")
+
+    regular = list(_tri_strips(900, 900, s, lambda r: (s / 2) * (r % 2)))
+    window = (1.5 * s, 1.5 * h, 7 * s, 9 * h)
+    assert _max_overlap(stagger, regular, window) < 0.99, (
+        "stagger_tri reproduced the triangle lattice")
+
+
+def test_translation_gate_catches_the_half_base_phase_duplicate():
+    # Teeth for the gate above, and the trap it exists for: shifting alternate
+    # rows by s/2 — the obvious "make it staggered" fix — IS the triangle
+    # lattice displaced by s/2. Every coordinate differs, so a raw diff passes
+    # it; the translation-invariant gate must still score a full match.
+    base_s = 60
+    s = 2.0 * base_s / (3.0 ** 0.25)
+    h = s * math.sqrt(3) / 2.0
+    half = list(_tri_strips(900, 900, s, lambda r: (s / 2) * ((r + 1) % 2)))
+    regular = list(_tri_strips(900, 900, s, lambda r: (s / 2) * (r % 2)))
+    window = (1.5 * s, 1.5 * h, 7 * s, 9 * h)
+
+    raw_a = sorted(_canon(p) for p in half)
+    raw_b = sorted(_canon(p) for p in regular)
+    assert raw_a != raw_b, "the two phasings should differ coordinate-wise"
+    assert _max_overlap(half, regular, window) == 1.0, (
+        "the gate failed to see through a pure translation — it would have "
+        "green-lit a duplicate of triangle")
+
+
+@pytest.mark.parametrize("w,h,base_s", [
+    (800, 600, 60),      # 4:3
+    (1200, 300, 50),     # wide band
+    (640, 640, 80),      # square
+    (500, 500, 40),      # dense
+    (384, 288, 100),     # the golden frame
+])
+def test_stagger_tri_covers_the_frame(w, h, base_s):
+    # Coverage is what makes the constant phase safe to ship: each row
+    # partitions its own slab, so slipping the rows sideways cannot open a gap
+    # no matter the phase. The wedge rows/cols start at -1 for the left/top
+    # edge (the down cell of c=-1 is what fills x in [0, s/2]).
+    acc = np.zeros((h, w), dtype=np.uint16)
+    for poly in _gen_stagger_tri(None, w, h, base_s):
+        m = Image.new("L", (w, h), 0)
+        ImageDraw.Draw(m).polygon([tuple(p) for p in poly], fill=1)
+        acc += np.asarray(m, dtype=np.uint16)
+    holes = int((acc == 0).sum())
+    assert holes == 0, f"{holes} uncovered px at {w}x{h} base_s={base_s}"
+
+
+def test_stagger_tri_mean_cell_area_is_base_s_squared():
+    # Pool convention (cairo/spectre): the scale is picked so a cell averages
+    # base_s^2. The `triangle` grid mode instead reads base_s as the side
+    # (area 0.433*base_s^2), so porting the scheme's `s = base_s` verbatim
+    # would have shipped cells less than half the pool's size.
+    base_s = 60
+    areas = []
+    for poly in _gen_stagger_tri(None, 900, 900, base_s):
+        (x1, y1), (x2, y2), (x3, y3) = poly
+        areas.append(abs((x2 - x1) * (y3 - y1) - (x3 - x1) * (y2 - y1)) / 2)
+    assert sum(areas) / len(areas) == pytest.approx(base_s ** 2, rel=0.01)
 
 
 def test_poincare_grout_via_dispatcher_is_hierarchical():

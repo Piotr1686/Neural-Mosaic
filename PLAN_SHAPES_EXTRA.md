@@ -1,4 +1,4 @@
-# PLAN_SHAPES_EXTRA.md — Wdrożenie puli extra (17 kształtów, rejestr 39 → 56; E1+E2 zamknięte, rejestr=42, zostaje 14)
+# PLAN_SHAPES_EXTRA.md — Wdrożenie puli extra (17 kształtów, rejestr 39 → 56; E1+E2 zamknięte + `stagger_tri` z E3, rejestr=43, zostaje 13)
 
 **Status:** ZATWIERDZONY przez usera 2026-07-16. Kanoniczny plan puli extra. Kontynuacja `PLAN_SHAPES.md` (S3-S8 ZAMKNIĘTE — 39 kształtów w silniku, ostatni `poincare` 2026-07-15/16).
 **Decyzja finalna:** bez zmian — po wdrożeniu WSZYSTKICH kształtów user generuje mozaiki testowe i dopiero wtedy decyduje, które zostają. Nie usuwać żadnego przed tą decyzją.
@@ -7,24 +7,24 @@
 
 Punkt wyjścia (weryfikacja 2026-07-16, rejestr vs PNG): 39 kształtów w silniku, 57 schematów ⇒ **18 bez implementacji, 0 sierot**. Po usunięciu `kepler_ty` (duplikat) pula = **17**.
 
-**ZOSTAJE 14** (rejestr=42 po E1+E2):
+**ZOSTAJE 13** (rejestr=43 po E1+E2+`stagger_tri`):
 
 ```
 braid  dragon  gereh  koch_island  koch_snowflake  moire  nautilus
 rosette  rosette_fractal  scales  sierpinski  sierpinski_carpet
-sierpinski_d  stagger_tri
+sierpinski_d
 ```
 
-Wdrożone: `penrose_p2` (E1, `b3e725c`) · `bloom`, `pebbles` (E2, `3990cfa`). Cel końcowy: **rejestr 56**.
+Wdrożone: `penrose_p2` (E1, `b3e725c`) · `bloom`, `pebbles` (E2, `3990cfa`) · `stagger_tri` (E3). Cel końcowy: **rejestr 56**.
 
 ## ⚠ AUDYT KONSTRUKCJI (2026-07-17) — czytaj przed każdym sprintem
 
-Pula powstała jako **schematy**, gdzie różnicę niósł KOLOR. Pod zdjęciami kolor znika, więc każde rozróżnienie „tylko paletą" zapada się w duplikat. Trzy trafienia (`kepler_ty`, `bloom`, `stagger_tri`) ⇒ jednorazowy audyt konstrukcji wszystkich pozostałych, wykonany 2026-07-17. **Wynik jest wiążący — nie powtarzać analizy per sprint.**
+Pula powstała jako **schematy**, gdzie różnicę niósł KOLOR. Pod zdjęciami kolor znika, więc każde rozróżnienie „tylko paletą" zapada się w duplikat. Trzy trafienia (`kepler_ty`, `bloom`, `stagger_tri` — przy czym werdykt dla `stagger_tri` sam okazał się błędny, patrz niżej) ⇒ jednorazowy audyt konstrukcji wszystkich pozostałych, wykonany 2026-07-17. **Wynik jest wiążący — nie powtarzać analizy per sprint.**
 
 **Duplikaty (różnica tylko w palecie):**
 - `kepler_ty` — identyczne `(N, zeta, gamma)` co `penrose` → **USUNIĘTY** (`1e53982`).
 - `bloom` — identyczna krata co `phyllotaxis` (kąt złoty, `r=c√i`, stała `(√2+0.45)`); motyw „21 ramion" był kolorem `i mod 21` → **ZRÓŻNICOWANY kątem Lucasa** (decyzja usera; `3990cfa`).
-- `stagger_tri` — geometria = zwykła krata trójkątów naprzemiennych (= tryb `triangle`); flaga `on = (ci & rj) == 0` wybiera TYLKO paletę → **do zróżnicowania geometrycznego w E3** (decyzja usera: realne przesunięcie rzędów o pół trójkąta; T-junctions na granicach rzędów legalne w partycji).
+- ~~`stagger_tri`~~ — **WERDYKT AUDYTU OBALONY 2026-07-17 pomiarem (E3, `_gen_stagger_tri`).** Flaga `on = (ci & rj) == 0` faktycznie wybierała tylko paletę (to trafne), ale wniosek „geometria = tryb `triangle`" był **fałszywy i odwrócony**: to `triangle` przesuwa fazę o pół podstawy co rząd (jego reguła flipu `(c+r)%2` JEST tym przesunięciem — patrz `_grout_cells_triangle`, parzystość wierzchołka zmienia się z linią), a schemat trzymał fazę STAŁĄ. Pokrycie z `triangle` przy dowolnej translacji: **50%, nie 100%** ⇒ geometria była odrębna od początku i została przeniesiona 1:1. **Zalecone „przesunięcie o pół trójkąta" odtworzyłoby `triangle` w 100%** (przesunięty o `s/2`) — czyli zbudowałoby duplikat, który miało usunąć.
 
 **Sprawdzone i ODRĘBNE** (dzielą maszynerię, ale różnią się KOMÓRKĄ — planować bez obaw; zweryfikować wizualnie po wdrożeniu):
 
@@ -39,7 +39,10 @@ Pula powstała jako **schematy**, gdzie różnicę niósł KOLOR. Pod zdjęciami
 
 **Bezspornie odrębne:** `moire` (wierzchołki wyginane polem interferencji — ostrzeżenie „≡ square" NIEAKTUALNE), `dragon`, `koch_island`, `koch_snowflake`, `scales`, `sierpinski`, `sierpinski_d`, `pebbles`.
 
-**REGUŁA:** przed wdrożeniem porównuj **KONSTRUKCJĘ** z tym, co silnik ma — nie nazwę i nie docstring. Statystyki potrafią NIE wystarczyć: `bloom` i `phyllotaxis` mają identyczny rozkład pól (wspólne promienie `r=c√n`), różni je tylko kąt ⇒ porównuj współrzędne.
+**REGUŁA:** przed wdrożeniem porównuj **KONSTRUKCJĘ** z tym, co silnik ma — nie nazwę, nie docstring i nie werdykt tego audytu (patrz `stagger_tri`: audyt orzekł duplikat, pomiar orzekł odwrotnie). Drabinka narzędzi, rosnąco:
+1. **Statystyki pól potrafią NIE wystarczyć** — `bloom` i `phyllotaxis` mają identyczny rozkład pól (wspólne promienie `r=c√n`), różni je tylko kąt.
+2. **Porównanie współrzędnych potrafi NIE wystarczyć** — gdy rodziny dzielą KOMÓRKĘ i różnią się tylko UŁOŻENIEM (faza/orientacja), translacja zmienia każdą współrzędną, więc naiwny `a != b` przepuści duplikat (`stagger_tri`: wariant `s/2` = `triangle` przesunięty, 0/78 surowo vs 78/78 po wyrównaniu).
+3. **Wtedy mierz z dokładnością do izometrii** — `_max_overlap` w `tests/test_grout_engine.py`, plus test kontrolny dowodzący, że bramka łapie znany duplikat.
 
 ---
 
@@ -59,7 +62,7 @@ Pula powstała jako **schematy**, gdzie różnicę niósł KOLOR. Pod zdjęciami
 |---|---|---|---|
 | ~~**E1**~~ | ~~`penrose_p2`~~ | **ZAMKNIĘTY** `b3e725c` (rejestr=40) | — |
 | ~~**E2**~~ | ~~`bloom`, `pebbles`~~ | **ZAMKNIĘTY** `3990cfa` (rejestr=42) | — |
-| **E3** | `braid`, `moire`, `stagger_tri` | czyste lattice'y wielokątne, rdzeń `_polygon_sector` | niskie |
+| **E3** | ~~`stagger_tri`~~ ✓ · `braid`, `moire` | czyste lattice'y wielokątne, rdzeń `_polygon_sector` | niskie |
 | **E4** | `dragon`, `koch_island`, `koch_snowflake` | rep-tile / Koch (geometria gotowa w gen_extra) | średnie |
 | **E5** | `gereh`, `rosette` | islamskie partycje gwiaździste — wzorzec `girih` | średnie |
 | **E6** | `scales`, `nautilus`, `rosette_fractal` | łuki + radialne (`_arc_pitch`, „dobry środek") | średnie |
@@ -82,7 +85,9 @@ Kolejność E1→E3 najpierw celowo: same reużywają istniejącą maszynerię, 
 - ⚠ **Znaleziona wada w istniejącym `voronoi`** (NIE naprawiona, poza zakresem E2): przy 384×288 `base_s=100` daje **12,8% dziur** — wchodzi podłoga `max(16, ...)` i 16 ziaren nie pokrywa kadru. Dotyczy skrajnie zgrubnych ustawień.
 
 ### E3 — lattice'y
-- ⚠ `stagger_tri` **WYMAGA ZRÓŻNICOWANIA GEOMETRYCZNEGO** (decyzja usera 2026-07-17): jego obecna geometria to zwykła krata trójkątów naprzemiennych = tryb `triangle`; „stagger" z nazwy dotyczył PASM KOLORU (`on = (ci & rj) == 0` wybiera tylko paletę). Wdrożyć realne przesunięcie rzędów o pół trójkąta (T-junctions na poziomych granicach rzędów są legalne w partycji — precedens `sierpinski`). **Bramka: test porównujący współrzędne z `triangle` musi wykazać różnicę** (wzorzec: `test_bloom_geometry_differs_from_phyllotaxis`).
+- ✓ `stagger_tri` **WDROŻONY 2026-07-17** (rejestr=43, wariant A — przeniesienie 1:1, decyzja usera po obaleniu werdyktu audytu). Rzędy trójkątów o **stałej fazie x** ⇒ każda pozioma linia rzędu to linia poślizgu z T-junctions (legalne — każdy rząd dzieli własny pas niezależnie, więc faza nie może otworzyć dziury; precedens `sierpinski`). Skala `s = 2·base_s/3^(1/4)` (konwencja puli: średnie pole = `base_s²`; schemat używał `s = base_s`, czyli konwencji `triangle` — pole 0,433·base_s²). Flaga palety `on` porzucona.
+  - **META-LEKCJA (bramka): zalecony test „porównaj współrzędne z `triangle`" BYŁBY ŚLEPY.** Wariant z przesunięciem o `s/2` to `triangle` przesunięty o `s/2` — **każda** współrzędna się różni (0/78 wspólnych surowo), więc naiwny `a != b` (wzorzec `test_bloom_geometry_differs_from_phyllotaxis`) dałby zielone światło duplikatowi; po wyrównaniu translacji: 78/78. Bramka MUSI być niewrażliwa na translację. Wdrożone w `tests/test_grout_engine.py`: `_max_overlap` (kandydaci na translację = różnice centroid od kotwicy — wyczerpujące, bez skanowania siatki offsetów) + test kontrolny `test_translation_gate_catches_the_half_base_phase_duplicate`, który dowodzi, że bramka ma zęby (łapie wariant `s/2` jako 100%).
+  - Uogólnienie: dla rodzin dzielących KOMÓRKĘ, a różniących się tylko UŁOŻENIEM (faza/orientacja), różnica musi być mierzona z dokładnością do izometrii — inaczej test mierzy układ współrzędnych, nie kształt.
 - `moire`: ⚠ **Historyczne ostrzeżenie „moire ≡ square" jest NIEAKTUALNE** — schemat po rewizji 2026-07-04 pokazuje prawdziwe moiré geometryczne (2 obrócone siatki → komórki = przecięcia, zmienny kształt). Zweryfikowano wizualnie 2026-07-16. Ale zasada nadrzędna zostaje: **kształt ma sens TYLKO gdy geometria komórki różni się od kwadratu** — po wdrożeniu sprawdzić na prawdziwym renderze, czy nie zdegenerował się do `square`.
 - `braid`: basketweave (pary prostokątów 2:1, naprzemienna orientacja). Zweryfikowano 2026-07-16: to NIE jest duplikat `weave` (tam wstęgi + komórki-węzły) ani `brick_wall`. Płaski przeplot bez nad/pod — over-under = nakładanie, złamałoby regułę teselacji.
 

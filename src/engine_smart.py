@@ -807,6 +807,43 @@ def _gen_pinwheel(engine, target_w, target_h, base_s):
         yield [(A.real, A.imag), (B.real, B.imag), (C.real, C.imag)]
 
 
+def _gen_stagger_tri(engine, target_w, target_h, base_s):
+    """Triangle rows stacked at a CONSTANT x-phase, so consecutive rows slip
+    against one another instead of interlocking.
+
+    NOT the `triangle` grid mode, despite sharing the cell. `triangle` shifts
+    the phase by half a base every row — its (c+r)%2 flip rule IS that shift
+    (see _grout_cells_triangle: vertex parity alternates line to line), which
+    makes it the regular vertex-to-vertex lattice. Holding the phase fixed
+    turns every row line into a slip line: the row below meets it at k*s+s/2,
+    the row above at k*s, so each vertex lands mid-edge of its neighbour. Those
+    T-junctions are the shape (precedent: sierpinski's brick offset) and are
+    legal in the partition because each row partitions its own slab
+    independently — phase cannot open a gap.
+
+    Careful: this differs from `triangle` in exactly 50% of its cells, and
+    shifting the phase by s/2 instead would reproduce `triangle` bit-for-bit
+    under a w/2 translation. A raw coordinate diff would not catch that (the
+    translation makes every coordinate differ), so the gate in
+    test_grout_engine compares the two translation-invariantly.
+
+    The scheme's `on = (ci & rj) == 0` flag is dropped: it only ever picked a
+    palette, and colour is gone once photos land in the cells (the kepler_ty
+    failure).
+    """
+    s = 2.0 * base_s / (3.0 ** 0.25)      # s^2*sqrt(3)/4 == base_s^2
+    h = s * math.sqrt(3) / 2.0
+    rows = int(target_h / h) + 2
+    cols = int(target_w / s) + 2
+    for r in range(-1, rows):
+        y0 = r * h
+        y1 = y0 + h
+        for c in range(-1, cols):
+            x = c * s
+            yield [(x, y0), (x + s, y0), (x + s / 2, y1)]
+            yield [(x + s, y0), (x + s / 2, y1), (x + 3 * s / 2, y1)]
+
+
 def _gen_cairo(engine, target_w, target_h, base_s):
     """Cairo pentagonal tiling: 4 congruent equilateral-parameter pentagons
     around every (i+j even) node of a unit square lattice. Pentagon area is
@@ -2224,6 +2261,7 @@ SHAPE_MODES = {
     "hexagon_romb":  ShapeSpec("grid"),
     "romb":          ShapeSpec("grid"),
     "triangle":      ShapeSpec("grid"),
+    "stagger_tri":   ShapeSpec("polygon", _gen_stagger_tri, aa=4),
     "kites":         ShapeSpec("polygon", _gen_kites, aa=1),
     "spectre":       ShapeSpec("polygon", _gen_spectre, aa=4),
     "sunflower_grande":         ShapeSpec("polygon", _gen_sunflower_grande, aa=4),
