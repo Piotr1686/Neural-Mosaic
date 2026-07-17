@@ -1,3 +1,71 @@
+## ═══ Sesja zarchiwizowana [2026-07-17 21:20] ═══
+
+# last_session.md
+
+**Sesja:** 2026-07-16/17 · 22:00-00:57
+**Status:** ✓ Zakończona poprawnie
+**Punkt odniesienia (git):** 2aaf567 @ main (zsynchronizowane z origin/main)
+
+---
+
+## ▸ NASTĘPNY KROK (zacznij tutaj)
+
+**Sprint E3, krok 1: zróżnicować `stagger_tri` geometrycznie i wdrożyć jako `_gen_stagger_tri` w `src/engine_smart.py`.**
+
+Konkretnie:
+1. `gen_stagger_tri` (`src/tools/gen_extra_shape_schemes.py:239`) rysuje `(bl,br,tp)` + `(br,tp,tr)` na regularnej kracie — to **dokładnie** silnikowy tryb `triangle`; jego `on = (ci & rj) == 0` wybiera TYLKO paletę. **Nie przenosić tej geometrii 1:1** — powstałby duplikat.
+2. Wdrożyć **realne przesunięcie rzędów o pół trójkąta** (decyzja usera 2026-07-17): co drugi rząd `+s/2`. T-junctions na poziomych granicach rzędów są legalne w partycji (precedens: `sierpinski`).
+3. Wpis w `SHAPE_MODES` (aa=4, bez seeda — czysta konstrukcja).
+4. **BRAMKA (obowiązkowa):** test porównujący WSPÓŁRZĘDNE z `triangle` musi wykazać różnicę — wzorzec gotowy: `test_bloom_geometry_differs_from_phyllotaxis` w `tests/test_grout_engine.py`. Statystyki pól NIE wystarczą (trójkąty są tej samej wielkości).
+5. Potem `braid` (`:783`) i `moire` (`:740`) — oba oczyszczone audytem, przenosić wprost.
+6. Domknięcie sprintu: goldeny ×2 border_mode w 2 procesach · test pokrycia rasteryzacją ≥4 kadry · regeneracja schematów Z SILNIKA (wzorzec: `src/tools/gen_e2_schemes.py`) · `pytest` · commit + push.
+
+Kontekst: `PLAN_SHAPES_EXTRA.md` jest kanoniczny i ZATWIERDZONY; E1 (`b3e725c`) i E2 (`3990cfa`) zamknięte, rejestr=42, zostaje 14 kształtów. `stagger_tri` to jedyny element E3 wymagający decyzji projektowej — `braid` i `moire` są gotowe do przeniesienia, więc kolejność „najpierw stagger_tri" zdejmuje ryzyko z całego sprintu.
+
+---
+
+## Co zrobiono w tej sesji
+
+- ✓ **Krok 5 (b++) → PLAN POINCARE UKOŃCZONY.** Drabinka 4:1 (`PeakRAMSampler` z `tests/benchmark.py`): 20 Mpx → 1,44 GB · 81 Mpx → 1,96 GB · **324 Mpx (36000×9000) → 4,02 GB / 80 422 kom. / 15,2 min**. **Model RAM `delta ≈ 1,27 GB stałe + 0,0085 GB/Mpx`, LINIOWY** (przewidział 4,03 vs 4,02). Zero członu superliniowego ⇒ tiling nie ma patologii do naprawy. Bramka 3,9 GB przekroczona o 3,1% — **decyzja usera: zaakceptować + raportować własną liczbę** (inwariant opisuje 16K, panorama to inny artefakt: 2,45× pikseli za 1,03× RAM). Eksport DZI = osobny etap: 2,37 GB / 1,9 min / 101,5 MB kafelków (szacunek 1,3 GB był o 80% za niski).
+- ✓ **fix(dzi) `494333f` — REALNY BUG:** `make_dzi` gubił `Image.MAX_IMAGE_PIXELS = None`. Progi Pillow: ostrzeżenie 89,5 Mpx, **twardy błąd 179 Mpx**. 16K (133 Mpx) = warning ⇒ działało po cichu od 2026-06-27; panorama (324 Mpx) ⇒ **CLI `dzi` i przycisk GUI wywalały się `DecompressionBombError`**. META-LEKCJA: skrypt pomiarowy miał własną łatkę i MASKOWAŁ ścieżkę produkcyjną.
+- ✓ **`PLAN_SHAPES_EXTRA.md` ZATWIERDZONY** (`d14b913`, odświeżony `2aaf567`): sprinty E1-E8, mapa linii, pułapki per grupa, definicja ukończenia (rejestr 56).
+- ✓ **AUDYT KONSTRUKCJI puli** (`27b14a7`, decyzja usera — jednorazowo zamiast per sprint). Przyczyna systemowa: pula to SCHEMATY, gdzie różnicę niósł KOLOR. Wynik: 3 duplikaty + **6 podejrzanych OCZYSZCZONYCH** + 8 bezspornie odrębnych ⇒ realny rozmiar puli **14, nie 16**. Wynik WIĄŻĄCY — nie powtarzać per sprint.
+- ✓ **`kepler_ty` USUNIĘTY** (`1e53982`): identyczne `(N, zeta, gamma)` co `penrose`. Usunięto też wpis w `SHAPES` (inaczej regeneracja przywróciłaby PNG).
+- ✓ **Sprint E1 — `penrose_p2`** (`b3e725c`, rejestr=40): latawce/strzałki P2 (deflacja P3 → Robinson B→A → scalanie bliźniaków). Kontrola: latawce/strzałki **1.614 vs φ=1.618**. PUŁAPKA: scalanie porzuca niesparowane połówki, a tworzy je KAŻDA granica ⇒ sun dobrany „ledwo" dał **pasmo 42 px dziur** niewidoczne w liczbie kafli ani polach ⇒ `PRUNE_LEGS=3 > CULL_LEGS=1`.
+- ✓ **Sprint E2 — `bloom` + `pebbles`** (`3990cfa`, rejestr=42): `bloom` = kąt Lucasa 99,502° (oś `power` nasycona); `pebbles` = Voronoi zmiennej gęstości (rozrzut pól 0,74-0,84 vs voronoi 0,49-0,70). Trzy pułapki zasiewania: stała suma przepełnia kadr · partia 4096 daje **stałe 425 kafli w każdej rozdzielczości** · ucięcie zagładza margines → **5,3% dziur**.
+- ✓ **Korekty nieaktualnych zapisów:** „moire ≡ square" NIEAKTUALNE; `braid` = odrębny basketweave. Obie moje hipotezy „duplikatów do wycięcia" okazały się FAŁSZYWE — uratowało sprawdzenie PNG zamiast zaufania notatce.
+- ✓ **398 testów** (z 377 na starcie): +10 E1, +8 E2, +1 DZI, +2 goldeny. Schematy regenerowane Z SILNIKA: `gen_penrose_p2_scheme.py`, `gen_e2_schemes.py` (oba commitowane).
+
+## Co zostało (backlog sesji)
+
+- ⟳ **E3:** `stagger_tri` (wymaga zróżnicowania) + `braid` + `moire` (NASTĘPNY KROK).
+- ⟳ **E4-E7:** `dragon`/`koch_island`/`koch_snowflake` · `gereh`/`rosette` · `scales`/`nautilus`/`rosette_fractal` · `sierpinski` ×3. **E8:** docs + montaż 56 + selekcja finalna usera → galeria 16K.
+- ⟳ **Hero panorama:** wyeksportowana lokalnie (`output/hero_pano_dzi/`, gitignored), NIE opublikowana na GitHub Pages — Wariant C wciąż odłożony (ryzyko publicznego artefaktu).
+- ⟳ README: dopisać liczbę panoramy **4,0 GB @324 Mpx** jako OSOBNĄ od 3,9 GB @16K.
+- ⟳ (przeniesione) PLAN_FRACTAL F1a; escher_lizard sylwetka; README `--grout`/`--grout-level`.
+
+## Aktywne pliki
+
+- `PLAN_SHAPES_EXTRA.md` — kanoniczny plan puli + **audyt konstrukcji** (czytać przed E3).
+- `src/engine_smart.py` — `_PHI`/`_LUCAS_ANGLE`, `_p3_half_deflate`, `_gen_penrose_p2`, `_gen_pebbles`, `_gen_bloom`, `angle` w `_vogel_points`/`_graded_sunflower`. E3: dodać `_gen_stagger_tri`/`_gen_braid`/`_gen_moire`.
+- `src/tools/gen_extra_shape_schemes.py` — źródło geometrii (17 SHAPES; mapa linii w planie, ODŚWIEŻONA po usunięciu `gen_kepler_ty`).
+- `src/tools/gen_penrose_p2_scheme.py`, `src/tools/gen_e2_schemes.py` — WZORCE regeneracji schematu z silnika.
+- `tests/test_golden_shapes.py` — goldeny (penrose_p2/bloom/pebbles ×2).
+- `tests/test_grout_engine.py` — pokrycie + partycja + testy odrębności geometrycznej.
+
+## Otwarte pytania
+
+- ⚠ **Wada w istniejącym `voronoi`: 12,8% dziur @384×288 base_s=100** (podłoga `max(16, ...)` — 16 ziaren nie pokrywa kadru). Wykryta przy E2, zgłoszona, NIE naprawiona (poza zakresem). Naprawiać osobno?
+- **Publikacja hero panoramy** na GitHub Pages (Wariant C) — nietknięte, decyzja usera.
+- **`bloom` — różnica realna, ale subtelna:** kąt Lucasa daje inny układ ramion, ale oba czytają się jako „słonecznikowe Voronoi". Kandydat do odrzucenia przy selekcji finalnej.
+- **Preview vs render:** nd zależy od skali px → podgląd ma grubszą siatkę niż finalny render. Zaakceptowane milcząco.
+- Selekcja finalna kształtów przez usera — po wdrożeniu wszystkich (bez zmian).
+
+## Do MEMORY.md (przeniesiono)
+
+- **repo MEMORY.md:** wpis `[2026-07-16]` (krok 5, model RAM, decyzja o bramce, fix DZI, plan, kepler_ty, E1 + pułapka pierścienia) oraz `[2026-07-17]` (audyt konstrukcji, E2, 3 pułapki zasiewania Voronoi, meta-lekcja „statystyki nie rozstrzygną duplikatu", wada `voronoi`).
+- **pamięć długoterminowa:** `project_dzi_decompression_bomb.md` (NOWY — bug + „skrypt pomiarowy ≠ produkcja") · `project_penrose_p2_pruning.md` (NOWY — niesparowane połówki przy każdej granicy; konwencja pola = base_s²) · `project_e2_voronoi_seeding.md` (NOWY — 3 pułapki zasiewania; `angle` w `_vogel_points`) · `project_poincare_bpp_plan.md` (krok 5 zamknięty) · `project_extra_15_shapes.md` (audyt wiążący, korekty).
+
 ## ═══ Sesja zarchiwizowana [2026-07-17 00:57] ═══
 
 # last_session.md
@@ -470,67 +538,3 @@ Kontekst: to najtańsza z pozostałych pozycji PLAN_SHAPES (kod geometrii istnie
 
 - Repo MEMORY.md: wpis **[2026-07-11b]** w „Aktywne TODO" — rozstrzygnięcie girih (stały seed, blokada `commit()`, RAD z kadru, inflacja hulla) + truchet (`_CurvedMask` zbędny, precedens `_sun_arc`) + ustalona kolejność wdrożenia pozostałych kształtów.
 - Repo MEMORY.md: wpis **[2026-07-11]** w „Odrzucone podejścia" — `_CurvedMask` odrzucony, nie wracać.
-
-## ═══ Sesja zarchiwizowana [2026-07-11 22:59] ═══
-
-# last_session.md
-
-**Sesja:** 2026-07-11 · ~10:30-12:30 · (Opus 4.8 + Fable 5)
-**Status:** ✓ Zakończona poprawnie
-**Punkt odniesienia (git):** 9a74ff2 @ main (zsynchronizowane z origin/main; wszystkie 4 commity sesji wypchnięte)
-
----
-
-## ▸ NASTĘPNY KROK (zacznij tutaj)
-
-**Wiring voderberg + escher_lizard + weave** — trzy ostatnie kształty z gotową geometrią w `src/tools/gen_fable_shape_schemes.py` (`gen_voderberg`:425, `gen_escher`:495, `gen_weave`:534; RNG tylko do kolorów paneli, geometria deterministyczna). Wzorzec identyczny jak dzisiejsze Fable ×4:
-1. Port geometrii do `engine_smart.py` jako `_gen_<shape>(engine, w, h, base_s)` w image space (scheme renderer był y-down → bez flipu); skala: pole DOMINUJĄCEGO kafla ~ base_s².
-2. Wpis `ShapeSpec("polygon", _gen_<shape>, aa=4)` w `SHAPE_MODES`.
-3. Rasteryzacja pokrycia (scratch `check_coverage.py` — wzorzec w archiwum czatu; cel 0% dziur, sub-px na łukach OK) + side-by-side z PNG schematu.
-4. Goldeny both-borders ×2 procesy (scratch `gen_goldens.py`) → hashe do `GOLDEN` w `tests/test_golden_shapes.py`.
-5. Montaż na `input/0013.jpg` (CLI render 2K) + pełny pytest.
-
-UWAGA voderberg: środek przeprojektowany werdyktem 2026-07-05 (pierścienie od r=0, 8 wygiętych klinów w biegunie, arc_in=[] gdy rin==0) — portować wersję z gen_fable (już poprawioną), nie wymyślać od nowa. escher_lizard: krawędzie `_wavy` to poliliniowe poligony — przechodzą przez `_polygon_sector` bez nowej maszynerii.
-
-Kontekst: po dzisiejszych 11 kształtach z PLAN_SHAPES zostają: ta trójka (najtańsza — kod istnieje), girih (sweep seedów → potrzebne decyzje: zamrożenie seeda per wymiary?), poincare (model pasmowy, BFS odbić — złożony), truchet×2 (wymaga nowej maszynerii `_CurvedMask`), pula extra 21-43. User chce WSZYSTKIE kształty przed galerią 16K i selekcją finalną.
-
----
-
-## Co zrobiono w tej sesji
-
-- ✓ **Pakiet poprawek po uwagach usera** (5f3ada0): presety groutu EN `thin`/`medium`/`thick` wszędzie (grout.py/GUI/CLI/sufiks batch); `used_tiles.json` opt-in domyślnie OFF (param `save_used_tiles`, checkbox GUI, flaga `--save-used-tiles`); **generyczny flat grout dla WSZYSTKICH kształtów polygon** (`_grout_cells` fallback re-yieldujący poligony generatora → linie na szwach; naprawia „grout nie działa na nowych kształtach").
-- ✓ **Fable ×4 wdrożone** (5e04b42): pinwheel (substytucja Conway-Radin, pruning w subdywizji), cairo, floret, gosper (162-gon depth-3). Helper `_lattice_mn_range`. Pokrycie ≤0.025%, chiralność zgodna z PNG (scheme renderer y-down).
-- ✓ **Archimedesowe ×5 OD ZERA z PNG schematów** (98924bd; kod Opusa przepadł): trunc_square, trunc_hex, rhombitrihex (ciemne trójkąty PNG = pełnoprawne komórki), pythagorean (pułapka dziury [b-s,b]×[b,b+s] — złapana rasteryzacją, było 19% dziur), sunburst (log-polar, twist −0.18, czapka 7 klinów, łuki polygonizowane).
-- ✓ **Multigrid ×2 wdrożone** (9a74ff2): `_multigrid_dual` (Cramer verbatim ze zwalidowanego kodu; okno przecięć = kadr/(N/2) → 16K w 0.2 s); penrose P3 (pentagrid γ suma=1) + ammann_beenker (N=4, zgodny 1:1 z PNG).
-- ✓ **Bilans: +11 kształtów dziś, rejestr SHAPE_MODES = 32; 325 testów zielonych (+22 goldeny cross-proces).** Każdy kształt: rasteryzacja pokrycia + side-by-side ze schematem + montaż na 0013.jpg.
-- ✓ Fix 2 testów groutu (penrose jako „spoza rejestru" wszedł do rejestru → nazwy fikcyjne).
-- ✓ MEMORY.md repo (wpis [2026-07-11]) + auto-memory (`project_grout_engine`, `project_tile_quality_plan`, `project_10_shapes_plan`) zaktualizowane na bieżąco.
-- ✓ Wyjaśnienie zagadki liczby testów: „327" poprzedniej sesji liczyło z `test_ai_core` (28); konwencja CI = ignore test_ai_core.
-
-## Co zostało (backlog sesji)
-
-- ⟳ **PLAN_SHAPES — ostatnie kształty** (NASTĘPNY KROK = voderberg/escher_lizard/weave): potem girih (decyzje seedów), poincare (pasmowy), truchet×2 (`_CurvedMask`), pula extra 21-43. Po WSZYSTKICH → selekcja finalna usera.
-- ⟳ **Galeria 16K triangle+hexagon** — odłożona do wdrożenia wszystkich kształtów (decyzja 2026-07-10).
-- ⟳ **PLAN_FRACTAL wykonawczy** — F1a (trójfazowa pętla, golden bit-w-bit).
-- ⟳ (opcjonalny cleanup) migracja kites/spectre do generycznej gałęzi polygon.
-- ⟳ Standing: GUI niesprawdzone wizualnie w realnym `python -m src.gui` (pasek DZI, dropdown Tile Borders z EN presetami, nowy checkbox used-tiles, 11 nowych kształtów w dropdownie ze schematami).
-- ⟳ Stare pliki batch `_grout-sredni` w output/ nie łapią skip-if-exists po rename presetów (kosmetyka).
-
-## Aktywne pliki
-
-- `src/engine_smart.py` (sekcja generatorów: `_lattice_mn_range`/`_pin_sub`/`_gen_pinwheel`/`_gen_cairo`/`_gen_floret`/`_gosper_edge`/`_gen_gosper` + `_multigrid_dual`/`_gen_penrose`/`_gen_ammann_beenker` + `_gen_trunc_square`/`_gen_trunc_hex`/`_gen_rhombitrihex`/`_gen_pythagorean`/`_sun_arc`/`_gen_sunburst`; `_grout_cells` generyczny fallback polygon; `create_mosaic(save_used_tiles=False)`; rejestr `SHAPE_MODES` = 32)
-- `src/grout.py` (PRESETS thin/medium/thick), `src/cli.py` (`--save-used-tiles`, `_GROUT_PRESETS` EN), `src/gui.py` (dropdown Tile Borders EN, checkbox used-tiles)
-- `tests/test_golden_shapes.py` (GOLDEN = 54 hashe), `tests/test_grout_engine.py` (+3 testy generycznego groutu), `tests/test_used_tiles.py` (opt-in), `tests/test_grout.py`, `tests/test_cli.py`
-- Scratch (wzorce, w scratchpadzie sesji): `check_coverage.py`, `gen_goldens.py`
-
-## Otwarte pytania
-
-- girih w silniku: jak zamrozić sweep seedów (per wymiary jak `_shape_seed`? stały seed?) i czy domykanie dziur convex-hullem jest deterministyczne — decyzja przy wiringu.
-- truchet: go/no-go po prototypie 1 kafelka `_CurvedMask` (per PLAN_SHAPES).
-- Selekcja finalna kształtów przez usera — po wdrożeniu wszystkich.
-
-## Do MEMORY.md (przeniesiono)
-
-- Repo MEMORY.md: wpis [2026-07-11] — pakiet poprawek UX (grout EN, used_tiles opt-in, generyczny grout polygon), 11 kształtów z lekcjami (pułapka pythagorean, optymalizacja okna multigridu (N/2)·p, wzorzec „pole dominującego kafla ~ base_s²", lekcja testowa o nazwach fikcyjnych).
-- Auto-memory: `project_grout_engine` (presety EN + generyczna gałąź), `project_tile_quality_plan` (used_tiles opt-in), `project_10_shapes_plan` (Fable ×4, archimedesowe ×5, stan „zostało") + indeks MEMORY.md.
-
