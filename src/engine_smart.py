@@ -226,15 +226,66 @@ def _clip_square(poly, R):
 
 
 def _voronoi_cells(pts, R=1.0):
-    """Yield bounded Voronoi cells of `pts`, each clipped to [-R, R]^2 (>= 3
-    vertices). Unbounded cells (generators past the corners) are skipped; the
-    frame stays covered by their bounded neighbours."""
-    vor = Voronoi(np.asarray(pts, dtype=np.float64))
-    for i in range(len(pts)):
+    """Yield the Voronoi cells of `pts`, each clipped to [-R, R]^2 (>= 3
+    vertices).
+
+    Unbounded cells (every hull generator has one) used to be skipped
+    outright, on the assumption that the frame stays covered by their bounded
+    neighbours. That only holds when seeds are dense: at coarse settings (the
+    seed floor of 16 — small preview frames with a large base_s) the unbounded
+    cells reach INTO the frame, and dropping them left holes across the whole
+    Voronoi family — 12.8-16% (voronoi) up to 41.6% (sunflower_disc).
+
+    Fix, in two passes to protect the bit-for-bit render invariant:
+
+      1. The plain diagram emits every bounded cell EXACTLY as before —
+         same Qhull run on the same input, so same vertex bits, and every
+         previously-visible render is unchanged (goldens prove it).
+      2. Generators whose region is unbounded (exactly the convex-hull
+         points) are deferred and re-solved in a second diagram where each
+         is mirrored across the four sides of a box [-M, M]^2 that contains
+         every generator AND the frame. Inside that box a mirror can never
+         beat its own original (dist^2(q,p) - dist^2(q,mirror(p)) =
+         4(M-a)(x-M) < 0 for q strictly inside), so the second diagram is
+         the TRUE diagram there, and the mirrors merely fence the hull
+         cells into bounded polygons, which are then clipped and emitted
+         instead of dropped.
+
+    A single mirrored pass would be simpler but perturbs Qhull's internal
+    rescaling for EVERY vertex — all 22 family goldens shifted by float
+    last-bits when tried. Two passes cost one extra Voronoi over n + 4*hull
+    points, negligible next to the render itself. M must cover the frame even
+    when all generators sit inside it (a smaller box would cut cells short of
+    the frame edge and reopen the holes this fix removes)."""
+    arr = np.asarray(pts, dtype=np.float64)
+    vor = Voronoi(arr)
+    deferred = []
+    for i in range(len(arr)):
         reg = vor.regions[vor.point_region[i]]
         if not reg or -1 in reg:
+            deferred.append(i)
             continue
         poly = [tuple(vor.vertices[v]) for v in reg]
+        cl = _clip_square(poly, R)
+        if len(cl) >= 3:
+            yield cl
+    if not deferred:
+        return
+
+    M = max(R, float(np.abs(arr).max())) + 0.5
+    hp = arr[deferred]
+    mirrors = np.vstack([
+        np.column_stack((2.0 * M - hp[:, 0], hp[:, 1])),
+        np.column_stack((-2.0 * M - hp[:, 0], hp[:, 1])),
+        np.column_stack((hp[:, 0], 2.0 * M - hp[:, 1])),
+        np.column_stack((hp[:, 0], -2.0 * M - hp[:, 1])),
+    ])
+    vor2 = Voronoi(np.vstack([arr, mirrors]))
+    for i in deferred:
+        reg = vor2.regions[vor2.point_region[i]]
+        if not reg or -1 in reg:
+            continue
+        poly = [tuple(vor2.vertices[v]) for v in reg]
         cl = _clip_square(poly, R)
         if len(cl) >= 3:
             yield cl
@@ -639,9 +690,11 @@ def _shape_seed(base_s, target_w, target_h):
 
 def _gen_voronoi(engine, target_w, target_h, base_s):
     """Uniform random Voronoi: Lloyd-relaxed random seeds (even cells, no
-    slivers). Seeds are generated past the [-1, 1] frame so every in-frame cell
-    stays bounded (unbounded border cells are dropped). Cell count ~ frame area
-    / base_s^2 so tile_scale sizes the cells."""
+    slivers). Seeds are generated past the [-1, 1] frame so in-frame cells
+    stay compact; hull cells are recovered by _voronoi_cells' mirrored second
+    pass (dropping them left 12.8-16% rim holes at coarse settings, where the
+    seed floor of 16 binds). Cell count ~ frame area / base_s^2 so tile_scale
+    sizes the cells."""
     n = max(16, int(target_w * target_h / (base_s * base_s)))
     margin = 1.30                                # generate past the frame edge
     n_gen = int(n * margin * margin)
@@ -707,7 +760,11 @@ def _gen_pebbles(engine, target_w, target_h, base_s):
     # margin nearly empty and border cells come out unbounded -> dropped ->
     # holes (5.3% at 640x640). Pad the margin with uniform seeds at the frame's
     # mean density; they only bound the border cells, which are clipped anyway
-    # (same job as the frozen outer ring in `voronoi`).
+    # (same job as the frozen outer ring in `voronoi`). Predates the hull-cell
+    # recovery in _voronoi_cells, which now also closes those holes — the ring
+    # STAYS regardless: removing it would shift the RNG stream (breaking the
+    # goldens) and border cells would become huge clipped hull cells instead
+    # of frame-density ones.
     ring_area = (2.0 * margin) ** 2 - 4.0
     n_ring = max(8, int(n / 4.0 * ring_area))
     ring = rng.uniform(-margin, margin, size=(n_ring * 3, 2))

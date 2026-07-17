@@ -65,8 +65,15 @@ GOLDEN = {
     ("rhombs_star", True): "e92d5357a4b9cf18d03c7857fe250673a79d4d35dacbe8ac8dfe1ed1eb56c382",
     # S5 variable-cell shapes: uniform Voronoi (seeded RNG from dims -> stable
     # per size) and canonical phyllotaxis (Vogel power=0.5, no RNG).
-    ("voronoi", False): "05d55f73d17db1a44b6dae5460ae8dd5bbcca9043b5731fc396bbc2757d40568",
-    ("voronoi", True): "44a665d467d0ede4666480fb8321f45ee7a0e60e77bad913e0e7e286df9a99c9",
+    # voronoi regenerated 2026-07-17 (hull-cell recovery in _voronoi_cells):
+    # unbounded hull cells used to be dropped, which at the golden frame left
+    # rim holes (6 recovered cells, 61 -> 67; ~5% of pixels changed, ALL at the
+    # frame rim — interior verified untouched via a pixel-diff mask against the
+    # old render, which still matched the old hash bit-for-bit). The other 20
+    # family goldens (pebbles/sunflowers/phyllotaxis/bloom) did NOT change —
+    # the two-pass fix keeps bounded cells bit-identical by design.
+    ("voronoi", False): "7bb07e64b6dfd2b48313d9204df9c65eb462ef02b537e61a4e9165e640d51ff2",
+    ("voronoi", True): "d84c8a55ec3bc44d365ac905df7aeb76bd0ca6b740fb5e958ac6070c2cb89876",
     ("phyllotaxis", False): "2d6f0e07782ed19945bfbd135faa42aa0bb3bdfa5545dffecb8ecde83ae42245",
     ("phyllotaxis", True): "70161b6c52e4b54077e4bf6ada6b832eb92a6858e09c9bb7e27ff2eb553e15a8",
     # Deterministic Fable tessellations (2026-07-11): geometry ported from

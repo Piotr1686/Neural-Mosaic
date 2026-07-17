@@ -17,9 +17,10 @@ import numpy as np
 import pytest
 from PIL import Image, ImageDraw
 
-from src.engine_smart import (SmartEngine, _poincare_cells, _gen_penrose_p2,
-                              _gen_pebbles, _gen_bloom, _gen_phyllotaxis,
-                              _gen_stagger_tri, _GOLDEN_ANGLE, _LUCAS_ANGLE)
+from src.engine_smart import (SHAPE_MODES, SmartEngine, _poincare_cells,
+                              _gen_penrose_p2, _gen_pebbles, _gen_bloom,
+                              _gen_phyllotaxis, _gen_stagger_tri,
+                              _GOLDEN_ANGLE, _LUCAS_ANGLE)
 from src.grout import classify_edges
 from tests.test_golden_shapes import _build_library, _make_target
 
@@ -219,6 +220,35 @@ def test_pebbles_covers_the_frame(w, h, base_s):
         acc += np.asarray(m, dtype=np.uint16)
     holes = int((acc == 0).sum())
     assert holes <= 64, f"{holes} uncovered px at {w}x{h} base_s={base_s}"
+
+
+_VORONOI_FAMILY = ["voronoi", "pebbles", "phyllotaxis", "bloom",
+                   "sunflower_grande", "sunflower_grande_xl",
+                   "sunflower_grande_soft", "sunflower_grande_inverse",
+                   "sunflower_soft", "sunflower_rings", "sunflower_disc"]
+
+
+@pytest.mark.parametrize("name", _VORONOI_FAMILY)
+@pytest.mark.parametrize("w,h,base_s", [
+    (384, 288, 100),     # the golden frame at a coarse tile
+    (300, 300, 120),     # the sunflower_disc worst case (was 41.6% holes)
+    (500, 375, 100),     # the voronoi worst case (was 16.0% holes)
+])
+def test_voronoi_family_covers_coarse_frames(name, w, h, base_s):
+    # The coarse regime is the seed floor (max(16, ...)) binding: few seeds
+    # mean the unbounded hull cells reach INTO the frame, and dropping them
+    # (pre-fix _voronoi_cells) left 5-41.6% holes across the family. Small
+    # frame + large base_s is exactly the PREVIEW profile, so a shape that
+    # holes here loses the final selection to a bug, not to aesthetics. The
+    # mirrored second pass must keep every frame fully covered — for every
+    # member, since they all share _emit_cells.
+    acc = np.zeros((h, w), dtype=np.uint16)
+    for poly in SHAPE_MODES[name].generator(None, w, h, base_s):
+        m = Image.new("L", (w, h), 0)
+        ImageDraw.Draw(m).polygon([tuple(p) for p in poly], fill=1)
+        acc += np.asarray(m, dtype=np.uint16)
+    holes = int((acc == 0).sum())
+    assert holes == 0, f"{holes} uncovered px for {name} at {w}x{h} base_s={base_s}"
 
 
 def test_pebbles_cell_sizes_vary_more_than_uniform_voronoi():
