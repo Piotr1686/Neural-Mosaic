@@ -19,7 +19,7 @@ from PIL import Image, ImageDraw
 
 from src.engine_smart import (SHAPE_MODES, SmartEngine, _poincare_cells,
                               _gen_penrose_p2, _gen_pebbles, _gen_bloom,
-                              _gen_phyllotaxis, _gen_stagger_tri,
+                              _gen_phyllotaxis, _gen_stagger_tri, _gen_braid,
                               _GOLDEN_ANGLE, _LUCAS_ANGLE)
 from src.grout import classify_edges
 from tests.test_golden_shapes import _build_library, _make_target
@@ -432,6 +432,118 @@ def test_stagger_tri_mean_cell_area_is_base_s_squared():
     for poly in _gen_stagger_tri(None, 900, 900, base_s):
         (x1, y1), (x2, y2), (x3, y3) = poly
         areas.append(abs((x2 - x1) * (y3 - y1) - (x3 - x1) * (y2 - y1)) / 2)
+    assert sum(areas) / len(areas) == pytest.approx(base_s ** 2, rel=0.01)
+
+
+# --- braid vs a single-orientation running bond -----------------------------
+# braid is basketweave: 2x1 bricks in alternating horizontal/vertical pairs on
+# a 2x2 checkerboard. The open risk (the stagger_tri class) is that it only
+# *looks* new next to `brick_wall` — both are rectangles, so the difference
+# lives in the LAYOUT, not the cell, and a raw coordinate diff is not evidence.
+# The reference is therefore a running bond built from braid's OWN 2u x u brick
+# (same cell, single orientation): if braid were just a restagger of one
+# orientation the translation-invariant gate would match it. It cannot, because
+# half of braid's bricks stand vertical and no translation turns a horizontal
+# brick into a vertical one. Comparing against brick_wall at its pool scale
+# would be trivially distinct (different cell size) and would not test the
+# layout — the same-cell bond is what isolates it.
+
+def _running_bond(target_w, target_h, u):
+    """All-horizontal 2u x u bricks, rows offset half a brick (running bond)."""
+    for j in range(-2, int(target_h / u) + 3):
+        y = j * u
+        off = u if j % 2 else 0.0            # half-brick (= u) row shift
+        for i in range(-2, int(target_w / (2 * u)) + 3):
+            x = i * 2 * u + off
+            yield [(x, y), (x + 2 * u, y), (x + 2 * u, y + u), (x, y + u)]
+
+
+def _braid_parity_flipped(target_w, target_h, base_s):
+    """braid with the H/V choice inverted (I+J odd -> horizontal). The obvious
+    "restagger", which is in fact braid translated by one block."""
+    u = base_s / math.sqrt(2.0)
+    ni = int(target_w / (2.0 * u)) + 2
+    nj = int(target_h / (2.0 * u)) + 2
+    for I in range(-1, ni):
+        for J in range(-1, nj):
+            x, y = 2 * I * u, 2 * J * u
+            if (I + J) % 2 == 1:                      # flipped: horizontal pair
+                yield [(x, y), (x + 2 * u, y),
+                       (x + 2 * u, y + u), (x, y + u)]
+                yield [(x, y + u), (x + 2 * u, y + u),
+                       (x + 2 * u, y + 2 * u), (x, y + 2 * u)]
+            else:                                     # flipped: vertical pair
+                yield [(x, y), (x + u, y),
+                       (x + u, y + 2 * u), (x, y + 2 * u)]
+                yield [(x + u, y), (x + 2 * u, y),
+                       (x + 2 * u, y + 2 * u), (x + u, y + 2 * u)]
+
+
+def test_braid_is_not_a_running_bond_under_any_translation():
+    # The gate the pool turns on for braid. A horizontal-only running bond can
+    # match at most braid's horizontal bricks (half the cells); its vertical
+    # bricks are an orientation the bond has not got, so no translation lifts
+    # the overlap near 1.
+    base_s = 60
+    u = base_s / math.sqrt(2.0)
+    braid = [list(p) for p in _gen_braid(None, 900, 900, base_s)]
+    bond = list(_running_bond(900, 900, u))
+    window = (2 * u, 2 * u, 16 * u, 16 * u)
+    assert _max_overlap(braid, bond, window) < 0.99, (
+        "braid collapsed onto a single-orientation running bond — its vertical "
+        "bricks are not a real distinction from brick_wall")
+
+
+def test_braid_parity_flip_is_a_pure_translation_duplicate():
+    # Teeth for the gate, and the trap it exists for: swapping which blocks run
+    # horizontal is the obvious "restagger", but it is braid shifted by one
+    # block — every coordinate differs while the tiling is identical. A raw diff
+    # calls it new; the translation-invariant gate must score a full match.
+    base_s = 60
+    u = base_s / math.sqrt(2.0)
+    braid = [list(p) for p in _gen_braid(None, 900, 900, base_s)]
+    flipped = [list(p) for p in _braid_parity_flipped(900, 900, base_s)]
+    window = (2 * u, 2 * u, 16 * u, 16 * u)
+
+    raw_a = sorted(_canon(p) for p in braid)
+    raw_b = sorted(_canon(p) for p in flipped)
+    assert raw_a != raw_b, "the two parities should differ coordinate-wise"
+    assert _max_overlap(braid, flipped, window) == 1.0, (
+        "the gate failed to see through a one-block translation of braid — it "
+        "would have green-lit a duplicate")
+
+
+@pytest.mark.parametrize("w,h,base_s", [
+    (800, 600, 60),      # 4:3
+    (1200, 300, 50),     # wide band
+    (640, 640, 80),      # square
+    (500, 500, 40),      # dense
+    (384, 288, 100),     # the golden frame
+])
+def test_braid_covers_the_frame(w, h, base_s):
+    # Each 2x2 block is partitioned by its two bricks and the blocks tile the
+    # plane, so coverage is exact at any phase. Blocks start at -1 so the
+    # down/left wedge blocks fill the top and left edges.
+    acc = np.zeros((h, w), dtype=np.uint16)
+    for poly in _gen_braid(None, w, h, base_s):
+        m = Image.new("L", (w, h), 0)
+        ImageDraw.Draw(m).polygon([tuple(p) for p in poly], fill=1)
+        acc += np.asarray(m, dtype=np.uint16)
+    holes = int((acc == 0).sum())
+    assert holes == 0, f"{holes} uncovered px at {w}x{h} base_s={base_s}"
+
+
+def test_braid_mean_cell_area_is_base_s_squared():
+    # Pool convention: every 2x1 brick has area 2 in block units, so the unit
+    # u = base_s/sqrt(2) makes a cell average base_s^2.
+    base_s = 60
+    areas = []
+    for poly in _gen_braid(None, 900, 900, base_s):
+        (x1, y1), (x2, y2), (x3, y3), (x4, y4) = poly
+        # shoelace for the 4-gon
+        a = abs((x1 * y2 - x2 * y1) + (x2 * y3 - x3 * y2)
+                + (x3 * y4 - x4 * y3) + (x4 * y1 - x1 * y4)) / 2
+        areas.append(a)
     assert sum(areas) / len(areas) == pytest.approx(base_s ** 2, rel=0.01)
 
 

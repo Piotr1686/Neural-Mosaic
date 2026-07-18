@@ -162,6 +162,14 @@ GOLDEN = {
     # RNG; verified across two interpreters, one with PYTHONHASHSEED=1.
     ("stagger_tri", False): "cee4b15ccb044f46d3e5c7ab4935a56773ccff7e4bc414dfb699a447b56aec72",
     ("stagger_tri", True): "97524a19731c816d29c497f97530ddabf7d488ca9c5725bb942b29369104970b",
+    # braid (2026-07-18): basketweave rebuilt as a true partition — 2x1 bricks
+    # in alternating horizontal/vertical pairs on a 2x2 checkerboard. NOT
+    # `brick_wall` (single running bond, one orientation); the extra vertical
+    # bricks are an orientation set no rigid motion adds, proven by the
+    # translation-invariant gate in test_grout_engine. Pure arithmetic, no RNG;
+    # verified across two interpreters, one with PYTHONHASHSEED=1.
+    ("braid", False): "e76a5d546a82f1d3f9af17c72471f266f032aefbe9e7196e06a279cea8faba6f",
+    ("braid", True): "db6356dd1d1f377d7dfde8bf1f133e26c989b006bbca970f6761e08c29fd9c7c",
 }
 
 

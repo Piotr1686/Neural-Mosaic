@@ -901,6 +901,44 @@ def _gen_stagger_tri(engine, target_w, target_h, base_s):
             yield [(x + s, y0), (x + s / 2, y1), (x + 3 * s / 2, y1)]
 
 
+def _gen_braid(engine, target_w, target_h, base_s):
+    """Basketweave: a FLAT interlace (no over/under, so no overlap) of 2x1
+    bricks laid in alternating horizontal/vertical pairs on a checkerboard of
+    2x2 blocks. A true edge-to-edge partition that reads as woven.
+
+    NOT `brick_wall`, though both cells are rectangles. brick_wall is a single
+    running bond: one brick orientation, rows offset half a brick. braid rotates
+    the pair block to block, so half its bricks stand vertical -- an orientation
+    set brick_wall does not have, and no rigid motion adds one. This is exactly
+    the class where the difference lives in the LAYOUT, not the cell, so a raw
+    coordinate diff is not evidence (the stagger_tri lesson): the pool's
+    translation-invariant gate in test_grout_engine is what proves it. The gate
+    also has teeth against the tempting duplicate here -- flipping the (I+J)
+    parity (the "obvious" way to restagger) is nothing but a one-block
+    translation of the same tiling, so it must score a full match, not a diff.
+
+    Each 2x1 brick has area 2 in block units, so the unit u = base_s/sqrt(2)
+    keeps a cell averaging base_s^2 like the rest of the pool. Blocks start at
+    -1 so the down/left wedge blocks fill the top and left frame edges.
+    """
+    u = base_s / math.sqrt(2.0)
+    ni = int(target_w / (2.0 * u)) + 2
+    nj = int(target_h / (2.0 * u)) + 2
+    for I in range(-1, ni):
+        for J in range(-1, nj):
+            x, y = 2 * I * u, 2 * J * u
+            if (I + J) % 2 == 0:                      # horizontal brick pair
+                yield [(x, y), (x + 2 * u, y),
+                       (x + 2 * u, y + u), (x, y + u)]
+                yield [(x, y + u), (x + 2 * u, y + u),
+                       (x + 2 * u, y + 2 * u), (x, y + 2 * u)]
+            else:                                     # vertical brick pair
+                yield [(x, y), (x + u, y),
+                       (x + u, y + 2 * u), (x, y + 2 * u)]
+                yield [(x + u, y), (x + 2 * u, y),
+                       (x + 2 * u, y + 2 * u), (x + u, y + 2 * u)]
+
+
 def _gen_cairo(engine, target_w, target_h, base_s):
     """Cairo pentagonal tiling: 4 congruent equilateral-parameter pentagons
     around every (i+j even) node of a unit square lattice. Pentagon area is
@@ -2319,6 +2357,7 @@ SHAPE_MODES = {
     "romb":          ShapeSpec("grid"),
     "triangle":      ShapeSpec("grid"),
     "stagger_tri":   ShapeSpec("polygon", _gen_stagger_tri, aa=4),
+    "braid":         ShapeSpec("polygon", _gen_braid, aa=4),
     "kites":         ShapeSpec("polygon", _gen_kites, aa=1),
     "spectre":       ShapeSpec("polygon", _gen_spectre, aa=4),
     "sunflower_grande":         ShapeSpec("polygon", _gen_sunflower_grande, aa=4),
