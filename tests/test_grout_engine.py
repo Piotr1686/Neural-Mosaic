@@ -20,7 +20,7 @@ from PIL import Image, ImageDraw
 from src.engine_smart import (SHAPE_MODES, SmartEngine, _poincare_cells,
                               _gen_penrose_p2, _gen_pebbles, _gen_bloom,
                               _gen_phyllotaxis, _gen_stagger_tri, _gen_braid,
-                              _GOLDEN_ANGLE, _LUCAS_ANGLE)
+                              _gen_moire, _GOLDEN_ANGLE, _LUCAS_ANGLE)
 from src.grout import classify_edges
 from tests.test_golden_shapes import _build_library, _make_target
 
@@ -32,6 +32,16 @@ def _engine():
 def _centroid(poly):
     n = len(poly)
     return (sum(p[0] for p in poly) / n, sum(p[1] for p in poly) / n)
+
+
+def _poly_area(poly):
+    n = len(poly)
+    s = 0.0
+    for k in range(n):
+        x0, y0 = poly[k]
+        x1, y1 = poly[(k + 1) % n]
+        s += x0 * y1 - x1 * y0
+    return abs(s) / 2.0
 
 
 # ---------------------------------------------------------------------------
@@ -545,6 +555,69 @@ def test_braid_mean_cell_area_is_base_s_squared():
                 + (x3 * y4 - x4 * y3) + (x4 * y1 - x1 * y4)) / 2
         areas.append(a)
     assert sum(areas) / len(areas) == pytest.approx(base_s ** 2, rel=0.01)
+
+
+# --- moire must not collapse to `square` ------------------------------------
+# The whole point of the geometric moire (vs the trivial coloured grid that
+# reads as `square` once photos land) is that the CELL geometry warps. The pool
+# convention after kepler_ty is to prove that on the geometry, not the scheme:
+# a plain square lattice has every cell equal and axis-aligned, so
+# non-degeneracy = real spread in cell area AND edges that are mostly not
+# axis-aligned.
+
+def _moire_edge_axis_fraction(polys):
+    axis = total = 0
+    for p in polys:
+        n = len(p)
+        for k in range(n):
+            x0, y0 = p[k]
+            x1, y1 = p[(k + 1) % n]
+            ang = math.degrees(math.atan2(abs(y1 - y0), abs(x1 - x0)))
+            if min(ang, 90 - ang) < 0.5:      # within 0.5 deg of an axis
+                axis += 1
+            total += 1
+    return axis / total
+
+
+def test_moire_does_not_degenerate_to_square():
+    polys = [list(p) for p in _gen_moire(None, 900, 900, 60)]
+    areas = np.array([_poly_area(p) for p in polys])
+    cv = areas.std() / areas.mean()
+    axis_frac = _moire_edge_axis_fraction(polys)
+    # a square lattice would score cv == 0 and axis_frac == 1.0 exactly.
+    assert cv > 0.1, f"moire cells are near-uniform in area (cv={cv:.3f}) — it collapsed to a grid"
+    assert axis_frac < 0.5, (
+        f"{axis_frac:.2f} of moire edges are axis-aligned — the cells are "
+        "square, not warped")
+
+
+@pytest.mark.parametrize("w,h,base_s", [
+    (800, 600, 60),      # 4:3
+    (1200, 300, 50),     # wide band
+    (640, 640, 80),      # square
+    (500, 500, 40),      # dense
+    (384, 288, 100),     # the golden frame
+])
+def test_moire_covers_the_frame(w, h, base_s):
+    # A < 0.5 keeps every vertex inside its neighbour, so the displaced grid is
+    # a valid partition; running it two cells past every edge means the wavy
+    # outer boundary still covers the frame.
+    acc = np.zeros((h, w), dtype=np.uint16)
+    for poly in _gen_moire(None, w, h, base_s):
+        m = Image.new("L", (w, h), 0)
+        ImageDraw.Draw(m).polygon([tuple(p) for p in poly], fill=1)
+        acc += np.asarray(m, dtype=np.uint16)
+    holes = int((acc == 0).sum())
+    assert holes == 0, f"{holes} uncovered px at {w}x{h} base_s={base_s}"
+
+
+def test_moire_mean_cell_area_is_about_base_s_squared():
+    # Pitch = base_s; the sinusoidal warp is only area-preserving to first
+    # order, so at A=0.42 the mean cell biases ~3% high — still "~base_s^2" per
+    # the pool convention (cairo/weave use the same approximate wording).
+    base_s = 60
+    areas = [_poly_area(p) for p in _gen_moire(None, 900, 900, base_s)]
+    assert sum(areas) / len(areas) == pytest.approx(base_s ** 2, rel=0.05)
 
 
 def test_poincare_grout_via_dispatcher_is_hierarchical():

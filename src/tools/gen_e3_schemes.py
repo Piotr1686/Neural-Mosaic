@@ -30,7 +30,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-from src.engine_smart import _gen_braid, _gen_stagger_tri
+from src.engine_smart import _gen_braid, _gen_moire, _gen_stagger_tri
 
 log = logging.getLogger(__name__)
 
@@ -41,6 +41,7 @@ OUTLINE = (16, 16, 20)
 SHAPES = [
     ("stagger_tri", _gen_stagger_tri, 45, (0.03, 0.09)),   # terracotta hues
     ("braid", _gen_braid, 60, (0.55, 0.63)),               # cool blue hues
+    ("moire", _gen_moire, 45, (0.45, 0.62)),               # teal->blue beat
 ]
 
 

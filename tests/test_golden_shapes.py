@@ -170,6 +170,14 @@ GOLDEN = {
     # verified across two interpreters, one with PYTHONHASHSEED=1.
     ("braid", False): "e76a5d546a82f1d3f9af17c72471f266f032aefbe9e7196e06a279cea8faba6f",
     ("braid", True): "db6356dd1d1f377d7dfde8bf1f133e26c989b006bbca970f6761e08c29fd9c7c",
+    # moire (2026-07-18): a quad grid displaced by a two-grating interference
+    # field. Cells stay gap-free (shared displaced vertices) but warp in
+    # shape/size with the beat — verified on a real render NOT to collapse to
+    # `square` (CV of cell area ~0.27, only ~28% of edges axis-aligned; a square
+    # lattice would be 0 and 100%). Pure arithmetic, no RNG; verified across two
+    # interpreters, one with PYTHONHASHSEED=1.
+    ("moire", False): "e45f0fae165786bf9f56815a580212c8769ef260f6be61424f0a710c6d7d3dc7",
+    ("moire", True): "7ad9dedb3421380057c92b805c9391d623e89a36ab724a88f3bf982ae934b9cb",
 }
 
 

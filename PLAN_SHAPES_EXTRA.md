@@ -1,4 +1,4 @@
-# PLAN_SHAPES_EXTRA.md — Wdrożenie puli extra (17 kształtów, rejestr 39 → 56; E1+E2 zamknięte + `stagger_tri`+`braid` z E3, rejestr=44, zostaje 12)
+# PLAN_SHAPES_EXTRA.md — Wdrożenie puli extra (17 kształtów, rejestr 39 → 56; E1+E2+E3 zamknięte, rejestr=45, zostaje 11)
 
 **Status:** ZATWIERDZONY przez usera 2026-07-16. Kanoniczny plan puli extra. Kontynuacja `PLAN_SHAPES.md` (S3-S8 ZAMKNIĘTE — 39 kształtów w silniku, ostatni `poincare` 2026-07-15/16).
 **Decyzja finalna:** bez zmian — po wdrożeniu WSZYSTKICH kształtów user generuje mozaiki testowe i dopiero wtedy decyduje, które zostają. Nie usuwać żadnego przed tą decyzją.
@@ -7,15 +7,14 @@
 
 Punkt wyjścia (weryfikacja 2026-07-16, rejestr vs PNG): 39 kształtów w silniku, 57 schematów ⇒ **18 bez implementacji, 0 sierot**. Po usunięciu `kepler_ty` (duplikat) pula = **17**.
 
-**ZOSTAJE 12** (rejestr=44 po E1+E2+`stagger_tri`+`braid`):
+**ZOSTAJE 11** (rejestr=45 po E1+E2+E3):
 
 ```
-dragon  gereh  koch_island  koch_snowflake  moire  nautilus
-rosette  rosette_fractal  scales  sierpinski  sierpinski_carpet
-sierpinski_d
+dragon  gereh  koch_island  koch_snowflake  nautilus  rosette
+rosette_fractal  scales  sierpinski  sierpinski_carpet  sierpinski_d
 ```
 
-Wdrożone: `penrose_p2` (E1, `b3e725c`) · `bloom`, `pebbles` (E2, `3990cfa`) · `stagger_tri`, `braid` (E3). Cel końcowy: **rejestr 56**.
+Wdrożone: `penrose_p2` (E1, `b3e725c`) · `bloom`, `pebbles` (E2, `3990cfa`) · `stagger_tri`, `braid`, `moire` (E3). Cel końcowy: **rejestr 56**.
 
 ## ⚠ AUDYT KONSTRUKCJI (2026-07-17) — czytaj przed każdym sprintem
 
@@ -62,7 +61,7 @@ Pula powstała jako **schematy**, gdzie różnicę niósł KOLOR. Pod zdjęciami
 |---|---|---|---|
 | ~~**E1**~~ | ~~`penrose_p2`~~ | **ZAMKNIĘTY** `b3e725c` (rejestr=40) | — |
 | ~~**E2**~~ | ~~`bloom`, `pebbles`~~ | **ZAMKNIĘTY** `3990cfa` (rejestr=42) | — |
-| **E3** | ~~`stagger_tri`~~ ✓ · ~~`braid`~~ ✓ · `moire` | czyste lattice'y wielokątne, rdzeń `_polygon_sector` | niskie |
+| ~~**E3**~~ | ~~`stagger_tri`, `braid`, `moire`~~ | **ZAMKNIĘTY** (rejestr=45) | — |
 | **E4** | `dragon`, `koch_island`, `koch_snowflake` | rep-tile / Koch (geometria gotowa w gen_extra) | średnie |
 | **E5** | `gereh`, `rosette` | islamskie partycje gwiaździste — wzorzec `girih` | średnie |
 | **E6** | `scales`, `nautilus`, `rosette_fractal` | łuki + radialne (`_arc_pitch`, „dobry środek") | średnie |
@@ -88,7 +87,7 @@ Kolejność E1→E3 najpierw celowo: same reużywają istniejącą maszynerię, 
 - ✓ `stagger_tri` **WDROŻONY 2026-07-17** (rejestr=43, wariant A — przeniesienie 1:1, decyzja usera po obaleniu werdyktu audytu). Rzędy trójkątów o **stałej fazie x** ⇒ każda pozioma linia rzędu to linia poślizgu z T-junctions (legalne — każdy rząd dzieli własny pas niezależnie, więc faza nie może otworzyć dziury; precedens `sierpinski`). Skala `s = 2·base_s/3^(1/4)` (konwencja puli: średnie pole = `base_s²`; schemat używał `s = base_s`, czyli konwencji `triangle` — pole 0,433·base_s²). Flaga palety `on` porzucona.
   - **META-LEKCJA (bramka): zalecony test „porównaj współrzędne z `triangle`" BYŁBY ŚLEPY.** Wariant z przesunięciem o `s/2` to `triangle` przesunięty o `s/2` — **każda** współrzędna się różni (0/78 wspólnych surowo), więc naiwny `a != b` (wzorzec `test_bloom_geometry_differs_from_phyllotaxis`) dałby zielone światło duplikatowi; po wyrównaniu translacji: 78/78. Bramka MUSI być niewrażliwa na translację. Wdrożone w `tests/test_grout_engine.py`: `_max_overlap` (kandydaci na translację = różnice centroid od kotwicy — wyczerpujące, bez skanowania siatki offsetów) + test kontrolny `test_translation_gate_catches_the_half_base_phase_duplicate`, który dowodzi, że bramka ma zęby (łapie wariant `s/2` jako 100%).
   - Uogólnienie: dla rodzin dzielących KOMÓRKĘ, a różniących się tylko UŁOŻENIEM (faza/orientacja), różnica musi być mierzona z dokładnością do izometrii — inaczej test mierzy układ współrzędnych, nie kształt.
-- `moire`: ⚠ **Historyczne ostrzeżenie „moire ≡ square" jest NIEAKTUALNE** — schemat po rewizji 2026-07-04 pokazuje prawdziwe moiré geometryczne (2 obrócone siatki → komórki = przecięcia, zmienny kształt). Zweryfikowano wizualnie 2026-07-16. Ale zasada nadrzędna zostaje: **kształt ma sens TYLKO gdy geometria komórki różni się od kwadratu** — po wdrożeniu sprawdzić na prawdziwym renderze, czy nie zdegenerował się do `square`.
+- ✓ `moire` **WDROŻONY 2026-07-18** (rejestr=45, `_gen_moire`, przeniesienie 1:1). Siatka quadów o wierzchołkach przesuniętych polem interferencji dwóch krat; sąsiednie quady dzielą PRZESUNIĘTE wierzchołki ⇒ partycja bez dziur, ale każda komórka faluje kształtem/rozmiarem. Amplituda `A=0,42 < 0,5` (jednostki siatki) gwarantuje brak inwersji komórek. **Częstotliwość w jednostkach SIATKI, nie px** ⇒ dudnienie obejmuje stałą liczbę kafli w każdej rozdzielczości (lekcja girih/truchet: „ten sam wzór, tylko więcej"). Skala `s = base_s` (dudnienie biasuje średnie pole ~3% w górę — warp tylko I-rzędu area-preserving; wciąż „~base_s²"). **⚠ Ostrzeżenie „moire ≡ square" ROZSTRZYGNIĘTE POMIAREM na prawdziwym renderze:** NIE degeneruje się — CV pola komórek ≈ 0,27, tylko ~28% krawędzi osiowych (square = 0 i 100%), max/min pola = 2,85. Test `test_moire_does_not_degenerate_to_square` mierzy oba (na geometrii, nie schemacie — konwencja po `kepler_ty`). Goldeny ×2 cross-process, pokrycie ×5, schemat z silnika. +9 testów (452→461).
 - ✓ `braid` **WDROŻONY 2026-07-18** (rejestr=44, `_gen_braid`, przeniesienie 1:1). Basketweave: cegiełki 2:1 w naprzemiennych parach poziomych/pionowych na szachownicy bloków 2×2 — płaski przeplot bez nad/pod (over-under = nakładanie, złamałoby partycję). Skala `u = base_s/√2` (pole cegiełki = 2·u² = base_s²). **Bramka odrębności zbudowana na `_max_overlap` (izometryczna), NIE na surowym `a != b`** — bo to klasa „różnica w UŁOŻENIU, nie komórce" (jak `stagger_tri`): (a) `test_braid_is_not_a_running_bond_under_any_translation` — wozówkowy jednoorientacyjny z tej samej cegiełki nie odtwarza `braid` (<0,99; jego pionowe cegiełki to orientacja, której `brick_wall` nie ma); (b) **zęby** `test_braid_parity_flip_is_a_pure_translation_duplicate` — odwrócenie parzystości `(I+J)` (kuszący „restagger") to `braid` przesunięty o jeden blok ⇒ surowo różny, ale bramka MUSI dać pełne dopasowanie (1,0). Goldeny ×2 cross-process (PYTHONHASHSEED=1), pokrycie ×5 kadrów (holes==0), schemat zregenerowany z silnika (`gen_e3_schemes.py`). +10 testów (442→452).
 
 ### E4 — rep-tile / Koch

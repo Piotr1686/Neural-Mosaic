@@ -939,6 +939,50 @@ def _gen_braid(engine, target_w, target_h, base_s):
                        (x + 2 * u, y + 2 * u), (x + u, y + 2 * u)]
 
 
+def _gen_moire(engine, target_w, target_h, base_s):
+    """Geometric moire: a quad grid whose vertices are displaced by a two-
+    grating interference field. Neighbouring quads share their DISPLACED
+    vertices, so the tiling stays gap-free, but every cell genuinely warps in
+    shape and size with the beat. That is what saves it from the classic
+    `moire == square` trap: the trivial version is a plain grid, which reduces
+    to `square` the moment photos fill the cells (colour was the only thing that
+    read as moire); here the cell geometry itself is non-square everywhere, so
+    the warp survives photo substitution (verified on a real render, not just
+    the scheme -- the pool convention after kepler_ty).
+
+    Amplitude A < 0.5 (grid units) guarantees no vertex crosses its neighbour,
+    so no cell inverts and the partition is valid. The interference frequency is
+    in GRID units, not pixels, so the beat spans a fixed number of tiles at any
+    resolution ("the same pattern, just more of it" -- the girih/truchet seed
+    lesson), and the field is centred on the frame so the beat is symmetric. The
+    grid runs two cells past every edge so the wavy outer boundary still covers
+    the frame (the render clips the overhang). Pitch = base_s and the
+    displacement is area-preserving on average, so a cell averages base_s^2.
+    """
+    s = float(base_s)
+    theta = math.radians(11)
+    ct, st = math.cos(theta), math.sin(theta)
+    A = 0.42
+    freq = 0.7
+    ni = int(target_w / s) + 1
+    nj = int(target_h / s) + 1
+    cx, cy = ni / 2.0, nj / 2.0
+
+    def vpos(i, j):
+        x, y = i - cx, j - cy
+        xr = x * ct - y * st
+        yr = x * st + y * ct
+        dx = A * math.sin(freq * x) * math.cos(freq * xr)
+        dy = A * math.cos(freq * y) * math.sin(freq * yr)
+        return ((i + dx) * s, (j + dy) * s)
+
+    V = {(i, j): vpos(i, j)
+         for i in range(-2, ni + 3) for j in range(-2, nj + 3)}
+    for i in range(-2, ni + 2):
+        for j in range(-2, nj + 2):
+            yield [V[(i, j)], V[(i + 1, j)], V[(i + 1, j + 1)], V[(i, j + 1)]]
+
+
 def _gen_cairo(engine, target_w, target_h, base_s):
     """Cairo pentagonal tiling: 4 congruent equilateral-parameter pentagons
     around every (i+j even) node of a unit square lattice. Pentagon area is
@@ -2358,6 +2402,7 @@ SHAPE_MODES = {
     "triangle":      ShapeSpec("grid"),
     "stagger_tri":   ShapeSpec("polygon", _gen_stagger_tri, aa=4),
     "braid":         ShapeSpec("polygon", _gen_braid, aa=4),
+    "moire":         ShapeSpec("polygon", _gen_moire, aa=4),
     "kites":         ShapeSpec("polygon", _gen_kites, aa=1),
     "spectre":       ShapeSpec("polygon", _gen_spectre, aa=4),
     "sunflower_grande":         ShapeSpec("polygon", _gen_sunflower_grande, aa=4),
