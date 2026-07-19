@@ -114,9 +114,13 @@ def _unit_tab_diecut(u1, u2):
                       (PL[0] - 0.05 * tL[0], PL[1] - 0.05 * tL[1]), PL)
     shoulder_r = _bez(PR, (PR[0] + 0.05 * tR[0], PR[1] + 0.05 * tR[1]),
                       (0.72, 0.0), (0.90, 0.0))
+    # [1:] drops the duplicated junction vertices (PL/PR) -- doubled
+    # consecutive points break Pillow's scanline parity when they land on a
+    # scanline (1-2 px unfilled strips across the polygon; engine measured
+    # 784 hole px before the dedup).
     pts = [(0.0, 0.0)] + shoulder_l
-    pts += _arc_cw(C, R, thL, thR)
-    pts += shoulder_r + [(1.0, 0.0)]
+    pts += _arc_cw(C, R, thL, thR)[1:]
+    pts += shoulder_r[1:] + [(1.0, 0.0)]
     return pts
 
 

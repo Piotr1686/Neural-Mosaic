@@ -20,7 +20,9 @@ from PIL import Image, ImageDraw
 from src.engine_smart import (SHAPE_MODES, SmartEngine, _poincare_cells,
                               _gen_penrose_p2, _gen_pebbles, _gen_bloom,
                               _gen_phyllotaxis, _gen_stagger_tri, _gen_braid,
-                              _gen_moire, _GOLDEN_ANGLE, _LUCAS_ANGLE)
+                              _gen_moire, _gen_puzzle_classic,
+                              _gen_puzzle_ribbon, _gen_puzzle_hex,
+                              _GOLDEN_ANGLE, _LUCAS_ANGLE)
 from src.grout import classify_edges
 from tests.test_golden_shapes import _build_library, _make_target
 
@@ -618,6 +620,123 @@ def test_moire_mean_cell_area_is_about_base_s_squared():
     base_s = 60
     areas = [_poly_area(p) for p in _gen_moire(None, 900, 900, base_s)]
     assert sum(areas) / len(areas) == pytest.approx(base_s ** 2, rel=0.05)
+
+
+# --- puzzle family (sprint P, 2026-07-19) -----------------------------------
+# A jigsaw tab is a per-EDGE polyline shared by both neighbouring cells, so
+# the partition is exact by construction. The gates mirror the pool's curved-
+# shape precedent (poincare/penrose_p2): a FORMAL partition test via
+# classify_edges instead of a 1:1 binary raster — Pillow's 1:1 scanline fill
+# loses whole rows on curve chains whose vertices land on a scanline
+# (measured: 784 false "hole" px for classic at 800x600 while the partition
+# is provably exact), so the binary raster is the wrong instrument here. Area
+# coverage is instead measured the way the ENGINE actually rasterises:
+# ss=4 masks + BOX downsample (the _LazyMask path). Calibration: shipped
+# voderberg scores min_cov=0.502 / 210 px below 0.9 on this instrument;
+# the puzzle family scores the same or better (133-134 px below 0.9).
+
+_PUZZLE_GENS = {"puzzle_classic": _gen_puzzle_classic,
+                "puzzle_ribbon": _gen_puzzle_ribbon,
+                "puzzle_hex": _gen_puzzle_hex}
+
+
+@pytest.mark.parametrize("name", sorted(_PUZZLE_GENS))
+@pytest.mark.parametrize("w,h,base_s", [
+    (800, 600, 60),      # 4:3
+    (1200, 300, 50),     # wide band
+    (384, 288, 100),     # the golden frame
+])
+def test_puzzle_family_is_an_exact_partition(name, w, h, base_s):
+    # Collapse all cells to one group: classify_edges then routes every
+    # unpaired seam segment to level 3. A tab polyline NOT shared identically
+    # by both neighbours (float drift, wrong direction, differing jitter)
+    # would leave interior unpaired segments; zero proves the shared-edge
+    # construction. This also proves full coverage: cells are closed and
+    # extend past the frame, so with every interior seam paired the union's
+    # boundary lies outside the frame.
+    PAD = 2.0
+    cells = [(list(poly), 0, 0) for poly in _PUZZLE_GENS[name](None, w, h, base_s)]
+    by_level = classify_edges(cells)
+    interior_unpaired = [
+        (a, b) for a, b in by_level[3]
+        if all(PAD < p[0] < w - PAD and PAD < p[1] < h - PAD for p in (a, b))
+    ]
+    assert not interior_unpaired, (
+        f"{len(interior_unpaired)} unpaired interior seam segment(s) for "
+        f"{name} at {w}x{h} base_s={base_s}: {interior_unpaired[:3]}")
+
+
+@pytest.mark.parametrize("name", sorted(_PUZZLE_GENS))
+def test_puzzle_family_covers_via_engine_masks(name):
+    # Float coverage on the engine's own rasterisation path (ss=4 + BOX). A
+    # real hole (a lost tab lobe) is a 0.0-coverage region; sub-pixel seam
+    # dust from Pillow's boundary rules bottoms out at ~0.5 (voderberg, the
+    # shipped worst case, measures 0.502) — hence the 0.45 floor.
+    w, h, base_s, ss = 800, 600, 60, 4
+    acc = np.zeros((h, w), dtype=np.float64)
+    for poly in _PUZZLE_GENS[name](None, w, h, base_s):
+        m = Image.new("L", (w * ss, h * ss), 0)
+        ImageDraw.Draw(m).polygon([(x * ss, y * ss) for x, y in poly], fill=255)
+        acc += np.asarray(m.resize((w, h), Image.BOX), dtype=np.float64) / 255.0
+    below = int((acc < 0.45).sum())
+    assert below == 0, (
+        f"{name}: {below} px under 45% engine-mask coverage "
+        f"(min={acc.min():.3f}) — real holes, not seam dust")
+
+
+def test_puzzle_ribbon_warp_differs_from_classic_lattice():
+    # The distinctness gate for the pair sharing the tab machinery. Metric on
+    # the lattice CORNERS (poly[0] is always a lattice corner, never a tab
+    # point), so tab jitter cannot blur it, and nearest-neighbour distances
+    # are translation-invariant by construction (the stagger_tri lesson):
+    # classic corners are the exact square lattice (CV == 0), ribbon's are
+    # warped by the sine field (CV ~ 0.046 measured).
+    def corner_cv(gen):
+        corners = [list(p)[0] for p in gen(None, 900, 900, 60)]
+        interior = [c for c in corners
+                    if 120 <= c[0] <= 780 and 120 <= c[1] <= 780]
+        dists = []
+        for c in interior:
+            best = min((c[0] - o[0]) ** 2 + (c[1] - o[1]) ** 2
+                       for o in corners if o != c
+                       and abs(o[0] - c[0]) < 150 and abs(o[1] - c[1]) < 150)
+            dists.append(math.sqrt(best))
+        arr = np.array(dists)
+        return arr.std() / arr.mean()
+
+    assert corner_cv(_gen_puzzle_classic) < 0.005, (
+        "classic corners left the exact lattice")
+    assert corner_cv(_gen_puzzle_ribbon) > 0.02, (
+        "ribbon warp collapsed onto the classic lattice — it would be a "
+        "duplicate of puzzle_classic")
+
+
+def test_puzzle_cells_have_tab_curves_not_plain_polygons():
+    # Distinctness from square/hexagon/moire in one cheap invariant: every
+    # boundary is a die-cut curve, so cells carry hundreds of vertices
+    # (plain lattices have 4-6; measured: 224/224/336).
+    for name, gen in _PUZZLE_GENS.items():
+        vmin = min(len(list(p)) for p in gen(None, 600, 600, 60))
+        assert vmin > 150, f"{name}: min vertices {vmin} — tabs missing"
+
+
+@pytest.mark.parametrize("name,rel", [("puzzle_classic", 0.02),
+                                      ("puzzle_ribbon", 0.03),
+                                      ("puzzle_hex", 0.02)])
+def test_puzzle_mean_cell_area_is_base_s_squared(name, rel):
+    # Tabs swap area pairwise, so the mean stays base_s^2; the residue is the
+    # outer ring of the generated block, whose outward tabs have no partner.
+    base_s = 60
+    areas = []
+    for poly in _PUZZLE_GENS[name](None, 900, 900, base_s):
+        p = list(poly)
+        s = 0.0
+        for k in range(len(p)):
+            x0, y0 = p[k]
+            x1, y1 = p[(k + 1) % len(p)]
+            s += x0 * y1 - x1 * y0
+        areas.append(abs(s) / 2.0)
+    assert sum(areas) / len(areas) == pytest.approx(base_s ** 2, rel=rel)
 
 
 def test_poincare_grout_via_dispatcher_is_hierarchical():

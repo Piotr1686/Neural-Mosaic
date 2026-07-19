@@ -14,7 +14,9 @@ dragon  gereh  koch_island  koch_snowflake  nautilus  rosette
 rosette_fractal  scales  sierpinski  sierpinski_carpet  sierpinski_d
 ```
 
-Wdrożone: `penrose_p2` (E1, `b3e725c`) · `bloom`, `pebbles` (E2, `3990cfa`) · `stagger_tri`, `braid`, `moire` (E3). Cel końcowy: **rejestr 56**.
+Wdrożone: `penrose_p2` (E1, `b3e725c`) · `bloom`, `pebbles` (E2, `3990cfa`) · `stagger_tri`, `braid`, `moire` (E3). Cel końcowy puli: **rejestr 56**.
+
+**POZA PULĄ — rodzina puzzle (sprint P, 2026-07-19, decyzja usera):** `puzzle_classic`, `puzzle_ribbon`, `puzzle_hex` — trzy siatki (kratka / kratka falowana / hex) z tabami die-cut jako WSPÓLNYMI poliliniami per krawędź (crc32, bez RNG; profil wg zdjęć referencyjnych usera). Bramki wg precedensu kształtów krzywoliniowych: **formalny test partycji** (classify_edges, 0 niesparowanych wewnętrznych — binarny raster 1:1 to ZŁY instrument dla krzywych: parzystość scanline'a Pillow gubi całe wiersze, zmierzone 784 fałszywe „dziury" przy dowodliwie dokładnej partycji) + pokrycie FLOAT na ścieżce masek silnika ss=4+BOX (kalibracja: wdrożony `voderberg` = 0,502 min / 210 px <0,9; puzzle ≤ tego) + goldeny ×2 cross-process. PUŁAPKA opłacona: zduplikowane KOLEJNE wierzchołki (złączenia ramię/łuk) łamią parzystość scanline'a Pillow także w maskach aa=4 → pasy 1-2 px; dedup `[1:]` jest nośny. Odrębność: `ribbon` vs `classic` bramką CV odległości narożników (0 vs 0,046, niewrażliwa na translacje); od `square`/`hexagon`/`moire` — krzywe tabów (>150 wierzchołków/komórkę). **Rejestr po sprincie P = 48; cel końcowy całości = 59.**
 
 ## ⚠ AUDYT KONSTRUKCJI (2026-07-17) — czytaj przed każdym sprintem
 

@@ -178,6 +178,18 @@ GOLDEN = {
     # interpreters, one with PYTHONHASHSEED=1.
     ("moire", False): "e45f0fae165786bf9f56815a580212c8769ef260f6be61424f0a710c6d7d3dc7",
     ("moire", True): "7ad9dedb3421380057c92b805c9391d623e89a36ab724a88f3bf982ae934b9cb",
+    # puzzle family (2026-07-19, sprint P): die-cut jigsaw tabs as per-edge
+    # shared polylines (crc32-keyed, no RNG) on three lattices — classic
+    # ribbon-cut grid, sine-warped ribbon grid, flat-top hex. Verified across
+    # two interpreters, one with PYTHONHASHSEED=1. The dedup of the profile's
+    # junction vertices is load-bearing: doubled consecutive points broke
+    # Pillow's scanline parity inside the aa=4 masks (1-2 px strips).
+    ("puzzle_classic", False): "8783330ea9c21030435c347cd8b27ffb5232cea3c49a39b864de1d5ef480dae4",
+    ("puzzle_classic", True): "c8fe3cbc096dd835e54b88948a90fa333608b92b66a5804f4bce7f7f0d8de06a",
+    ("puzzle_ribbon", False): "2c264a757630e7218cbf369a4e6a09a5da94e305397cae29ab31dff9da394a53",
+    ("puzzle_ribbon", True): "8886b6ad048bd342dbb4cc3dcc5a52bf3e2c8826624211d839a8c60ec6831097",
+    ("puzzle_hex", False): "6e034c3376f2e98ccb80b1e07e166d91ea8e83287797a247cf36af14e0d52351",
+    ("puzzle_hex", True): "d2c5dff49f91161218023e48d2d815fa962cb41c65c4b32253319fa9e7d9b97b",
 }
 
 

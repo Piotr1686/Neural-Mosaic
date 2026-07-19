@@ -21,6 +21,7 @@ import cmath
 import json
 import threading
 import heapq
+import zlib
 from collections import deque
 from datetime import datetime
 from dataclasses import dataclass
@@ -982,6 +983,197 @@ def _gen_moire(engine, target_w, target_h, base_s):
     for i in range(-2, ni + 2):
         for j in range(-2, nj + 2):
             yield [V[(i, j)], V[(i + 1, j)], V[(i + 1, j + 1)], V[(i, j + 1)]]
+
+
+# --- Puzzle family (user verdict 2026-07-19: classic/ribbon/hex accepted,
+# die-cut profile family-wide) ----------------------------------------------
+#
+# A jigsaw tab is a property of the EDGE, not the cell: the tab polyline is
+# built ONCE per edge (keyed by rounded endpoints) and both neighbouring
+# cells reuse the SAME point list (one reversed), so the tiling is an exact
+# partition by construction — no T-junctions, no holes, and the tab gives one
+# cell exactly what it takes from the other (mean cell area unchanged).
+#
+# Tab direction and jitter come from crc32 of the edge key (never an RNG,
+# never hash()): reproducible bit-for-bit across processes, and identical for
+# preview and 16K render because base_s (not the frame) sets the lattice —
+# the girih/truchet rule, "the same pattern, just more of it".
+#
+# Arc sampling uses a fixed ANGULAR pitch of 9 deg: its sagitta is
+# R*(1-cos(4.5 deg)) ~ 0.003*R, and the head radius R ~ 0.13*edge stays
+# ~26 px even at tile_scale 2, so the facet error is < 0.1 px at any
+# realistic scale — safely under the 0.35 px _arc_pitch tolerance. (The
+# truchet_hex trap was a fixed CHORD pitch, whose sagitta grows with R;
+# a fixed angular pitch shrinks the chord as R shrinks.)
+
+def _puzzle_bez(p0, p1, p2, p3, n=12):
+    out = []
+    for k in range(n + 1):
+        t = k / n
+        s = 1 - t
+        out.append((s**3 * p0[0] + 3 * s * s * t * p1[0]
+                    + 3 * s * t * t * p2[0] + t**3 * p3[0],
+                    s**3 * p0[1] + 3 * s * s * t * p1[1]
+                    + 3 * s * t * t * p2[1] + t**3 * p3[1]))
+    return out
+
+
+def _puzzle_arc_cw(c, rad, a0, a1, step=math.radians(9)):
+    """Sample the clockwise arc (decreasing angle) from a0 to a1."""
+    while a1 >= a0:
+        a1 -= 2 * math.pi
+    n = max(2, int((a0 - a1) / step))
+    return [(c[0] + rad * math.cos(a0 + (a1 - a0) * k / n),
+             c[1] + rad * math.sin(a0 + (a1 - a0) * k / n))
+            for k in range(n + 1)]
+
+
+def _puzzle_tab_profile(u1, u2):
+    """Die-cut jigsaw profile on the unit edge (0,0)..(1,0), tab towards +y.
+
+    Matched to the user's reference photos (2026-07-19): big round head (one
+    270-degree arc entered at 225 deg, left at -45 deg — strong undercut),
+    narrow flared neck, S-curved shoulders as cubics whose end handles align
+    with the circle tangents (smooth join). Shoulders leave the corners
+    EXACTLY along the baseline and keep every Bezier control point at y >= 0
+    (convex-hull property: the curve cannot cross the baseline) — the
+    proposal's first version dipped negative at the corners and neighbouring
+    edge polylines crossed there: 295 hole px in the coverage raster.
+    """
+    cx = 0.5 + (u1 - 0.5) * 0.10
+    sc = 0.90 + 0.20 * u2
+    R, H = 0.13 * sc, 0.16 * sc
+    C = (cx, H)
+    thL, thR = math.radians(225), math.radians(-45)
+    PL = (C[0] + R * math.cos(thL), C[1] + R * math.sin(thL))
+    PR = (C[0] + R * math.cos(thR), C[1] + R * math.sin(thR))
+    tL = (math.sin(thL), -math.cos(thL))
+    tR = (math.sin(thR), -math.cos(thR))
+    shoulder_l = _puzzle_bez((0.10, 0.0), (0.28, 0.0),
+                             (PL[0] - 0.05 * tL[0], PL[1] - 0.05 * tL[1]), PL)
+    shoulder_r = _puzzle_bez(PR, (PR[0] + 0.05 * tR[0], PR[1] + 0.05 * tR[1]),
+                             (0.72, 0.0), (0.90, 0.0))
+    # The [1:] slices drop the junction points the previous chunk already
+    # ends with (PL, PR). Duplicated CONSECUTIVE vertices look harmless but
+    # break Pillow's scanline parity when the doubled point lies exactly on
+    # a scanline: the fill leaves a 1-2 px unfilled strip across the whole
+    # polygon at that y (measured: 784 hole px at 800x600, all in such
+    # strips; 0 after the dedup).
+    pts = [(0.0, 0.0)] + shoulder_l
+    pts += _puzzle_arc_cw(C, R, thL, thR)[1:]
+    pts += shoulder_r[1:] + [(1.0, 0.0)]
+    return pts
+
+
+def _puzzle_rkey(p):
+    return (round(p[0], 2), round(p[1], 2))
+
+
+def _puzzle_edge_key(a, b):
+    ka, kb = _puzzle_rkey(a), _puzzle_rkey(b)
+    return (ka, kb) if ka <= kb else (kb, ka)
+
+
+def _puzzle_crc_units(key):
+    h = zlib.crc32(repr(key).encode("ascii"))
+    sign = (h & 1) * 2 - 1
+    return sign, ((h >> 1) & 255) / 255.0, ((h >> 9) & 255) / 255.0
+
+
+def _puzzle_cells(polys, lmin):
+    """Assemble puzzle cells from plain polygons: one shared tab polyline per
+    edge (first-seen float endpoints are canonical, so both neighbours reuse
+    the identical point list). Edges shorter than ``lmin`` stay straight."""
+    plines = {}
+    for poly in polys:
+        n = len(poly)
+        for i in range(n):
+            a, b = poly[i], poly[(i + 1) % n]
+            k = _puzzle_edge_key(a, b)
+            if k in plines:
+                continue
+            A, B = (a, b) if _puzzle_rkey(a) == k[0] else (b, a)
+            L = math.hypot(B[0] - A[0], B[1] - A[1])
+            if L < lmin:
+                plines[k] = [A, B]
+                continue
+            sign, u1, u2 = _puzzle_crc_units(k)
+            ux, uy = (B[0] - A[0]) / L, (B[1] - A[1]) / L
+            nx, ny = -uy, ux
+            plines[k] = [(A[0] + t * L * ux + sign * y * L * nx,
+                          A[1] + t * L * uy + sign * y * L * ny)
+                         for t, y in _puzzle_tab_profile(u1, u2)]
+    for poly in polys:
+        out = []
+        n = len(poly)
+        for i in range(n):
+            a, b = poly[i], poly[(i + 1) % n]
+            k = _puzzle_edge_key(a, b)
+            pts = plines[k]
+            out += pts[:-1] if _puzzle_rkey(a) == k[0] else pts[::-1][:-1]
+        yield out
+
+
+def _gen_puzzle_classic(engine, target_w, target_h, base_s):
+    """Classic ribbon-cut jigsaw: square lattice of side base_s, a die-cut tab
+    on every edge. One ring of cells beyond every frame edge guarantees each
+    in-frame edge has both neighbours (an unpaired notch would be a hole);
+    the outer block boundary lies >= 0.7*base_s outside the frame, past the
+    deepest tab. NOT `square`: every cell boundary is the shared tab curve.
+    Tabs swap area pairwise, so the mean cell area stays base_s^2 exactly."""
+    s = float(base_s)
+    ni = int(target_w / s) + 1
+    nj = int(target_h / s) + 1
+    polys = [[(i * s, j * s), ((i + 1) * s, j * s),
+              ((i + 1) * s, (j + 1) * s), (i * s, (j + 1) * s)]
+             for i in range(-1, ni + 1) for j in range(-1, nj + 1)]
+    yield from _puzzle_cells(polys, lmin=0.5 * s)
+
+
+def _gen_puzzle_ribbon(engine, target_w, target_h, base_s):
+    """Hand-cut ('vintage ribbon') jigsaw: the classic grid's vertices are
+    displaced by a smooth single-grating sine field BEFORE the tabs go on, so
+    the cutting rows wander. Frequencies are in GRID units, so the wander
+    spans a fixed number of pieces at any resolution (the moire rule). NOT
+    `puzzle_classic`: the warp makes neighbour spacing vary (the translation-
+    invariant CV gate in test_grout_engine measures exactly that), and NOT
+    `moire`: tab curves with undercuts, plus a one-grating field, not an
+    interference beat."""
+    s = float(base_s)
+    amp = 0.22 * s
+    ni = int(target_w / s) + 1
+    nj = int(target_h / s) + 1
+
+    def v(i, j):
+        dx = amp * math.sin(0.85 * j + 0.40 * i)
+        dy = amp * math.sin(0.85 * i + 1.70 + 0.30 * j)
+        return (i * s + dx, j * s + dy)
+
+    V = {(i, j): v(i, j)
+         for i in range(-2, ni + 3) for j in range(-2, nj + 3)}
+    polys = [[V[(i, j)], V[(i + 1, j)], V[(i + 1, j + 1)], V[(i, j + 1)]]
+             for i in range(-2, ni + 2) for j in range(-2, nj + 2)]
+    yield from _puzzle_cells(polys, lmin=0.4 * s)
+
+
+def _gen_puzzle_hex(engine, target_w, target_h, base_s):
+    """Hexagonal jigsaw: flat-top hex lattice with a die-cut tab on every
+    edge — pieces read as six-lobed flowers/gears. NOT the `hexagon` grid
+    mode: those cells are plain 6-gons, these boundaries are tab curves.
+    Hex area (3*sqrt(3)/2)*rr^2 = base_s^2 gives rr = 0.6204*base_s; tabs
+    swap area pairwise, so the mean stays base_s^2."""
+    rr = base_s * math.sqrt(2.0 / (3.0 * math.sqrt(3.0)))
+    w_step = 1.5 * rr
+    h_step = math.sqrt(3.0) * rr
+    polys = []
+    for col in range(-2, int(target_w / w_step) + 3):
+        for row in range(-2, int(target_h / h_step) + 3):
+            cx = col * w_step
+            cy = row * h_step + (h_step / 2.0 if col % 2 else 0.0)
+            polys.append([(cx + rr * math.cos(math.radians(60 * k)),
+                           cy + rr * math.sin(math.radians(60 * k)))
+                          for k in range(6)])
+    yield from _puzzle_cells(polys, lmin=0.5 * rr)
 
 
 def _gen_cairo(engine, target_w, target_h, base_s):
@@ -2404,6 +2596,9 @@ SHAPE_MODES = {
     "stagger_tri":   ShapeSpec("polygon", _gen_stagger_tri, aa=4),
     "braid":         ShapeSpec("polygon", _gen_braid, aa=4),
     "moire":         ShapeSpec("polygon", _gen_moire, aa=4),
+    "puzzle_classic": ShapeSpec("polygon", _gen_puzzle_classic, aa=4),
+    "puzzle_ribbon":  ShapeSpec("polygon", _gen_puzzle_ribbon, aa=4),
+    "puzzle_hex":     ShapeSpec("polygon", _gen_puzzle_hex, aa=4),
     "kites":         ShapeSpec("polygon", _gen_kites, aa=1),
     "spectre":       ShapeSpec("polygon", _gen_spectre, aa=4),
     "sunflower_grande":         ShapeSpec("polygon", _gen_sunflower_grande, aa=4),
