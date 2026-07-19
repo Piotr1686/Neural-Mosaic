@@ -7,10 +7,10 @@
 
 Punkt wyjścia (weryfikacja 2026-07-16, rejestr vs PNG): 39 kształtów w silniku, 57 schematów ⇒ **18 bez implementacji, 0 sierot**. Po usunięciu `kepler_ty` (duplikat) pula = **17**.
 
-**ZOSTAJE 8** (rejestr=51 po E1-E4 + rodzinie puzzle):
+**ZOSTAJE 6** (rejestr=53 po E1-E5 + rodzinie puzzle):
 
 ```
-gereh  nautilus  rosette  rosette_fractal  scales
+nautilus  rosette_fractal  scales
 sierpinski  sierpinski_carpet  sierpinski_d
 ```
 
@@ -65,7 +65,7 @@ Pula powstała jako **schematy**, gdzie różnicę niósł KOLOR. Pod zdjęciami
 | ~~**E2**~~ | ~~`bloom`, `pebbles`~~ | **ZAMKNIĘTY** `3990cfa` (rejestr=42) | — |
 | ~~**E3**~~ | ~~`stagger_tri`, `braid`, `moire`~~ | **ZAMKNIĘTY** (rejestr=45) | — |
 | ~~**E4**~~ | ~~`dragon`, `koch_island`, `koch_snowflake`~~ | **ZAMKNIĘTY** (rejestr=51, z rodziną puzzle) | — |
-| **E5** | `gereh`, `rosette` | islamskie partycje gwiaździste — wzorzec `girih` | średnie |
+| ~~**E5**~~ | ~~`gereh`, `rosette`~~ | **ZAMKNIĘTY** (rejestr=53) | — |
 | **E6** | `scales`, `nautilus`, `rosette_fractal` | łuki + radialne (`_arc_pitch`, „dobry środek") | średnie |
 | **E7** | `sierpinski`, `sierpinski_d`, `sierpinski_carpet` | rodzina sierpińskiego — wszystkie 3 warianty (decyzja usera 2026-07-16) | średnie |
 | **E8** | docs + montaż zbiorczy 56 + mozaiki testowe | zamknięcie → selekcja finalna usera → galeria 16K | — |
@@ -97,10 +97,11 @@ Kolejność E1→E3 najpierw celowo: same reużywają istniejącą maszynerię, 
 - ✓ `koch_island` **WDROŻONY** (`_gen_koch_island`): Minkowski depth 2, żółw na CZYSTYCH INTACH (tabela kierunków, zero pyłu `exp(iπ/2)`); **period = 4^depth = 16, NIE bbox** (pułapka 2026-07-03; test `test_koch_island_period_is_lattice_not_bbox` — sąsiad = translacja o okres). Generator area-preserving ⇒ pole DOKŁADNIE base_s². Punkt domykający pętlę zrzucony (pułapka duplikatów kolejnych wierzchołków ze sprintu P).
 - ✓ `koch_snowflake` **WDROŻONY** (`_gen_koch_snowflake`): teselacja 2-rozmiarowa (duże płatki krok 2Rb; 2 małe 1/√3, obrót 30°, w dziurach; bilans pól DOKŁADNY 1:3, `Rb = 0,6937·base_s` ⇒ duży ≈ base_s²). **Głębokość STAŁA = 4** — skończona aproksymacja wspólnej granicy z RÓŻNYCH baz ⇒ szwy nie parują się dokładnie: NIE stosować formalnego testu partycji ani rastra 1:1; bramka = pokrycie FLOAT na maskach silnika (zmierzone min 0,686 / 0 px <0,45 / 0 px >1,5 — lepiej niż voderberg 0,502). Depth 5 odrzucony: ~1,2 GB poligonów @16K (budżet A1).
 
-### E5 — islamskie gwiazdy
-- `gereh` = same czworokąty: gwiazda-8 rozbita na 8 rombów-latawców centralnych (`r_in=0.60·apotema`) + 8 latawców zewn. + kwadraty. NIE gwiazda-na-wierzchu (to była nakładka).
-- `rosette` = 12-krotna rozeta islamska (zellij, Fez) jako partycja 3.12.12: dwunastokąt → 12 latawców rdzenia + 12 płatków-czworokątów + 12 trójkątów krawędziowych. ⚠ Trójkąty międzywęzłowe OSOBNĄ pętlą po WSZYSTKICH centrach (dziura może należeć do centrum odfiltrowanego!) + filtr BOX, nie promieniowy (rogowe rozety).
-- Lekcja z `girih`: greedy nie wyhoduje dekagonu (10 z 1610 prób) — te dwa są konstrukcyjne, nie greedy. Jeśli mimo to zostaną dziury: otoczka wypukła dziur malowana 2× daje kontur (7-11% kadru) — patrz `project_girih_lattice`.
+### E5 — islamskie gwiazdy — ZAMKNIĘTY 2026-07-19 (rejestr=53)
+- ✓ `gereh` **WDROŻONY** (`_gen_gereh`): 4.8.8, ośmiokąt → 8 latawców centralnych (gwiazda khatam, `r_in=0.60·apotema`) + 8 zewn.; kwadraty całe. Same czworokąty (bramka: `{4}` = zbiór liczb wierzchołków — odrębność od `trunc_square`). Skala: 17 komórek na okres `p²=(3+2√2)s²` ⇒ średnia DOKŁADNIE base_s². T-junctions ośmiokąt-kwadrat legalne (tip gwiazdy NA prostym boku kwadratu — precedens `stagger_tri`) ⇒ NIE stosować formalnego testu partycji, instrument = raster 1:1.
+  - ⚠ **BUG SCHEMATU ZŁAPANY BRAMKĄ POKRYCIA:** propozycja rysowała lukę 4.8.8 jako kwadrat OSIOWY (`_reg_poly` faza π/4) — nakładki na rogach + trójkątne dziury na środkach boków (11k px @800×600), niewidoczne pod konturami PNG. Prawdziwa luka to ROMB o wierzchołkach na osiach (rogi = wierzchołki ośmiokątów). Kolejny przypadek „schemat ≠ silnik" — wizualna akceptacja schematu NIE dowodzi partycji.
+- ✓ `rosette` **WDROŻONY** (`_gen_rosette`): 3.12.12, dwunastokąt → 12 latawców rdzenia + 12 płatków + 12 trójkątów krawędziowych + 2 trójkąty międzywęzłowe/komórkę kraty. **Dziury kotwiczone ANALITYCZNIE** jako centroidy trójkątów kraty `{c, c+t1, c+t2}` — trzej sąsiedzi znani wprost, pułapka „centrum odfiltrowane" (czarne kliny 2026-07-04) niemożliwa z konstrukcji, bez sortowania listy centrów (O(1) na dziurę). Skala: 38 komórek na komórkę kraty ⇒ R12 = 3,429·base_s. Instrument raster 1:1 (holes==0 ×5 od pierwszego strzału).
+- Lekcja z `girih` pozostaje: oba konstrukcyjne, nie greedy.
 
 ### E6 — łuki i radialne
 - ⚠ **`scales` ma ŁUKI** (komórka = kopuła + 2 wklęsłe łuki; okręgi `r` na siatce szachownicowej `dx=2r, dy=r`, offset `r`, pokrycie DOKŁADNE, przecięcia w `(0,-r),(±r,0)`). Krok polygonizacji **MUSI** być `_arc_pitch(r, tol=0.35)` = `sqrt(8·r·tol)`, a **NIE `seg = base_s/3`** — ta pomyłka sfasetowała truchet_hex (promień łuku tu nie rośnie z kadrem, jest ~stały, więc stały `seg` daje strzałkę 1-3 px = widoczny wielokąt).

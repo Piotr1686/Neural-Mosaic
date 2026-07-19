@@ -24,6 +24,7 @@ from src.engine_smart import (SHAPE_MODES, SmartEngine, _poincare_cells,
                               _gen_puzzle_ribbon, _gen_puzzle_hex,
                               _gen_dragon, _gen_koch_island,
                               _gen_koch_snowflake, _twindragon_boundary,
+                              _gen_gereh, _gen_rosette,
                               _GOLDEN_ANGLE, _LUCAS_ANGLE)
 from src.grout import classify_edges
 from tests.test_golden_shapes import _build_library, _make_target
@@ -846,6 +847,93 @@ def test_koch_snowflake_two_sizes_in_exact_area_balance():
     assert len(small) == pytest.approx(2 * len(big), abs=len(big) * 0.35)
     assert np.mean(big) == pytest.approx(base_s ** 2, rel=0.03)
     assert np.mean(big) / np.mean(small) == pytest.approx(3.0, rel=0.01)
+
+
+# --- E5: Islamic star partitions (2026-07-19) -------------------------------
+# gereh (4.8.8, octagons split into 16 kites + gap diamonds) and rosette
+# (3.12.12, dodecagons split into 36 cells + interstitial triangles). All
+# edges are straight segments, so the 1:1 binary raster is the right
+# coverage instrument (the instrument ladder from sprint P). gereh's
+# octagon-vs-square T-junctions are legal (the tip lies exactly on the
+# square's straight side — stagger_tri precedent), which is also why the
+# formal classify_edges partition test is NOT used here: it would flag
+# every legal T-junction as unpaired.
+
+@pytest.mark.parametrize("gen", [_gen_gereh, _gen_rosette],
+                         ids=["gereh", "rosette"])
+@pytest.mark.parametrize("w,h,base_s", [
+    (800, 600, 60),      # 4:3
+    (1200, 300, 50),     # wide band
+    (640, 640, 80),      # square
+    (500, 500, 40),      # dense
+    (384, 288, 100),     # the golden frame
+])
+def test_star_partitions_cover_the_frame(gen, w, h, base_s):
+    # For gereh this gate is what caught the scheme's own bug: the proposal
+    # drew the 4.8.8 gap square axis-aligned (phase pi/4), which overlaps the
+    # octagons at its corners and leaves triangular holes at its edge
+    # midpoints (11k px at 800x600) — invisible under the PNG's outlines.
+    # The true gap is the DIAMOND whose corners are octagon vertices.
+    acc = np.zeros((h, w), dtype=np.uint16)
+    for poly in gen(None, w, h, base_s):
+        m = Image.new("L", (w, h), 0)
+        ImageDraw.Draw(m).polygon([tuple(p) for p in poly], fill=1)
+        acc += np.asarray(m, dtype=np.uint16)
+    holes = int((acc == 0).sum())
+    assert holes == 0, f"{holes} uncovered px at {w}x{h} base_s={base_s}"
+
+
+def test_gereh_cells_are_all_quads_unlike_trunc_square():
+    # The audit's cleared distinction from trunc_square (same 4.8.8 lattice):
+    # there the octagon is ONE 8-gon cell, here it is 16 kites — so every
+    # gereh cell must be a quad, and the mean must sit at base_s^2 (17 cells
+    # per period cell of area (3+2*sqrt(2))*s^2).
+    base_s = 60
+    polys = [list(p) for p in _gen_gereh(None, 900, 900, base_s)]
+    assert {len(p) for p in polys} == {4}, "gereh emitted a non-quad cell"
+    areas = []
+    for p in polys:
+        s = 0.0
+        for k in range(len(p)):
+            x0, y0 = p[k]
+            x1, y1 = p[(k + 1) % len(p)]
+            s += x0 * y1 - x1 * y0
+        areas.append(abs(s) / 2.0)
+    assert sum(areas) / len(areas) == pytest.approx(base_s ** 2, rel=0.01)
+
+
+def test_rosette_cells_are_tris_and_quads_unlike_trunc_hex():
+    # Distinction from trunc_hex (same 3.12.12 lattice): the dodecagon there
+    # is ONE 12-gon cell, here 12 kites + 12 petals + 12 edge triangles, plus
+    # the interstitial triangles — so cells are only tris and quads, both
+    # kinds present, mean ~ base_s^2 (38 cells per lattice cell).
+    base_s = 60
+    polys = [list(p) for p in _gen_rosette(None, 900, 900, base_s)]
+    counts = {len(p) for p in polys}
+    assert counts == {3, 4}, f"unexpected cell vertex counts: {counts}"
+    areas = []
+    for p in polys:
+        s = 0.0
+        for k in range(len(p)):
+            x0, y0 = p[k]
+            x1, y1 = p[(k + 1) % len(p)]
+            s += x0 * y1 - x1 * y0
+        areas.append(abs(s) / 2.0)
+    assert sum(areas) / len(areas) == pytest.approx(base_s ** 2, rel=0.03)
+
+
+def test_rosette_interstitial_triangles_fill_the_lattice_holes():
+    # The 2026-07-04 black-wedge bug class: a hole whose rosette centre falls
+    # outside the drawing window must still get its triangle. The engine
+    # anchors holes at lattice-triangle centroids analytically, so every
+    # in-frame hole is covered — proven by zero holes in the coverage gate —
+    # and the triangle count matches the two-per-lattice-cell construction.
+    polys = [list(p) for p in _gen_rosette(None, 900, 900, 60)]
+    tris = [p for p in polys if len(p) == 3]
+    quads = [p for p in polys if len(p) == 4]
+    # per full dodecagon: 12 edge tris; per lattice cell: +2 interstitial.
+    # quads per dodecagon: 24. So tris/quads ~ (12+2)/24 for interior cells.
+    assert 0.4 < len(tris) / len(quads) < 0.8
 
 
 def test_poincare_grout_via_dispatcher_is_hierarchical():

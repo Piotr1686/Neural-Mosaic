@@ -208,6 +208,19 @@ GOLDEN = {
     ("koch_island", True): "81735781d8fe5db7dc2dad90f8372dd0ab08689040adce27b1b8999abab4317b",
     ("koch_snowflake", False): "a1d9eea35b8b1002d407250d28b4f234abcf3cd424f9937009e9bc41eef56439",
     ("koch_snowflake", True): "83ce7abf36893a3fa8b6a808d4fcb97f4f0a158de8c2d422d9ce448c6ae7e825",
+    # E5 (2026-07-19). gereh: 4.8.8 with every octagon split into 16 kites
+    # (8-point khatam star, r_in=0.60*apothem); the gap square is the DIAMOND
+    # with vertices on the axes — the scheme's axis-aligned square (phase
+    # pi/4) was a real bug hidden by the proposal PNG's outlines (11k hole px,
+    # caught by the coverage gate). rosette: 3.12.12, dodecagon -> 12 core
+    # kites + 12 petals + 12 edge triangles; interstitial holes anchored
+    # analytically at lattice-triangle centroids (the filtered-centre trap
+    # cannot occur). Both pure trig, no RNG; verified across two
+    # interpreters, one with PYTHONHASHSEED=1.
+    ("gereh", False): "6aa90a7ce86be7cab5ed15a2f94e678aa878e31e50191efba43aeaa963908ae6",
+    ("gereh", True): "e35cf3a98363541bc808963b38a2ee2a75a6c703fe1912726e6782c7f41e3ebe",
+    ("rosette", False): "79566de37822130179642527ed067573af28ccc6fa8c4bad35c51624d2e7a5c4",
+    ("rosette", True): "9f279666088fa1df78d0a29842a7eda47f10f2745ab0f5a4cff4c36095594d72",
 }
 
 

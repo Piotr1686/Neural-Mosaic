@@ -1371,6 +1371,137 @@ def _gen_koch_snowflake(engine, target_w, target_h, base_s):
             yield _koch_snowflake_pts(c + 2 * hole, Rs, depth, phase=math.pi / 6)
 
 
+def _gen_gereh(engine, target_w, target_h, base_s):
+    """Gereh (khatam) star tiling as a true partition of QUADS only: the
+    4.8.8 octagon+square lattice with every octagon split into 8 central
+    kites (they compose the 8-point star) + 8 outer kites over the vertices;
+    the squares stay whole. NOT `trunc_square`, which keeps the octagons
+    whole — here every octagon cell is 16 kites (the audit's cleared
+    distinction: same lattice, different CELL).
+
+    Star core radius r_in = 0.60 * apothem (the reviewed proportion). Legal
+    T-junctions: an octagon edge facing a SQUARE is split at its midpoint
+    (the star tip) while the square keeps the whole edge — the tip lies
+    exactly on the square's straight side (stagger_tri precedent), and
+    octagon-octagon edges split at the shared midpoint on both sides. All
+    edges straight, so the 1:1 binary raster is the right coverage
+    instrument. Mean cell area: the period cell p^2 = 3+2*sqrt(2) holds 17
+    cells, so s = base_s * sqrt(17/(3+2*sqrt(2))) makes the mean base_s^2."""
+    s = base_s * math.sqrt(17.0 / (3.0 + 2.0 * math.sqrt(2.0)))
+    p = (1.0 + math.sqrt(2.0)) * s
+    Roct = s / (2.0 * math.sin(math.pi / 8.0))
+    apoth = s / (2.0 * math.tan(math.pi / 8.0))
+    r_in = 0.60 * apoth
+    i0 = int(math.floor(-Roct / p)) - 1
+    i1 = int(math.ceil((target_w + Roct) / p)) + 1
+    j0 = int(math.floor(-Roct / p)) - 1
+    j1 = int(math.ceil((target_h + Roct) / p)) + 1
+    for i in range(i0, i1 + 1):
+        for j in range(j0, j1 + 1):
+            c = complex(i * p, j * p)
+            if (c.real < -Roct - p or c.real > target_w + Roct + p
+                    or c.imag < -Roct - p or c.imag > target_h + Roct + p):
+                continue
+            V = [c + Roct * cmath.exp(1j * (math.pi / 8 + math.pi / 4 * k))
+                 for k in range(8)]
+            Mid = [(V[k] + V[(k + 1) % 8]) / 2 for k in range(8)]
+            inner = [c + r_in * cmath.exp(1j * (math.pi / 8
+                                                + math.pi / 4 * (k + 1)))
+                     for k in range(8)]
+            for k in range(8):
+                kite_c = [c, inner[(k - 1) % 8], Mid[k], inner[k]]
+                yield [(z.real, z.imag) for z in kite_c]
+            for k in range(8):
+                kite = [Mid[k], V[(k + 1) % 8], Mid[(k + 1) % 8], inner[k]]
+                yield [(z.real, z.imag) for z in kite]
+            # The 4.8.8 gap square is the DIAMOND with vertices along the
+            # axes (its corners ARE octagon vertices: (0.5s, 1.207s) etc.).
+            # The scheme drew it with phase pi/4 (an axis-aligned square) —
+            # a real bug hidden by the proposal PNG's outlines: it overlaps
+            # the octagons at its corners and leaves triangular holes at its
+            # edge midpoints (11k hole px at 800x600). Caught only by the
+            # rasterised coverage gate — the "schemat != silnik" lesson.
+            cs = complex((i + 0.5) * p, (j + 0.5) * p)
+            sq = [cs + (s * math.sqrt(2) / 2)
+                  * cmath.exp(1j * (math.pi / 2 * k))
+                  for k in range(4)]
+            yield [(z.real, z.imag) for z in sq]
+
+
+def _gen_rosette(engine, target_w, target_h, base_s):
+    """12-fold Islamic rosette (zellij, Fez) as a true partition of the
+    3.12.12 lattice: every dodecagon splits into 12 core kites (the gold
+    star), 12 petal quads reaching the dodecagon vertices and 12 edge
+    triangles; the two interstitial 3.12.12 triangles per lattice cell are
+    cells too. NOT `trunc_hex`, which keeps the dodecagons whole (the
+    audit's cleared distinction).
+
+    The interstitial holes are the CENTROIDS of the lattice triangles
+    {c, c+t1, c+t2} and {c+t1, c+t2, c+t1+t2}, so their three surrounding
+    dodecagons are known ANALYTICALLY — no filtered-centre lookup, which is
+    what caused the 2026-07-04 black-wedge bug the scheme fixed with a
+    separate pass; here the trap cannot occur by construction. Each hole
+    triangle takes the two dodecagon vertices closest to it from each
+    neighbour (they coincide pairwise -> 3 unique points). All edges
+    straight and shared full-length, so the 1:1 raster is the coverage
+    instrument. Mean cell: 38 cells per lattice cell of area
+    2*sqrt(3)*cos(pi/12)^2*R12^2 -> R12 = 3.4288*base_s."""
+    R12 = base_s * math.sqrt(38.0 / (2.0 * math.sqrt(3.0)
+                                     * math.cos(math.pi / 12.0) ** 2))
+    ap = R12 * math.cos(math.pi / 12.0)
+    D = 2.0 * ap
+    t1 = complex(D, 0)
+    t2 = complex(D / 2.0, D * math.sqrt(3.0) / 2.0)
+    r0, r1 = 0.26 * R12, 0.52 * R12
+
+    def u(ang):
+        return cmath.exp(1j * ang)
+
+    row_h = D * math.sqrt(3.0) / 2.0
+    n0 = int(math.floor(-R12 / row_h)) - 1
+    n1 = int(math.ceil((target_h + R12) / row_h)) + 1
+    for n in range(n0, n1 + 1):
+        shift = n * D / 2.0
+        m0 = int(math.floor((-R12 - shift) / D)) - 1
+        m1 = int(math.ceil((target_w + R12 - shift) / D)) + 1
+        for m in range(m0, m1 + 1):
+            c = m * t1 + n * t2
+            in_frame = (-R12 <= c.real <= target_w + R12
+                        and -R12 <= c.imag <= target_h + R12)
+            if in_frame:
+                s = [c + r1 * u(math.pi / 6 * k) for k in range(12)]
+                i_ = [c + r0 * u(math.pi / 6 * k + math.pi / 12)
+                      for k in range(12)]
+                t = [c + R12 * u(math.pi / 6 * k + math.pi / 12)
+                     for k in range(12)]
+                for k in range(12):
+                    core = [c, i_[(k - 1) % 12], s[k], i_[k]]
+                    yield [(z.real, z.imag) for z in core]
+                    petal = [i_[k], s[k], t[k], s[(k + 1) % 12]]
+                    yield [(z.real, z.imag) for z in petal]
+                    tri = [s[k], t[(k - 1) % 12], t[k]]
+                    yield [(z.real, z.imag) for z in tri]
+            # the two interstitial triangles anchored at THIS lattice cell;
+            # neighbours are analytic, so they exist even when their rosette
+            # centre falls outside the drawing window
+            for tri_c in ((c, c + t1, c + t2),
+                          (c + t1, c + t2, c + t1 + t2)):
+                hole = sum(tri_c) / 3.0
+                if not (-D <= hole.real <= target_w + D
+                        and -D <= hole.imag <= target_h + D):
+                    continue
+                uniq = {}
+                for cc in tri_c:
+                    verts = [cc + R12 * u(math.pi / 6 * k + math.pi / 12)
+                             for k in range(12)]
+                    verts.sort(key=lambda v: abs(v - hole))
+                    for v in verts[:2]:
+                        uniq[(round(v.real, 6), round(v.imag, 6))] = v
+                tri = sorted(uniq.values(), key=lambda v: cmath.phase(v - hole))
+                if len(tri) == 3:
+                    yield [(z.real, z.imag) for z in tri]
+
+
 def _gen_cairo(engine, target_w, target_h, base_s):
     """Cairo pentagonal tiling: 4 congruent equilateral-parameter pentagons
     around every (i+j even) node of a unit square lattice. Pentagon area is
@@ -2797,6 +2928,8 @@ SHAPE_MODES = {
     "dragon":        ShapeSpec("polygon", _gen_dragon, aa=4),
     "koch_island":   ShapeSpec("polygon", _gen_koch_island, aa=4),
     "koch_snowflake": ShapeSpec("polygon", _gen_koch_snowflake, aa=4),
+    "gereh":         ShapeSpec("polygon", _gen_gereh, aa=4),
+    "rosette":       ShapeSpec("polygon", _gen_rosette, aa=4),
     "kites":         ShapeSpec("polygon", _gen_kites, aa=1),
     "spectre":       ShapeSpec("polygon", _gen_spectre, aa=4),
     "sunflower_grande":         ShapeSpec("polygon", _gen_sunflower_grande, aa=4),
