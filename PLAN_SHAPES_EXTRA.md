@@ -7,11 +7,11 @@
 
 Punkt wyjścia (weryfikacja 2026-07-16, rejestr vs PNG): 39 kształtów w silniku, 57 schematów ⇒ **18 bez implementacji, 0 sierot**. Po usunięciu `kepler_ty` (duplikat) pula = **17**.
 
-**ZOSTAJE 11** (rejestr=45 po E1+E2+E3):
+**ZOSTAJE 8** (rejestr=51 po E1-E4 + rodzinie puzzle):
 
 ```
-dragon  gereh  koch_island  koch_snowflake  nautilus  rosette
-rosette_fractal  scales  sierpinski  sierpinski_carpet  sierpinski_d
+gereh  nautilus  rosette  rosette_fractal  scales
+sierpinski  sierpinski_carpet  sierpinski_d
 ```
 
 Wdrożone: `penrose_p2` (E1, `b3e725c`) · `bloom`, `pebbles` (E2, `3990cfa`) · `stagger_tri`, `braid`, `moire` (E3). Cel końcowy puli: **rejestr 56**.
@@ -64,7 +64,7 @@ Pula powstała jako **schematy**, gdzie różnicę niósł KOLOR. Pod zdjęciami
 | ~~**E1**~~ | ~~`penrose_p2`~~ | **ZAMKNIĘTY** `b3e725c` (rejestr=40) | — |
 | ~~**E2**~~ | ~~`bloom`, `pebbles`~~ | **ZAMKNIĘTY** `3990cfa` (rejestr=42) | — |
 | ~~**E3**~~ | ~~`stagger_tri`, `braid`, `moire`~~ | **ZAMKNIĘTY** (rejestr=45) | — |
-| **E4** | `dragon`, `koch_island`, `koch_snowflake` | rep-tile / Koch (geometria gotowa w gen_extra) | średnie |
+| ~~**E4**~~ | ~~`dragon`, `koch_island`, `koch_snowflake`~~ | **ZAMKNIĘTY** (rejestr=51, z rodziną puzzle) | — |
 | **E5** | `gereh`, `rosette` | islamskie partycje gwiaździste — wzorzec `girih` | średnie |
 | **E6** | `scales`, `nautilus`, `rosette_fractal` | łuki + radialne (`_arc_pitch`, „dobry środek") | średnie |
 | **E7** | `sierpinski`, `sierpinski_d`, `sierpinski_carpet` | rodzina sierpińskiego — wszystkie 3 warianty (decyzja usera 2026-07-16) | średnie |
@@ -92,10 +92,10 @@ Kolejność E1→E3 najpierw celowo: same reużywają istniejącą maszynerię, 
 - ✓ `moire` **WDROŻONY 2026-07-18** (rejestr=45, `_gen_moire`, przeniesienie 1:1). Siatka quadów o wierzchołkach przesuniętych polem interferencji dwóch krat; sąsiednie quady dzielą PRZESUNIĘTE wierzchołki ⇒ partycja bez dziur, ale każda komórka faluje kształtem/rozmiarem. Amplituda `A=0,42 < 0,5` (jednostki siatki) gwarantuje brak inwersji komórek. **Częstotliwość w jednostkach SIATKI, nie px** ⇒ dudnienie obejmuje stałą liczbę kafli w każdej rozdzielczości (lekcja girih/truchet: „ten sam wzór, tylko więcej"). Skala `s = base_s` (dudnienie biasuje średnie pole ~3% w górę — warp tylko I-rzędu area-preserving; wciąż „~base_s²"). **⚠ Ostrzeżenie „moire ≡ square" ROZSTRZYGNIĘTE POMIAREM na prawdziwym renderze:** NIE degeneruje się — CV pola komórek ≈ 0,27, tylko ~28% krawędzi osiowych (square = 0 i 100%), max/min pola = 2,85. Test `test_moire_does_not_degenerate_to_square` mierzy oba (na geometrii, nie schemacie — konwencja po `kepler_ty`). Goldeny ×2 cross-process, pokrycie ×5, schemat z silnika. +9 testów (452→461).
 - ✓ `braid` **WDROŻONY 2026-07-18** (rejestr=44, `_gen_braid`, przeniesienie 1:1). Basketweave: cegiełki 2:1 w naprzemiennych parach poziomych/pionowych na szachownicy bloków 2×2 — płaski przeplot bez nad/pod (over-under = nakładanie, złamałoby partycję). Skala `u = base_s/√2` (pole cegiełki = 2·u² = base_s²). **Bramka odrębności zbudowana na `_max_overlap` (izometryczna), NIE na surowym `a != b`** — bo to klasa „różnica w UŁOŻENIU, nie komórce" (jak `stagger_tri`): (a) `test_braid_is_not_a_running_bond_under_any_translation` — wozówkowy jednoorientacyjny z tej samej cegiełki nie odtwarza `braid` (<0,99; jego pionowe cegiełki to orientacja, której `brick_wall` nie ma); (b) **zęby** `test_braid_parity_flip_is_a_pure_translation_duplicate` — odwrócenie parzystości `(I+J)` (kuszący „restagger") to `braid` przesunięty o jeden blok ⇒ surowo różny, ale bramka MUSI dać pełne dopasowanie (1,0). Goldeny ×2 cross-process (PYTHONHASHSEED=1), pokrycie ×5 kadrów (holes==0), schemat zregenerowany z silnika (`gen_e3_schemes.py`). +10 testów (442→452).
 
-### E4 — rep-tile / Koch
-- `dragon` = twindragon rep-tile order 8 (2^n kwadratów w bazie 1+i; brzeg przez kasowanie krawędzi + najostrzejszy skręt w lewo na pinchach; siatka `(1+i)^n·Z[i]`) — kafle w kształcie smoka, NIE wstęgi.
-- `koch_island` = Minkowski reptile; **period = 4^depth, NIE bbox** (pułapka zapisana 2026-07-03).
-- `koch_snowflake` = teselacja 2-rozmiarowa (duże płatki na siatce trójkątnej o kroku 2R stykają się w 6 punktach promienia R; 2 małe w skali 1/√3, obrót 30°, w dziurach; bilans pól DOKŁADNY). Sam płatek NIE kafelkuje — dlatego wariant 2-rozmiarowy.
+### E4 — rep-tile / Koch — ZAMKNIĘTY 2026-07-19 (rejestr=51)
+- ✓ `dragon` **WDROŻONY** (`_gen_dragon` + `_twindragon_boundary`): twindragon order 8 (256 kwadratów w bazie 1+i; brzeg przez kasowanie krawędzi + najostrzejszy skręt w lewo na pinchach; 246 wierzchołków). `(1+i)^8 = 16` ⇒ krata przesunięć to ZWYKŁA kratka 16 jednostek; `u = base_s/16` ⇒ pole DOKŁADNIE base_s². Krawędzie osiowe + wspólne coasty bit-identyczne (int·float) ⇒ klasyczny raster 1:1 holes==0 jest tu poprawnym instrumentem. Determinizm: tylko hashe int/int-tuple (nieslone).
+- ✓ `koch_island` **WDROŻONY** (`_gen_koch_island`): Minkowski depth 2, żółw na CZYSTYCH INTACH (tabela kierunków, zero pyłu `exp(iπ/2)`); **period = 4^depth = 16, NIE bbox** (pułapka 2026-07-03; test `test_koch_island_period_is_lattice_not_bbox` — sąsiad = translacja o okres). Generator area-preserving ⇒ pole DOKŁADNIE base_s². Punkt domykający pętlę zrzucony (pułapka duplikatów kolejnych wierzchołków ze sprintu P).
+- ✓ `koch_snowflake` **WDROŻONY** (`_gen_koch_snowflake`): teselacja 2-rozmiarowa (duże płatki krok 2Rb; 2 małe 1/√3, obrót 30°, w dziurach; bilans pól DOKŁADNY 1:3, `Rb = 0,6937·base_s` ⇒ duży ≈ base_s²). **Głębokość STAŁA = 4** — skończona aproksymacja wspólnej granicy z RÓŻNYCH baz ⇒ szwy nie parują się dokładnie: NIE stosować formalnego testu partycji ani rastra 1:1; bramka = pokrycie FLOAT na maskach silnika (zmierzone min 0,686 / 0 px <0,45 / 0 px >1,5 — lepiej niż voderberg 0,502). Depth 5 odrzucony: ~1,2 GB poligonów @16K (budżet A1).
 
 ### E5 — islamskie gwiazdy
 - `gereh` = same czworokąty: gwiazda-8 rozbita na 8 rombów-latawców centralnych (`r_in=0.60·apotema`) + 8 latawców zewn. + kwadraty. NIE gwiazda-na-wierzchu (to była nakładka).

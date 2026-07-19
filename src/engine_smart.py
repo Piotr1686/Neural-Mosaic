@@ -1176,6 +1176,201 @@ def _gen_puzzle_hex(engine, target_w, target_h, base_s):
     yield from _puzzle_cells(polys, lmin=0.5 * rr)
 
 
+def _twindragon_boundary(order):
+    """Boundary polygon of the order-n twindragon: the 2^n unit squares at
+    Gaussian integers sum(d_k (1+i)^k), d_k in {0,1}. Interior edges cancel
+    in opposite pairs; the survivors are chained into one loop (at pinch
+    vertices the sharpest LEFT turn keeps the interior consistently on the
+    left). Deterministic across processes: the sets/dicts only ever hash
+    ints and int tuples, whose hashes are not salted by PYTHONHASHSEED."""
+    b = 1 + 1j
+    cells = {0j}
+    for k in range(order):
+        step = b ** k
+        cells |= {z + step for z in cells}
+
+    edges = set()
+    for z in cells:
+        x, y = int(round(z.real)), int(round(z.imag))
+        corner = [(x, y), (x + 1, y), (x + 1, y + 1), (x, y + 1)]
+        for i in range(4):
+            e = (corner[i], corner[(i + 1) % 4])
+            back = (e[1], e[0])
+            if back in edges:
+                edges.remove(back)
+            else:
+                edges.add(e)
+
+    nxt = {}
+    for a, bb in edges:
+        nxt.setdefault(a, []).append(bb)
+    start = min(nxt)
+    loop = [start]
+    cur = start
+    prev_dir = (0, -1)
+    while True:
+        cands = nxt[cur]
+        if len(cands) == 1:
+            chosen = cands[0]
+        else:
+            def turn(nb):
+                d = (nb[0] - cur[0], nb[1] - cur[1])
+                a0 = math.atan2(prev_dir[1], prev_dir[0])
+                a1 = math.atan2(d[1], d[0])
+                t = (a1 - a0) % (2 * math.pi)
+                return t if t > 1e-9 else 2 * math.pi
+            chosen = min(cands, key=turn)      # sharpest left turn first
+        cands.remove(chosen)
+        prev_dir = (chosen[0] - cur[0], chosen[1] - cur[1])
+        if chosen == start:
+            break
+        loop.append(chosen)
+        cur = chosen
+    return loop
+
+
+def _gen_dragon(engine, target_w, target_h, base_s):
+    """Twindragon rep-tile: congruent dragon-shaped tiles (order 8, 256 unit
+    squares each) fill the plane exactly — every cell is one fractal 'dragon'
+    with the classic jagged coastline. (1+i)^8 = 16, so the tile lattice is
+    the plain square lattice with step 16 units; unit u = base_s/16 makes the
+    tile area 256*u^2 = base_s^2 exactly. Boundary edges are AXIS-ALIGNED
+    unit segments and adjacent tiles index the same integer lattice, so
+    shared coastline floats are bit-identical (int*float) — the 1:1 binary
+    coverage raster is a valid instrument here, unlike for the curved puzzle
+    seams. The loop is computed once per call and translated."""
+    loop = _twindragon_boundary(8)
+    u = base_s / 16.0
+    pts = [(x * u, y * u) for x, y in loop]
+    xs = [p[0] for p in pts]
+    ys = [p[1] for p in pts]
+    bx0, bx1, by0, by1 = min(xs), max(xs), min(ys), max(ys)
+    step = 16.0 * u
+    a0 = int(math.floor((0 - bx1) / step))
+    a1 = int(math.ceil((target_w - bx0) / step))
+    b0 = int(math.floor((0 - by1) / step))
+    b1 = int(math.ceil((target_h - by0) / step))
+    for a in range(a0, a1 + 1):
+        for b in range(b0, b1 + 1):
+            ox, oy = a * step, b * step
+            if (bx0 + ox > target_w or bx1 + ox < 0
+                    or by0 + oy > target_h or by1 + oy < 0):
+                continue
+            yield [(px + ox, py + oy) for px, py in pts]
+
+
+def _gen_koch_island(engine, target_w, target_h, base_s):
+    """Quadratic Koch island (Minkowski reptile): the depth-2 teragon of the
+    L-system F -> F+F-F-FF+F+F-F on a unit square tiles the plane by
+    translation. The turtle walks INTEGER steps (direction table, no
+    cmath.exp float dust), so every coordinate is exact and shared coastline
+    floats of adjacent tiles are bit-identical, like dragon's.
+
+    The tile lattice period is 4**depth = 16 units — the generator nets 4
+    units of advance per input segment — NOT the bounding box: the coastline
+    overshoots the underlying square, and tiling by the bbox leaves diagonal
+    gaps (trap paid 2026-07-03). The generator is area-preserving (it adds
+    and removes congruent bumps), so the tile keeps the underlying square's
+    area 16x16 = 256 units^2 and u = base_s/16 makes it base_s^2 exactly."""
+    depth = 2
+    rule = {"F": "F+F-F-FF+F+F-F"}
+    s = "F+F+F+F"
+    for _ in range(depth):
+        s = "".join(rule.get(ch, ch) for ch in s)
+    dirs = [(1, 0), (0, 1), (-1, 0), (0, -1)]
+    head = 0
+    x = y = 0
+    ipts = [(0, 0)]
+    for ch in s:
+        if ch == "F":
+            x += dirs[head][0]
+            y += dirs[head][1]
+            ipts.append((x, y))
+        elif ch == "+":
+            head = (head + 1) % 4
+        elif ch == "-":
+            head = (head - 1) % 4
+    ipts.pop()                     # closing point == start: drop the
+    # consecutive duplicate (the Pillow scanline-parity trap from sprint P)
+    u = base_s / 16.0
+    pts = [(px * u, py * u) for px, py in ipts]
+    xs = [p[0] for p in pts]
+    ys = [p[1] for p in pts]
+    bx0, bx1, by0, by1 = min(xs), max(xs), min(ys), max(ys)
+    step = 16.0 * u
+    a0 = int(math.floor((0 - bx1) / step))
+    a1 = int(math.ceil((target_w - bx0) / step))
+    b0 = int(math.floor((0 - by1) / step))
+    b1 = int(math.ceil((target_h - by0) / step))
+    for a in range(a0, a1 + 1):
+        for b in range(b0, b1 + 1):
+            ox, oy = a * step, b * step
+            if (bx0 + ox > target_w or bx1 + ox < 0
+                    or by0 + oy > target_h or by1 + oy < 0):
+                continue
+            yield [(px + ox, py + oy) for px, py in pts]
+
+
+def _koch_edge(a, b, d):
+    """Koch curve points from a to b (complex), depth d; excludes b."""
+    if d == 0:
+        return [a]
+    v = b - a
+    p1 = a + v / 3
+    p2 = a + 2 * v / 3
+    peak = p1 + (p2 - p1) * cmath.exp(-1j * math.pi / 3)
+    return (_koch_edge(a, p1, d - 1) + _koch_edge(p1, peak, d - 1)
+            + _koch_edge(peak, p2, d - 1) + _koch_edge(p2, b, d - 1))
+
+
+def _koch_snowflake_pts(centre, r, d, phase=0.0):
+    v = [centre + r * cmath.exp(1j * (phase + 2 * math.pi * k / 3))
+         for k in range(3)]
+    pts = []
+    for k in range(3):
+        pts += _koch_edge(v[k], v[(k + 1) % 3], d)
+    return [(p.real, p.imag) for p in pts]
+
+
+def _gen_koch_snowflake(engine, target_w, target_h, base_s):
+    """Two-size Koch snowflake tessellation: big flakes on a triangular
+    lattice (spacing 2*Rb, touching at their six radius-Rb points) and two
+    small flakes (scale 1/sqrt(3), rotated 30 deg) in the lattice holes. The
+    area balance is exact — cell 2*sqrt(3)*Rb^2 = big (1.2*sqrt(3)*Rb^2) +
+    2 x small (big/3) — so the LIMIT fractals join edge-to-edge with no
+    background; a single flake does not tile, which is why the two-size
+    variant exists. Dominant tile = the big flake, area = base_s^2 gives
+    Rb = base_s/sqrt(1.2*sqrt(3)) ~ 0.6937*base_s.
+
+    Finite depth is a polygonal approximation of the limit boundary, and the
+    big and small flakes approximate their SHARED boundary from different
+    bases, so seams do not pair exactly (unlike the puzzle family). Depth is
+    FIXED at 4: the residual mismatch is ~0.433*L/3^4 ~ 0.0064*base_s
+    (0.6 px at base_s=100) — sub-pixel seam shading in the aa=4 masks, the
+    voderberg dust class, gated by the float-coverage test. Depth 5 would
+    cut it 3x but triples vertices (~3k/flake, ~1.2 GB of polygons at 16K)
+    — rejected on the A1 peak-RAM budget."""
+    Rb = base_s / math.sqrt(1.2 * math.sqrt(3.0))
+    Rs = Rb / math.sqrt(3.0)
+    depth = 4
+    spacing = 2.0 * Rb
+    t1 = complex(spacing, 0)
+    t2 = complex(spacing / 2, spacing * math.sqrt(3) / 2)
+    hole = (t1 + t2) / 3
+    reach = 1.35 * Rb              # small flakes sit at most this far out
+    n1 = int(target_w / spacing) + 2
+    n0 = -int(target_h / (spacing * math.sqrt(3) / 2)) - 2
+    for m in range(n0 - 2, n1 + 2):
+        for n in range(-2, int(target_h / (spacing * math.sqrt(3) / 2)) + 2):
+            c = m * t1 + n * t2
+            if (c.real < -reach - spacing or c.real > target_w + reach + spacing
+                    or c.imag < -reach or c.imag > target_h + reach):
+                continue
+            yield _koch_snowflake_pts(c, Rb, depth, phase=0.0)
+            yield _koch_snowflake_pts(c + hole, Rs, depth, phase=math.pi / 6)
+            yield _koch_snowflake_pts(c + 2 * hole, Rs, depth, phase=math.pi / 6)
+
+
 def _gen_cairo(engine, target_w, target_h, base_s):
     """Cairo pentagonal tiling: 4 congruent equilateral-parameter pentagons
     around every (i+j even) node of a unit square lattice. Pentagon area is
@@ -2599,6 +2794,9 @@ SHAPE_MODES = {
     "puzzle_classic": ShapeSpec("polygon", _gen_puzzle_classic, aa=4),
     "puzzle_ribbon":  ShapeSpec("polygon", _gen_puzzle_ribbon, aa=4),
     "puzzle_hex":     ShapeSpec("polygon", _gen_puzzle_hex, aa=4),
+    "dragon":        ShapeSpec("polygon", _gen_dragon, aa=4),
+    "koch_island":   ShapeSpec("polygon", _gen_koch_island, aa=4),
+    "koch_snowflake": ShapeSpec("polygon", _gen_koch_snowflake, aa=4),
     "kites":         ShapeSpec("polygon", _gen_kites, aa=1),
     "spectre":       ShapeSpec("polygon", _gen_spectre, aa=4),
     "sunflower_grande":         ShapeSpec("polygon", _gen_sunflower_grande, aa=4),

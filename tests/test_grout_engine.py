@@ -22,6 +22,8 @@ from src.engine_smart import (SHAPE_MODES, SmartEngine, _poincare_cells,
                               _gen_phyllotaxis, _gen_stagger_tri, _gen_braid,
                               _gen_moire, _gen_puzzle_classic,
                               _gen_puzzle_ribbon, _gen_puzzle_hex,
+                              _gen_dragon, _gen_koch_island,
+                              _gen_koch_snowflake, _twindragon_boundary,
                               _GOLDEN_ANGLE, _LUCAS_ANGLE)
 from src.grout import classify_edges
 from tests.test_golden_shapes import _build_library, _make_target
@@ -737,6 +739,113 @@ def test_puzzle_mean_cell_area_is_base_s_squared(name, rel):
             s += x0 * y1 - x1 * y0
         areas.append(abs(s) / 2.0)
     assert sum(areas) / len(areas) == pytest.approx(base_s ** 2, rel=rel)
+
+
+# --- E4: rep-tile / Koch fractals (2026-07-19) ------------------------------
+# dragon and koch_island walk INTEGER lattices (axis-aligned unit edges,
+# bit-identical shared coastlines), so the classic 1:1 binary raster is a
+# valid coverage instrument for them — unlike the curved puzzle seams.
+# koch_snowflake's big and small flakes approximate their SHARED limit
+# boundary from different bases, so its seams do not pair exactly at finite
+# depth: it is gated on the engine-mask float-coverage instrument instead
+# (sprint P precedent; measured min 0.686 vs voderberg's shipped 0.502).
+
+@pytest.mark.parametrize("gen", [_gen_dragon, _gen_koch_island],
+                         ids=["dragon", "koch_island"])
+@pytest.mark.parametrize("w,h,base_s", [
+    (800, 600, 60),      # 4:3
+    (1200, 300, 50),     # wide band
+    (640, 640, 80),      # square
+    (500, 500, 40),      # dense
+    (384, 288, 100),     # the golden frame
+])
+def test_reptile_fractals_cover_the_frame(gen, w, h, base_s):
+    acc = np.zeros((h, w), dtype=np.uint16)
+    for poly in gen(None, w, h, base_s):
+        m = Image.new("L", (w, h), 0)
+        ImageDraw.Draw(m).polygon([tuple(p) for p in poly], fill=1)
+        acc += np.asarray(m, dtype=np.uint16)
+    holes = int((acc == 0).sum())
+    assert holes == 0, f"{holes} uncovered px at {w}x{h} base_s={base_s}"
+
+
+@pytest.mark.parametrize("gen", [_gen_dragon, _gen_koch_island],
+                         ids=["dragon", "koch_island"])
+def test_reptile_fractals_mean_cell_area_is_exactly_base_s_squared(gen):
+    # Both are area-preserving rep-tiles on a 16-unit lattice with
+    # u = base_s/16, and every generated tile is a full translate — the mean
+    # is base_s^2 EXACTLY, not approximately.
+    base_s = 60
+    areas = []
+    for poly in gen(None, 900, 900, base_s):
+        p = list(poly)
+        s = 0.0
+        for k in range(len(p)):
+            x0, y0 = p[k]
+            x1, y1 = p[(k + 1) % len(p)]
+            s += x0 * y1 - x1 * y0
+        areas.append(abs(s) / 2.0)
+    assert sum(areas) / len(areas) == pytest.approx(base_s ** 2, rel=1e-9)
+
+
+def test_dragon_boundary_is_a_fractal_coastline():
+    # 246 unit segments for order 8 — the jagged coastline IS the shape; a
+    # refactor that simplified it to the bounding square would pass area and
+    # coverage, so the vertex count is locked (with slack) here.
+    loop = _twindragon_boundary(8)
+    assert len(loop) > 200
+    assert len(set(loop)) == len(loop), "boundary revisits a vertex"
+
+
+def test_koch_island_period_is_lattice_not_bbox():
+    # The 2026-07-03 trap: the coastline overshoots the underlying square, so
+    # tiling by bbox leaves diagonal gaps. The generator must place tiles at
+    # the 16-unit lattice period: adjacent tiles' point sets, shifted by one
+    # period, must coincide exactly (translated copies).
+    base_s = 64                      # u = 4 px -> period 64 px
+    polys = [sorted(list(p)) for p in _gen_koch_island(None, 300, 200, base_s)]
+    first = polys[0]
+    shifted = sorted((x + 64.0, y) for x, y in first)
+    assert any(all(abs(a[0] - b[0]) < 1e-9 and abs(a[1] - b[1]) < 1e-9
+                   for a, b in zip(shifted, q)) for q in polys), (
+        "no tile equals its neighbour translated by one 16-unit period")
+
+
+def test_koch_snowflake_covers_via_engine_masks():
+    # Float coverage on the engine's own rasterisation path (sprint P
+    # instrument): a missing flake is a 0.0 region; finite-depth seam shading
+    # bottoms out at 0.686 (measured), comfortably above the 0.45 floor.
+    w, h, base_s, ss = 800, 600, 60, 4
+    acc = np.zeros((h, w), dtype=np.float64)
+    for poly in _gen_koch_snowflake(None, w, h, base_s):
+        m = Image.new("L", (w * ss, h * ss), 0)
+        ImageDraw.Draw(m).polygon([(x * ss, y * ss) for x, y in poly], fill=255)
+        acc += np.asarray(m.resize((w, h), Image.BOX), dtype=np.float64) / 255.0
+    below = int((acc < 0.45).sum())
+    over = int((acc > 1.5).sum())
+    assert below == 0, f"{below} px under 45% coverage — a flake is missing"
+    assert over == 0, f"{over} px over 150% coverage — flakes overlap"
+
+
+def test_koch_snowflake_two_sizes_in_exact_area_balance():
+    # 1 big + 2 small per lattice cell, small = big/3 (scale 1/sqrt(3)); the
+    # big flake is the pool's dominant tile at ~base_s^2 (depth-4 polygon
+    # sits ~1.5% inside the limit fractal).
+    base_s = 60
+    areas = []
+    for poly in _gen_koch_snowflake(None, 800, 600, base_s):
+        p = list(poly)
+        s = 0.0
+        for k in range(len(p)):
+            x0, y0 = p[k]
+            x1, y1 = p[(k + 1) % len(p)]
+            s += x0 * y1 - x1 * y0
+        areas.append(abs(s) / 2.0)
+    big = [a for a in areas if a > 2000]
+    small = [a for a in areas if a <= 2000]
+    assert len(small) == pytest.approx(2 * len(big), abs=len(big) * 0.35)
+    assert np.mean(big) == pytest.approx(base_s ** 2, rel=0.03)
+    assert np.mean(big) / np.mean(small) == pytest.approx(3.0, rel=0.01)
 
 
 def test_poincare_grout_via_dispatcher_is_hierarchical():

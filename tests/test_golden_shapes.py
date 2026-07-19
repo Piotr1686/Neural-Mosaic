@@ -190,6 +190,24 @@ GOLDEN = {
     ("puzzle_ribbon", True): "8886b6ad048bd342dbb4cc3dcc5a52bf3e2c8826624211d839a8c60ec6831097",
     ("puzzle_hex", False): "6e034c3376f2e98ccb80b1e07e166d91ea8e83287797a247cf36af14e0d52351",
     ("puzzle_hex", True): "d2c5dff49f91161218023e48d2d815fa962cb41c65c4b32253319fa9e7d9b97b",
+    # E4 (2026-07-19). dragon: order-8 twindragon rep-tile, boundary chained
+    # from edge-cancelled unit squares (sharpest-left at pinches); (1+i)^8=16
+    # so the tile lattice is the square lattice, u=base_s/16 -> area exactly
+    # base_s^2. Only int/int-tuple hashing (unsalted), verified across two
+    # interpreters, one with PYTHONHASHSEED=1.
+    ("dragon", False): "993c8e6089f946ca03f086d85b3bcb0bff938da7dc7d7c9d50a11c054b8b14d9",
+    ("dragon", True): "b122cf51161b96bd0c4f03de5772f1039e0fc2d506f42984389ea34762233336",
+    # koch_island: depth-2 Minkowski teragon walked on an INTEGER turtle
+    # (exact coords), period 4^2 = 16 units (NOT the bbox — the 2026-07-03
+    # trap), area-preserving generator -> tile area base_s^2 exactly.
+    # koch_snowflake: two-size tessellation (big flakes + 2x small 1/sqrt(3)
+    # rotated 30 deg in the lattice holes), depth FIXED at 4 — finite-depth
+    # seams are sub-pixel (min coverage 0.686 vs voderberg's shipped 0.502).
+    # Both verified across two interpreters, one with PYTHONHASHSEED=1.
+    ("koch_island", False): "5f665567a85a6e23325cb77d5c58431ffb1112499d54317c54a60c10ddbb3442",
+    ("koch_island", True): "81735781d8fe5db7dc2dad90f8372dd0ab08689040adce27b1b8999abab4317b",
+    ("koch_snowflake", False): "a1d9eea35b8b1002d407250d28b4f234abcf3cd424f9937009e9bc41eef56439",
+    ("koch_snowflake", True): "83ce7abf36893a3fa8b6a808d4fcb97f4f0a158de8c2d422d9ce448c6ae7e825",
 }
 
 
