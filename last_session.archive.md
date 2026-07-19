@@ -1,3 +1,67 @@
+## ═══ Sesja zarchiwizowana [2026-07-19 21:00] ═══
+
+# last_session.md
+
+**Sesja:** 2026-07-17 · 19:00-21:20
+**Status:** ✓ Zakończona poprawnie
+**Punkt odniesienia (git):** a90f33f @ main (zsynchronizowane z origin/main)
+
+---
+
+## ▸ NASTĘPNY KROK (zacznij tutaj)
+
+**Sprint E3, krok 2: wdrożyć `braid` jako `_gen_braid` w `src/engine_smart.py`** (geometria źródłowa: `gen_braid` w `src/tools/gen_extra_shape_schemes.py:783`).
+
+Konkretnie:
+1. `braid` = basketweave (naprzemienne pary prostokątów 2:1). Audyt oczyścił go jako odrębny od `brick_wall` i `weave` — PRZENIEŚĆ geometrię wprost, nie wymyślać.
+2. ⚠ **UWAGA Z TEJ SESJI:** `braid` różni się od `brick_wall` **UŁOŻENIEM, nie komórką** (oba to prostokąty) — to DOKŁADNIE klasa, w której naiwna bramka `a != b` zawodzi (patrz `stagger_tri`). Bramkę odrębności zbuduj na **`_max_overlap`** z `tests/test_grout_engine.py` (niewrażliwa na translację), NIE na wzorcu `test_bloom_geometry_differs_from_phyllotaxis`. Dodaj test kontrolny na znanym duplikacie, jeśli dotyczy.
+3. Wpis w `SHAPE_MODES` (aa=4, bez seeda — czysta konstrukcja). Skala wg konwencji puli: średnie pole kafla = `base_s²`.
+4. Domknięcie kształtu: goldeny ×2 border_mode w 2 procesach (jeden `PYTHONHASHSEED=1`) · test pokrycia rasteryzacją ≥4 kadry (holes==0) · regeneracja schematu Z SILNIKA (wzorzec: `src/tools/gen_e3_schemes.py`) · `pytest`.
+5. Potem `moire` (`:740`) domyka E3. ⚠ Dla `moire`: plan każe sprawdzić NA PRAWDZIWYM RENDERZE, czy nie degeneruje się do `square` (ostrzeżenie „≡ square" jest nieaktualne, ale zasada zostaje).
+
+Kontekst: `PLAN_SHAPES_EXTRA.md` kanoniczny, rejestr=43, zostaje **13 kształtów** (cel 56). E1/E2/`stagger_tri` zamknięte. `braid` i `moire` to ostatnie 2 kształty E3 — oba niskiego ryzyka (przeniesienie wprost), ale `braid` wymaga bramki izometrycznej z powodu klasy „różnica w ułożeniu".
+
+---
+
+## Co zrobiono w tej sesji
+
+- ✓ **`stagger_tri` WDROŻONY** (`16b8e7d`, E3, rejestr=43): przeniesienie 1:1 (wariant A, decyzja usera). **Werdykt audytu z poprzedniej sesji ODWRÓCONY pomiarem:** to `triangle` przesuwa fazę o pół podstawy co rząd (reguła flipu `(c+r)%2` JEST przesunięciem; potwierdza `_grout_cells_triangle`), a schemat trzymał fazę STAŁĄ ⇒ był odrębny od początku (pokrycie z `triangle` przy dowolnej translacji = 50%, nie 100%). Zalecony fix `s/2` odtworzyłby `triangle` w 100% = duplikat.
+- ✓ **META-LEKCJA bramki:** naiwne `a != b` przepuściłoby wariant `s/2` (translacja zmienia każdą współrzędną, 0/78 vs 78/78 po wyrównaniu). Wdrożona bramka izometryczna `_max_overlap` + test kontrolny łapiący znany duplikat. Drabinka: statystyki < współrzędne < izometria.
+- ✓ **Naprawiona wada dziur CAŁEJ rodziny Voronoi** (`a90f33f`): zgłoszone jako „voronoi 12,8%", pomiar pokazał wadę rodziny (do **41,6%** dla `sunflower_disc`). Fix dwuprzebiegowy w `_voronoi_cells`: odzysk komórek otoczki przez lustra względem pudełka obejmującego kadr. PUŁAPKA: wariant jednoprzebiegowy zaburza bity Qhulla → 22/22 goldenów pada; dwuprzebiegowy → 20/22 bit-w-bit. Goldeny `voronoi` ×2 zregenerowane świadomie (dowód: pixel-diff zmian tylko przy obrzeżu).
+- ✓ **442 testy** (z 409 na starcie E3, z 398 na starcie sesji): +11 stagger_tri, +33 rodzina Voronoi (pokrycie 11×3) − nakładka. Schematy regenerowane Z SILNIKA (`gen_e3_schemes.py` NOWY, `gen_e2`/`gen_e3` bit-identyczne po regeneracji).
+- ✓ **Oba commity wypchnięte na origin/main.** `PLAN_SHAPES_EXTRA.md` zaktualizowany (werdykt obalony, REGUŁA rozszerzona o drabinkę narzędzi).
+
+## Co zostało (backlog sesji)
+
+- ⟳ **E3 (2 kształty):** `braid` (NASTĘPNY KROK) + `moire`.
+- ⟳ **E4-E7 (11 kształtów):** `dragon`/`koch_island`/`koch_snowflake` · `gereh`/`rosette` · `scales`/`nautilus`/`rosette_fractal` · `sierpinski` ×3.
+- ⟳ **E8:** docs + montaż zbiorczy 56 + mozaiki testowe → selekcja finalna usera → galeria 16K.
+- ⟳ **Hero panorama:** lokalnie (`output/hero_pano_dzi/`, gitignored), NIE opublikowana — Wariant C odłożony (ryzyko publicznego artefaktu).
+- ⟳ README: panorama **4,0 GB @324 Mpx** jako liczba OSOBNA od 3,9 GB @16K; dokumentacja `--grout`/`--grout-level`.
+- ⟳ (przeniesione) PLAN_FRACTAL F1a; escher_lizard sylwetka.
+
+## Aktywne pliki
+
+- `PLAN_SHAPES_EXTRA.md` — kanoniczny plan + audyt konstrukcji + REGUŁA z drabinką narzędzi (czytać przed E3/E4).
+- `src/engine_smart.py` — `_gen_stagger_tri` (NOWY), `_voronoi_cells` (dwuprzebiegowy odzysk otoczki). E3: dodać `_gen_braid`/`_gen_moire`.
+- `src/tools/gen_extra_shape_schemes.py` — źródło geometrii (`gen_braid:783`, `gen_moire:740`).
+- `src/tools/gen_e3_schemes.py` — WZORZEC regeneracji schematu z silnika (E3).
+- `tests/test_grout_engine.py` — `_max_overlap` (bramka izometryczna), `test_voronoi_family_covers_coarse_frames` (`_VORONOI_FAMILY` — dopisać nowego członka rodziny), pokrycie + partycja.
+- `tests/test_golden_shapes.py` — goldeny (stagger_tri, voronoi zregenerowane ×2).
+
+## Otwarte pytania
+
+- **Publikacja hero panoramy** na GitHub Pages (Wariant C) — nietknięte, decyzja usera.
+- **`bloom` — różnica realna, ale subtelna:** kandydat do odrzucenia przy selekcji finalnej (E8).
+- **`braid` vs `brick_wall`:** oba prostokąty, różnica w ułożeniu — potwierdzić bramką izometryczną, że NIE duplikat (ryzyko realne, klasa `stagger_tri`).
+- **Preview vs render:** nd zależy od skali px → podgląd ma grubszą siatkę. Zaakceptowane milcząco. (Fix Voronoi zamyka najgorszy przypadek dziur w tym reżimie.)
+- Selekcja finalna kształtów przez usera — po wdrożeniu wszystkich.
+
+## Do MEMORY.md (przeniesiono)
+
+- **repo MEMORY.md:** wpis `[2026-07-17b]` (stagger_tri + obalenie werdyktu + meta-lekcja bramki izometrycznej + naprawa rodziny Voronoi + pułapka jednoprzebiegowych luster Qhulla); skorygowano wpis `[2026-07-17]` (wada voronoi → NAPRAWIONE).
+- **pamięć długoterminowa:** `project_stagger_tri_phase.md` (NOWY — werdykt odwrócony, bramka izometryczna) · `project_voronoi_hull_recovery.md` (NOWY — wada całej rodziny, dwuprzebiegowy odzysk, pułapka bitów Qhulla).
+
 ## ═══ Sesja zarchiwizowana [2026-07-17 21:20] ═══
 
 # last_session.md
@@ -479,62 +543,3 @@ Kontekst: to przedostatnia pozycja PLAN_SHAPES przed pulą extra (kolejność us
 
 ==============================================================================
 
-## ═══ Sesja zarchiwizowana [2026-07-13 12:30] ═══
-
-# last_session.md
-
-**Sesja:** 2026-07-11 · ~22:30-23:00 · (Opus 4.8) — sesja konsultacyjna, ZERO zmian w kodzie
-**Status:** ✓ Zakończona poprawnie
-**Punkt odniesienia (git):** 3c5bde5 @ main (zsynchronizowane z origin/main)
-
----
-
-## ▸ NASTĘPNY KROK (zacznij tutaj)
-
-**Wiring voderberg + escher_lizard + weave** — trzy ostatnie kształty z gotową geometrią w `src/tools/gen_fable_shape_schemes.py` (`gen_voderberg`:425, `gen_escher`:495, `gen_weave`:534; RNG tylko do kolorów paneli, geometria deterministyczna). Wzorzec identyczny jak Fable ×4 z 5e04b42:
-1. Port geometrii do `engine_smart.py` jako `_gen_<shape>(engine, w, h, base_s)` w image space (scheme renderer był y-down → bez flipu); skala: pole DOMINUJĄCEGO kafla ~ base_s².
-2. Wpis `ShapeSpec("polygon", _gen_<shape>, aa=4)` w `SHAPE_MODES` (dziś 32 wpisy).
-3. Rasteryzacja pokrycia (scratch `check_coverage.py` — wzorzec w archiwum czatu; cel 0% dziur, sub-px na łukach OK) + side-by-side z PNG schematu.
-4. Goldeny both-borders ×2 procesy (scratch `gen_goldens.py`) → hashe do `GOLDEN` w `tests/test_golden_shapes.py`.
-5. Montaż na `input/0013.jpg` (CLI render 2K) + pełny pytest.
-
-UWAGA voderberg: środek przeprojektowany werdyktem 2026-07-05 (pierścienie od r=0, 8 wygiętych klinów w biegunie, `arc_in=[]` gdy `rin==0`) — portować wersję z gen_fable (już poprawioną), nie wymyślać od nowa. escher_lizard: krawędzie `_wavy` to poliliniowe poligony — przechodzą przez `_polygon_sector` bez nowej maszynerii.
-
-Kontekst: to najtańsza z pozostałych pozycji PLAN_SHAPES (kod geometrii istnieje i jest wizualnie zwalidowany). Kolejność dalsza USTALONA w tej sesji: → **truchet ×2** (potaniał: bez `_CurvedMask`) → **girih** (fix `commit()` + sweep offline) → **poincare** (najdroższy: BFS odbić, model pasmowy) → pula extra 21-43. User chce WSZYSTKIE kształty przed galerią 16K i selekcją finalną.
-
----
-
-## Co zrobiono w tej sesji
-
-- ✓ **`/start`** — sanity-check: stan spójny, drzewo czyste, rejestr `SHAPE_MODES` = 32 potwierdzony empirycznie, `gen_voderberg`/`gen_escher`/`gen_weave` istnieją w gen_fable.
-- ✓ **Wypchnięty zaległy commit sesyjny** `3c5bde5` (`9a74ff2..3c5bde5`) — `main` == `origin/main`.
-- ✓ **ROZSTRZYGNIĘTE 2 z 3 otwartych pytań** (analiza kodu, nie spekulacja — decyzje w MEMORY.md wpis [2026-07-11b]):
-  - **truchet: `_CurvedMask` ODRZUCONY** — precedens `_sun_arc`/sunburst (`engine_smart.py:981`) dowodzi, że polygonizacja łuku z sub-px strzałką + `aa=4` w `_LazyMask` = to samo co prawdziwa krzywa. Niewypukłość OK (spectre), wspólna krawędź dokładna przy identycznym wywołaniu `_sun_arc` z obu stron. Truchet spada z „najdroższy" na „jeden z najtańszych".
-  - **girih: stały `_GIRIH_SEED` + sweep offline** (NIE `_shape_seed` per-wymiary — dałby dobry patch w preview 2K i dziurawy w 16K). Znaleziona PRAWDZIWA blokada: `commit()` w gen_fable:626-627 kopiuje CAŁY raster po każdym kaflu (setki GB memcpy przy 16K) → fix bbox-OR. Plus: `RAD` rosnący z kadrem (inwariant base_s²), inflacja hulla 1.10 → ~1.0.
-- ✓ **Standing „GUI niesprawdzone wizualnie"** — user uznał za OK, zdjęte z listy pytań.
-- ✓ MEMORY.md: wpis [2026-07-11b] w TODO + `_CurvedMask` w „Odrzucone podejścia".
-
-## Co zostało (backlog sesji)
-
-- ⟳ **PLAN_SHAPES — ostatnie kształty** (NASTĘPNY KROK = voderberg/escher_lizard/weave): potem truchet ×2, girih, poincare, pula extra 21-43. Po WSZYSTKICH → selekcja finalna usera.
-- ⟳ **Galeria 16K triangle+hexagon** — odłożona do wdrożenia wszystkich kształtów (decyzja 2026-07-10).
-- ⟳ **PLAN_FRACTAL wykonawczy** — F1a (trójfazowa pętla, golden bit-w-bit).
-- ⟳ (opcjonalny cleanup) migracja kites/spectre do generycznej gałęzi polygon.
-- ⟳ Stare pliki batch `_grout-sredni` w output/ nie łapią skip-if-exists po rename presetów (kosmetyka).
-
-## Aktywne pliki
-
-- Żadnych zmian w kodzie w tej sesji. Pliki CZYTANE (kontekst dla następnego kroku):
-  - `src/engine_smart.py` (`_sun_arc`:981, `_LazyMask`:74, `_polygon_sector`:1474, `_shape_seed`:614, `SHAPE_MODES`:1050, `_grout_cells`:1541)
-  - `src/tools/gen_fable_shape_schemes.py` (`_girih_attempt`:585 z blokadą `commit()`:625-627, `gen_girih`:729; `gen_voderberg`:425, `gen_escher`:495, `gen_weave`:534)
-- Zmienione: `MEMORY.md`, `last_session.md`, `last_session.archive.md` (pliki stanu).
-
-## Otwarte pytania
-
-- **Selekcja finalna kształtów przez usera** — po wdrożeniu wszystkich (jedyne pozostałe otwarte pytanie; girih i truchet ROZSTRZYGNIĘTE w tej sesji).
-- Girih: rewizja na wariant podstawieniowy (Lu-Steinhardt) TYLKO jeśli greedy po fixie `commit()` przekroczy kilka sekund przy 16K — zadanie badawcze, nie zaczynać od niego.
-
-## Do MEMORY.md (przeniesiono)
-
-- Repo MEMORY.md: wpis **[2026-07-11b]** w „Aktywne TODO" — rozstrzygnięcie girih (stały seed, blokada `commit()`, RAD z kadru, inflacja hulla) + truchet (`_CurvedMask` zbędny, precedens `_sun_arc`) + ustalona kolejność wdrożenia pozostałych kształtów.
-- Repo MEMORY.md: wpis **[2026-07-11]** w „Odrzucone podejścia" — `_CurvedMask` odrzucony, nie wracać.

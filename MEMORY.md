@@ -45,9 +45,26 @@
 - PREWENCJA (nowi userzy): `DOWNLOAD_SIZE=512` w config (odsklejone od TILE_SIZE=75 — to było źródło miękkich świeżych pobrań), optimizer 250→512 (env `OPTIMIZER_SHORT_SIDE`) + delete-corrupt tylko za flagą + guard na tiles_hires
 - DECYZJA: Sprint 5 (archiwa food/places/dogs/flowers) ZAMKNIĘTY — NIE robić (8 GB pobrań za +16% przy ~15% straconych = zły ROI); wyjątek on-demand: places-only (2.3 GB → ~10%); ESRGAN odroczony — wraca TYLKO jeśli deep-zoom DZI ujawni widoczną miękkość kafli nie-COCO
 
+[2026-07-19] **Grout: 10 stylów kreski + paleta 12 kolorów** (commit `8945009`; propozycje `86975a5`)
+- `src/grout.py`: `draw_grout(style=…, color=…)` — `solid` = klasyczna ścieżka BIT-IDENTYCZNA (test `test_solid_default_is_the_classic_pass`); 10 stylów (zigzag, squiggle, double, stitch, beads, rope, bevel, neon, kintsugi, brush) przez `_draw_grout_styled`: syntezatory per-segment do masek L per warstwa koloru (bevel światło/cień, neon halo+rdzeń, kintsugi złoto+blik, beads obwódka+wypełnienie), kompozycja w kolejności deklaracji; ta sama maszyneria ss=4+BOX+paste-with-self co solid
+- `GROUT_COLORS` (12, default black) + `resolve_color`/`color_names`/`style_names` (single source of truth dla GUI/CLI). CLI: `--grout-style`/`--grout-color` + sufiks batch tylko przy niedomyślnych; GUI: 2 menu, działają też w preview
+- Determinizm: faza/jitter z crc32 kwantowanych końcówek segmentu (zero RNG); amplitudy/okresy skalują się z szerokością poziomu (presety spójnie przeskalowują wzór); segmenty krótsze niż okres degradują do cienkiej kapsuły solid (gęste szwy łukowe zostają czystą linią)
+- Narzędzie propozycji stylów: `gen_grout_style_proposals.py` (NIE mylić z `gen_grout_proposals.py` 2026-07-05 = poziomy L1/L2/L3)
+
+[2026-07-19] **Rodzina puzzle (sprint P) + E4 + E5 — rejestr 43→53** (commity `be64bdc`, `174a5a3`, `667bcf7`; wcześniej E3 `def6513`/`3c10f0e`)
+- **Puzzle** (`puzzle_classic`/`puzzle_ribbon`/`puzzle_hex`, profil die-cut wg zdjęć referencyjnych usera — decyzja: jeden profil dla całej rodziny, NIE osobny kształt): tab = WSPÓLNA polilinia per krawędź (pierwsze-widziane końcówki kanoniczne, crc32 klucza → kierunek+jitter, zero RNG) ⇒ partycja dokładna z konstrukcji; tab oddaje sąsiadowi to co zabiera ⇒ średnie pole = base_s². Łuki: STAŁY krok kątowy 9° (strzałka ~0,003·R < 0,1 px w każdej realnej skali; pułapka truchet_hex dotyczyła stałego kroku CIĘCIWY). Bramka ribbon-vs-classic: CV odległości NAROŻNIKÓW (0 vs 0,046; narożniki nie centroidy — jitter tabów nie zamazuje; translacyjnie niezmienna)
+- **E4**: `dragon` (twindragon order 8, brzeg 246 wierzchołków przez kasowanie krawędzi + najostrzejszy skręt w lewo; `(1+i)^8=16` ⇒ krata zwykła 16 jednostek, pole DOKŁADNIE base_s²; determinizm: tylko hashe int/int-tuple), `koch_island` (Minkowski depth 2 na CZYSTYCH INTACH — tabela kierunków zamiast cmath.exp; period=4^depth NIE bbox), `koch_snowflake` (2-rozmiarowa, bilans pól DOKŁADNY 1:3, Rb=0,6937·base_s; głębokość STAŁA=4 — depth 5 = ~1,2 GB poligonów @16K, odrzucony budżetem A1)
+- **E5**: `gereh` (4.8.8 → 16 latawców/ośmiokąt + ROMBY w lukach; same czworokąty = odrębność od trunc_square; T-junctions ośmiokąt-kwadrat legalne), `rosette` (3.12.12 → 36 komórek/dwunastokąt + trójkąty międzywęzłowe kotwiczone ANALITYCZNIE jako centroidy trójkątów kraty — pułapka odfiltrowanego centrum niemożliwa z konstrukcji)
+- Wszystko: goldeny ×2 cross-process (PYTHONHASHSEED=1), schematy Z SILNIKA (`gen_puzzle_schemes.py`/`gen_e4_schemes.py`/`gen_e5_schemes.py`), GUI/CLI przez `shape_names()`. Testy 442→540. Cel całości = **59** (56 puli + 3 puzzle)
+
 ---
 
 ## Rozwiązane problemy
+
+[2026-07-19] **Parzystość scanline'a Pillow + drabinka instrumentów pokrycia** (sprinty P/E4/E5)
+- **Zduplikowane KOLEJNE wierzchołki** (złączenia łuk/ramię w profilu tabu) łamią parzystość scanline'a `ImageDraw.polygon`, gdy leżą na linii skanowania: fill gubi cały 1-2 px WIERSZ wielokąta (784 px pasów @800×600, także w maskach aa=4 renderu — to było źródło „prostej cięciwy" w pierwszym renderze propozycji die-cut). Fix: dedup `[1:]` przy sklejaniu segmentów profilu. ZAWSZE dedupować złączenia polilinii
+- **Raster binarny 1:1 to ZŁY instrument pokrycia dla KRZYWYCH szwów** (wielosegmentowe polilinie): zgłasza dziury przy dowodliwie dokładnej partycji. Drabinka instrumentów: (1) krawędzie proste → raster 1:1 holes==0; (2) krzywe szwy współdzielone → formalny test partycji (classify_edges, 0 niesparowanych wewnętrznych; dowodzi też pokrycia) + pokrycie FLOAT na ścieżce masek silnika (ss=4+BOX, próg 0,45; kalibracja: wdrożony voderberg = 0,502 min); (3) szwy nieparujące się z konstrukcji (koch_snowflake — aproksymacje wspólnej granicy z różnych baz) → tylko FLOAT + bilans pól. UWAGA: formalny test partycji NIE nadaje się dla kształtów z legalnymi T-junctions (gereh) — flagowałby je jako niesparowane
+- **Bug schematu `gereh` złapany bramką pokrycia**: propozycja rysowała lukę 4.8.8 jako kwadrat OSIOWY (`_reg_poly` faza π/4) — nakładki na rogach + trójkątne dziury (11k px), niewidoczne pod konturami PNG; prawdziwa luka to ROMB o wierzchołkach na osiach. Wizualna akceptacja schematu NIE dowodzi partycji („schemat ≠ silnik" po raz kolejny)
 
 [2026-04-18] **color_on_white dawał prześwietlone/neonowe kolory**
 - Fix 1: HLS clamping zamiast bezpośredniego RGB (colorsys.rgb_to_hls → clamp → hls_to_rgb)

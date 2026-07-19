@@ -1,61 +1,64 @@
 # last_session.md
 
-**Sesja:** 2026-07-17 · 19:00-21:20
+**Sesja:** 2026-07-19 · dzień-wieczór (~21:00)
 **Status:** ✓ Zakończona poprawnie
-**Punkt odniesienia (git):** a90f33f @ main (zsynchronizowane z origin/main)
+**Punkt odniesienia (git):** 667bcf7 @ main (zsynchronizowane z origin/main)
 
 ---
 
 ## ▸ NASTĘPNY KROK (zacznij tutaj)
 
-**Sprint E3, krok 2: wdrożyć `braid` jako `_gen_braid` w `src/engine_smart.py`** (geometria źródłowa: `gen_braid` w `src/tools/gen_extra_shape_schemes.py:783`).
+**Sprint E6, krok 1: wdrożyć `scales` jako `_gen_scales` w `src/engine_smart.py`** (geometria źródłowa: `gen_scales:847` w `src/tools/gen_extra_shape_schemes.py`).
 
 Konkretnie:
-1. `braid` = basketweave (naprzemienne pary prostokątów 2:1). Audyt oczyścił go jako odrębny od `brick_wall` i `weave` — PRZENIEŚĆ geometrię wprost, nie wymyślać.
-2. ⚠ **UWAGA Z TEJ SESJI:** `braid` różni się od `brick_wall` **UŁOŻENIEM, nie komórką** (oba to prostokąty) — to DOKŁADNIE klasa, w której naiwna bramka `a != b` zawodzi (patrz `stagger_tri`). Bramkę odrębności zbuduj na **`_max_overlap`** z `tests/test_grout_engine.py` (niewrażliwa na translację), NIE na wzorcu `test_bloom_geometry_differs_from_phyllotaxis`. Dodaj test kontrolny na znanym duplikacie, jeśli dotyczy.
-3. Wpis w `SHAPE_MODES` (aa=4, bez seeda — czysta konstrukcja). Skala wg konwencji puli: średnie pole kafla = `base_s²`.
-4. Domknięcie kształtu: goldeny ×2 border_mode w 2 procesach (jeden `PYTHONHASHSEED=1`) · test pokrycia rasteryzacją ≥4 kadry (holes==0) · regeneracja schematu Z SILNIKA (wzorzec: `src/tools/gen_e3_schemes.py`) · `pytest`.
-5. Potem `moire` (`:740`) domyka E3. ⚠ Dla `moire`: plan każe sprawdzić NA PRAWDZIWYM RENDERZE, czy nie degeneruje się do `square` (ostrzeżenie „≡ square" jest nieaktualne, ale zasada zostaje).
+1. `scales` = rybia łuska: okręgi promienia r na siatce szachownicowej (`dx=2r, dy=r`, offset r); komórka = kopuła półkolista + 2 wklęsłe łuki zbiegające w dolny wierzchołek; przecięcia okręgów DOKŁADNIE w `(0,−r)` i `(±r,0)`. PRZENIEŚĆ geometrię wprost.
+2. ⚠ **ŁUKI**: krok polygonizacji **MUSI** być `_arc_pitch(r, tol=0.35)` — NIE `seg = base_s/3` (ta pomyłka sfasetowała truchet_hex; promień łuski ~base_s, stały w px przy każdej rozdzielczości).
+3. ⚠ **Instrument pokrycia wg drabinki** (MEMORY [2026-07-19]): krzywe szwy — jeśli łuki współdzielone konstrukcyjnie (ta sama polilinia z obu stron, wzorzec `_sun_arc` / puzzle) → formalny test partycji + pokrycie FLOAT ss=4 (próg 0,45; kalibracja voderberg 0,502); raster binarny 1:1 SKŁAMIE.
+4. ⚠ Dedup KOLEJNYCH duplikatów wierzchołków na złączeniach łuków (parzystość scanline'a Pillow — pasy 1-2 px).
+5. Domknięcie: wpis w `SHAPE_MODES` (aa=4) · goldeny ×2 border_mode w 2 procesach (jeden `PYTHONHASHSEED=1`) · schemat Z SILNIKA (nowy `gen_e6_schemes.py`, wzorzec `gen_e5_schemes.py`) · pełny `pytest`.
+6. Potem `nautilus` (`gen_nautilus:688`; biegun POZA kadrem `(-1.55,-1.30)` — wzorzec „dobrego środka") i `rosette_fractal` (`:935`; sektory ×2 co `m=3` pierścienie, `g=2^(1/m)`; wspólne krawędzie próbkowane identycznie z obu stron) — domykają E6.
 
-Kontekst: `PLAN_SHAPES_EXTRA.md` kanoniczny, rejestr=43, zostaje **13 kształtów** (cel 56). E1/E2/`stagger_tri` zamknięte. `braid` i `moire` to ostatnie 2 kształty E3 — oba niskiego ryzyka (przeniesienie wprost), ale `braid` wymaga bramki izometrycznej z powodu klasy „różnica w ułożeniu".
+Kontekst: E1–E5 + rodzina puzzle ZAMKNIĘTE (rejestr=53, cel 59). Zostało 6 kształtów: E6 (`scales`/`nautilus`/`rosette_fractal`) + E7 (`sierpinski` ×3). User dał standing approval „rób pozostałe" — po E6 przejść do E7, potem E8 (docs + montaż + selekcja finalna usera).
 
 ---
 
 ## Co zrobiono w tej sesji
 
-- ✓ **`stagger_tri` WDROŻONY** (`16b8e7d`, E3, rejestr=43): przeniesienie 1:1 (wariant A, decyzja usera). **Werdykt audytu z poprzedniej sesji ODWRÓCONY pomiarem:** to `triangle` przesuwa fazę o pół podstawy co rząd (reguła flipu `(c+r)%2` JEST przesunięciem; potwierdza `_grout_cells_triangle`), a schemat trzymał fazę STAŁĄ ⇒ był odrębny od początku (pokrycie z `triangle` przy dowolnej translacji = 50%, nie 100%). Zalecony fix `s/2` odtworzyłby `triangle` w 100% = duplikat.
-- ✓ **META-LEKCJA bramki:** naiwne `a != b` przepuściłoby wariant `s/2` (translacja zmienia każdą współrzędną, 0/78 vs 78/78 po wyrównaniu). Wdrożona bramka izometryczna `_max_overlap` + test kontrolny łapiący znany duplikat. Drabinka: statystyki < współrzędne < izometria.
-- ✓ **Naprawiona wada dziur CAŁEJ rodziny Voronoi** (`a90f33f`): zgłoszone jako „voronoi 12,8%", pomiar pokazał wadę rodziny (do **41,6%** dla `sunflower_disc`). Fix dwuprzebiegowy w `_voronoi_cells`: odzysk komórek otoczki przez lustra względem pudełka obejmującego kadr. PUŁAPKA: wariant jednoprzebiegowy zaburza bity Qhulla → 22/22 goldenów pada; dwuprzebiegowy → 20/22 bit-w-bit. Goldeny `voronoi` ×2 zregenerowane świadomie (dowód: pixel-diff zmian tylko przy obrzeżu).
-- ✓ **442 testy** (z 409 na starcie E3, z 398 na starcie sesji): +11 stagger_tri, +33 rodzina Voronoi (pokrycie 11×3) − nakładka. Schematy regenerowane Z SILNIKA (`gen_e3_schemes.py` NOWY, `gen_e2`/`gen_e3` bit-identyczne po regeneracji).
-- ✓ **Oba commity wypchnięte na origin/main.** `PLAN_SHAPES_EXTRA.md` zaktualizowany (werdykt obalony, REGUŁA rozszerzona o drabinkę narzędzi).
+- ✓ **E3 domknięty**: `braid` (`def6513`, bramka izometryczna `_max_overlap` + zęby na flip parzystości) i `moire` (`3c10f0e`, ostrzeżenie „≡ square" obalone pomiarem: CV pola 0,27, 28% krawędzi osiowych). Rejestr=45.
+- ✓ **Propozycje na życzenie usera**: 5 puzzli + 10 stylów groutu (`86975a5`), potem profil die-cut wg zdjęć referencyjnych (`060b1e5`). Werdykt usera: grout — WSZYSTKIE 10 + kolor; puzzle — classic/ribbon/hex (organic/penrose odrzucone), die-cut jako profil rodziny.
+- ✓ **Grout: 10 stylów kreski + paleta 12 kolorów WDROŻONE** (`8945009`): `draw_grout(style=…, color=…)`, solid bit-identyczny, style per-segment do masek warstwowych, crc32 bez RNG, fallback krótkich segmentów; CLI `--grout-style`/`--grout-color` + GUI 2 menu (też preview).
+- ✓ **Sprint P: rodzina puzzle** (`be64bdc`, rejestr=48): 3 kształty na wspólnej maszynerii tabów (wspólna polilinia per krawędź, crc32); bramka ribbon-vs-classic CV narożników (0 vs 0,046).
+- ✓ **E4: fraktale** (`174a5a3`, rejestr=51): `dragon` (twindragon, pole DOKŁADNE), `koch_island` (żółw na intach, period=4^depth), `koch_snowflake` (2-rozmiarowa, depth STAŁE=4 — RAM-budżet).
+- ✓ **E5: islamskie gwiazdy** (`667bcf7`, rejestr=53): `gereh` (16 latawców/ośmiokąt + ROMBY; **bug schematu złapany bramką**: kwadrat osiowy zamiast rombu = 11k px dziur pod konturami PNG), `rosette` (36 komórek/dwunastokąt; dziury kotwiczone analitycznie — pułapka odfiltrowanego centrum niemożliwa).
+- ✓ **META-LEKCJE opłacone i zapisane** (MEMORY + auto-memory `project_pillow_raster_instrument`): (a) duplikaty kolejnych wierzchołków łamią parzystość scanline'a Pillow (pasy 1-2 px, też w aa=4); (b) drabinka instrumentów pokrycia: proste→raster 1:1 / krzywe współdzielone→partycja formalna+FLOAT / nieparujące→FLOAT; (c) formalna partycja NIE dla kształtów z legalnymi T-junctions.
+- ✓ **442→540 testów**; goldeny ×20 nowych (wszystkie cross-process, PYTHONHASHSEED=1); schematy z silnika (gen_puzzle/e4/e5_schemes.py); wszystko na origin/main.
 
 ## Co zostało (backlog sesji)
 
-- ⟳ **E3 (2 kształty):** `braid` (NASTĘPNY KROK) + `moire`.
-- ⟳ **E4-E7 (11 kształtów):** `dragon`/`koch_island`/`koch_snowflake` · `gereh`/`rosette` · `scales`/`nautilus`/`rosette_fractal` · `sierpinski` ×3.
-- ⟳ **E8:** docs + montaż zbiorczy 56 + mozaiki testowe → selekcja finalna usera → galeria 16K.
-- ⟳ **Hero panorama:** lokalnie (`output/hero_pano_dzi/`, gitignored), NIE opublikowana — Wariant C odłożony (ryzyko publicznego artefaktu).
-- ⟳ README: panorama **4,0 GB @324 Mpx** jako liczba OSOBNA od 3,9 GB @16K; dokumentacja `--grout`/`--grout-level`.
+- ⟳ **E6 (3 kształty):** `scales` (NASTĘPNY KROK) + `nautilus` + `rosette_fractal`.
+- ⟳ **E7 (3 kształty):** `sierpinski`, `sierpinski_d`, `sierpinski_carpet` (wszystkie 3 — decyzja usera 2026-07-16).
+- ⟳ **E8:** docs + montaż zbiorczy 59 + mozaiki testowe → selekcja finalna usera → galeria 16K.
+- ⟳ README: dokumentacja `--grout-style`/`--grout-color` (i zaległe `--grout`/`--grout-level`); panorama 4,0 GB @324 Mpx osobno od 3,9 GB @16K.
+- ⟳ Hero panorama: lokalna, NIE opublikowana (Wariant C odłożony).
 - ⟳ (przeniesione) PLAN_FRACTAL F1a; escher_lizard sylwetka.
 
 ## Aktywne pliki
 
-- `PLAN_SHAPES_EXTRA.md` — kanoniczny plan + audyt konstrukcji + REGUŁA z drabinką narzędzi (czytać przed E3/E4).
-- `src/engine_smart.py` — `_gen_stagger_tri` (NOWY), `_voronoi_cells` (dwuprzebiegowy odzysk otoczki). E3: dodać `_gen_braid`/`_gen_moire`.
-- `src/tools/gen_extra_shape_schemes.py` — źródło geometrii (`gen_braid:783`, `gen_moire:740`).
-- `src/tools/gen_e3_schemes.py` — WZORZEC regeneracji schematu z silnika (E3).
-- `tests/test_grout_engine.py` — `_max_overlap` (bramka izometryczna), `test_voronoi_family_covers_coarse_frames` (`_VORONOI_FAMILY` — dopisać nowego członka rodziny), pokrycie + partycja.
-- `tests/test_golden_shapes.py` — goldeny (stagger_tri, voronoi zregenerowane ×2).
+- `PLAN_SHAPES_EXTRA.md` — kanoniczny plan (E1–E5 ✓, sekcje E6/E7 z pułapkami — czytać przed E6).
+- `src/engine_smart.py` — generatory: `_gen_braid`/`_gen_moire`/`_puzzle_*`/`_gen_dragon`/`_gen_koch_*`/`_gen_gereh`/`_gen_rosette` (NOWE); następne: `_gen_scales`/`_gen_nautilus`/`_gen_rosette_fractal`.
+- `src/grout.py` — style + kolory (NOWE: `_STYLES`, `GROUT_COLORS`, `_draw_grout_styled`).
+- `src/tools/gen_extra_shape_schemes.py` — źródło geometrii E6/E7 (`gen_scales:847`, `gen_nautilus:688`, `gen_rosette_fractal:935`, `gen_sierpinski:84`…).
+- `tests/test_grout_engine.py` — sekcje puzzle/E4/E5 + style groutu; `tests/test_golden_shapes.py` — 20 nowych goldenów.
+- `assets/proposals/` — propozycje (historia); `assets/shape_schemes/` — schematy wdrożonych (z silnika).
 
 ## Otwarte pytania
 
-- **Publikacja hero panoramy** na GitHub Pages (Wariant C) — nietknięte, decyzja usera.
-- **`bloom` — różnica realna, ale subtelna:** kandydat do odrzucenia przy selekcji finalnej (E8).
-- **`braid` vs `brick_wall`:** oba prostokąty, różnica w ułożeniu — potwierdzić bramką izometryczną, że NIE duplikat (ryzyko realne, klasa `stagger_tri`).
-- **Preview vs render:** nd zależy od skali px → podgląd ma grubszą siatkę. Zaakceptowane milcząco. (Fix Voronoi zamyka najgorszy przypadek dziur w tym reżimie.)
-- Selekcja finalna kształtów przez usera — po wdrożeniu wszystkich.
+- **Selekcja finalna kształtów przez usera** — po wdrożeniu wszystkich (E8); kandydaci do odrzucenia: `bloom` (subtelny).
+- **Publikacja hero panoramy** (Wariant C) — decyzja usera.
+- **koch_snowflake depth=4**: szwy sub-pikselowe (min cov 0,686) — jeśli zoom DZI ujawni miękkość szwów, rozważyć depth 5 tylko dla małych kadrów.
+- **Grout styles na 16K**: style testowane na previews; pierwszy render 16K z kintsugi/neon warto obejrzeć (wydajność: capsule per segment — przy gęstych kształtach dużo segmentów).
 
 ## Do MEMORY.md (przeniesiono)
 
-- **repo MEMORY.md:** wpis `[2026-07-17b]` (stagger_tri + obalenie werdyktu + meta-lekcja bramki izometrycznej + naprawa rodziny Voronoi + pułapka jednoprzebiegowych luster Qhulla); skorygowano wpis `[2026-07-17]` (wada voronoi → NAPRAWIONE).
-- **pamięć długoterminowa:** `project_stagger_tri_phase.md` (NOWY — werdykt odwrócony, bramka izometryczna) · `project_voronoi_hull_recovery.md` (NOWY — wada całej rodziny, dwuprzebiegowy odzysk, pułapka bitów Qhulla).
+- **repo MEMORY.md:** [2026-07-19] Architektura: grout styles+kolory · rodzina puzzle+E4+E5 (rejestr 43→53, cel 59); Rozwiązane problemy: parzystość scanline'a Pillow + drabinka instrumentów pokrycia + bug schematu gereh.
+- **auto-memory:** `project_pillow_raster_instrument.md` (NOWY — drabinka instrumentów, dedup wierzchołków).
