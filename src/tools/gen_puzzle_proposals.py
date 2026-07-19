@@ -75,6 +75,51 @@ def _arc_cw(c, rad, a0, a1, step=math.radians(9)):
             for k in range(n + 1)]
 
 
+def _bez(p0, p1, p2, p3, n=12):
+    out = []
+    for k in range(n + 1):
+        t = k / n
+        s = 1 - t
+        out.append((s**3 * p0[0] + 3 * s * s * t * p1[0] + 3 * s * t * t * p2[0] + t**3 * p3[0],
+                    s**3 * p0[1] + 3 * s * s * t * p1[1] + 3 * s * t * t * p2[1] + t**3 * p3[1]))
+    return out
+
+
+def _unit_tab_diecut(u1, u2):
+    """Die-cut profile matched to the user's reference photos (2026-07-19):
+    big round head (~26% of the edge), narrow neck, S-curved shoulders that
+    dip slightly into the neighbour before flaring into the head - the
+    classic cardboard-puzzle silhouette. Head = one circular arc entered at
+    225 deg and left at -45 deg (clockwise over the top), so the undercut is
+    strong; shoulders are cubics whose end handles are aligned with the
+    circle tangents (smooth join, no visible kink)."""
+    cx = 0.5 + (u1 - 0.5) * 0.10
+    sc = 0.90 + 0.20 * u2
+    R, H = 0.13 * sc, 0.16 * sc
+    C = (cx, H)
+    thL, thR = math.radians(225), math.radians(-45)
+    PL = (C[0] + R * math.cos(thL), C[1] + R * math.sin(thL))
+    PR = (C[0] + R * math.cos(thR), C[1] + R * math.sin(thR))
+    # clockwise travel tangent at angle th is (sin th, -cos th)
+    tL = (math.sin(thL), -math.cos(thL))
+    tR = (math.sin(thR), -math.cos(thR))
+    # Shoulders leave the corners EXACTLY along the baseline and all their
+    # Bezier control points keep y >= 0 (convex-hull property: the curve can
+    # never cross the baseline). A first version pulled the shoulders into a
+    # negative dip like a real die-cut, but the dip started at the corner and
+    # neighbouring edge polylines crossed there: 295 hole px in the coverage
+    # raster (the pool gate demands 0). The flared neck + 270-degree head
+    # carry the reference look on their own.
+    shoulder_l = _bez((0.10, 0.0), (0.28, 0.0),
+                      (PL[0] - 0.05 * tL[0], PL[1] - 0.05 * tL[1]), PL)
+    shoulder_r = _bez(PR, (PR[0] + 0.05 * tR[0], PR[1] + 0.05 * tR[1]),
+                      (0.72, 0.0), (0.90, 0.0))
+    pts = [(0.0, 0.0)] + shoulder_l
+    pts += _arc_cw(C, R, thL, thR)
+    pts += shoulder_r + [(1.0, 0.0)]
+    return pts
+
+
 def _unit_tab(u1, u2):
     """Full edge polyline (0,0)..(1,0) with a jigsaw tab bumping to +y."""
     cx = 0.5 + (u1 - 0.5) * 0.10          # tab centre wanders a little
@@ -120,17 +165,17 @@ def _on_frame(a, b, size, eps=0.6):
     return False
 
 
-def _tab_edge(A, B, key):
+def _tab_edge(A, B, key, profile):
     sign, u1, u2 = _crc_units(key)
     L = math.hypot(B[0] - A[0], B[1] - A[1])
     ux, uy = (B[0] - A[0]) / L, (B[1] - A[1]) / L
     nx, ny = -uy, ux
     return [(A[0] + t * L * ux + sign * y * L * nx,
              A[1] + t * L * uy + sign * y * L * ny)
-            for t, y in _unit_tab(u1, u2)]
+            for t, y in profile(u1, u2)]
 
 
-def _assemble(polys, size, lmin, frame_rule=True):
+def _assemble(polys, size, lmin, frame_rule=True, profile=None):
     """Turn plain polygons into puzzle cells with per-edge shared tabs."""
     plines = {}
     for poly in polys:
@@ -145,7 +190,7 @@ def _assemble(polys, size, lmin, frame_rule=True):
             if L < lmin or (frame_rule and _on_frame(A, B, size)):
                 plines[k] = [A, B]
             else:
-                plines[k] = _tab_edge(A, B, k)
+                plines[k] = _tab_edge(A, B, k, profile or _unit_tab)
     cells = []
     for poly in polys:
         out = []
@@ -255,12 +300,16 @@ def _montage(panels, path, cols=2, cell=500, pad=14, label_h=30):
 
 
 PANELS = [
-    # (name, builder, lmin, frame_rule, hues)
-    ("puzzle_classic", _grid_polys, 50, True, (0.03, 0.10)),
-    ("puzzle_ribbon", _wavy_polys, 50, True, (0.55, 0.62)),
-    ("puzzle_hex", _hex_polys, 50, False, (0.30, 0.38)),
-    ("puzzle_organic", _organic_polys, 42, False, (0.08, 0.16)),
-    ("puzzle_penrose", _penrose_polys, 30, False, (0.75, 0.83)),
+    # (name, builder, lmin, frame_rule, hues, profile)
+    ("puzzle_classic", _grid_polys, 50, True, (0.03, 0.10), None),
+    ("puzzle_ribbon", _wavy_polys, 50, True, (0.55, 0.62), None),
+    ("puzzle_hex", _hex_polys, 50, False, (0.30, 0.38), None),
+    ("puzzle_organic", _organic_polys, 42, False, (0.08, 0.16), None),
+    ("puzzle_penrose", _penrose_polys, 30, False, (0.75, 0.83), None),
+    # 2026-07-19: die-cut profile matched to the user's reference photos;
+    # shown on the classic grid, but the profile drops into ribbon/hex too
+    # (the tab is a per-edge function - the lattice does not care).
+    ("puzzle_diecut", _grid_polys, 50, True, (0.98, 1.06), _unit_tab_diecut),
 ]
 
 
@@ -269,9 +318,9 @@ def main():
     out_dir = Path(__file__).resolve().parents[2] / "assets" / "proposals"
     out_dir.mkdir(parents=True, exist_ok=True)
     panels = []
-    for name, builder, lmin, frame_rule, (h0, h1) in PANELS:
+    for name, builder, lmin, frame_rule, (h0, h1), profile in PANELS:
         polys = [[tuple(p) for p in poly] for poly in builder()]
-        cells = _assemble(polys, SIZE, lmin, frame_rule)
+        cells = _assemble(polys, SIZE, lmin, frame_rule, profile)
         img = _draw_panel(cells, h0, h1)
         img.save(out_dir / f"{name}.png")
         panels.append((name, img))
