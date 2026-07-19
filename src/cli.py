@@ -28,6 +28,10 @@ _RESOLUTIONS = ["2K", "4K", "8K", "16K"]
 from .engine_smart import shape_names as _shape_names
 _SMART_SHAPES = _shape_names()
 _GROUT_PRESETS = ["thin", "medium", "thick"]   # mirrors src.grout.PRESETS
+from .grout import color_names as _grout_color_names
+from .grout import style_names as _grout_style_names
+_GROUT_STYLES = _grout_style_names()
+_GROUT_COLORS = _grout_color_names()
 _TYPO_MODES = ["black_on_white", "white_on_black"]
 _FONT_GROUPS = [
     "A_cjk", "B_ancient", "C_symbols",
@@ -104,6 +108,18 @@ def _add_smart_args(p: argparse.ArgumentParser) -> None:
              "super-group (kites: the 7-hexagon flower). Higher levels stay "
              "drawn, so 2 still emphasises the flower boundaries. Only the "
              "hierarchical shapes have levels 2-3; the rest ignore this.",
+    )
+    sg.add_argument(
+        "--grout-style", default="solid", choices=_GROUT_STYLES,
+        metavar="STYLE",
+        help="Stroke style for the grout lines (needs --grout). "
+             "Choices: " + ", ".join(_GROUT_STYLES) + "  (default: solid).",
+    )
+    sg.add_argument(
+        "--grout-color", default="black", choices=_GROUT_COLORS,
+        metavar="COLOR",
+        help="Base colour of the grout lines (needs --grout). "
+             "Choices: " + ", ".join(_GROUT_COLORS) + "  (default: black).",
     )
     sg.add_argument(
         "--blend", type=float, default=0.0, metavar="FLOAT",
@@ -335,6 +351,8 @@ def _render_smart(engine, input_path: Path, output_path: Path, args: argparse.Na
         tint_strength=args.tint,
         grout_preset=args.grout,
         grout_level=args.grout_level,
+        grout_style=args.grout_style,
+        grout_color=args.grout_color,
         save_used_tiles=args.save_used_tiles,
     )
 
@@ -365,7 +383,8 @@ def _run_render(args: argparse.Namespace, log: logging.Logger) -> None:
             "  Shape=%s  Scale=%.2f  Border=%s  Grout=%s  Blend=%.2f  Tint=%.2f"
             "  Mirror=%s  EdgeAware=%s",
             args.shape, args.scale, args.border,
-            f"{args.grout}/L{args.grout_level}" if args.grout else "off",
+            (f"{args.grout}/L{args.grout_level}"
+             f"/{args.grout_style}/{args.grout_color}") if args.grout else "off",
             args.blend, args.tint, args.mirror, args.edge_aware,
         )
         engine = _load_smart_engine(args, log)
@@ -394,10 +413,14 @@ def _batch_output_path(output_dir: Path, stem: str, args: argparse.Namespace) ->
         suffix = f"_{args.shape}"
         if getattr(args, "grout", None):
             suffix += f"_grout-{args.grout}"
-            # level in the name only when it is not the default, so existing
-            # batch outputs keep matching skip-if-exists
+            # level/style/colour in the name only when not the default, so
+            # existing batch outputs keep matching skip-if-exists
             if getattr(args, "grout_level", 1) != 1:
                 suffix += f"-L{args.grout_level}"
+            if getattr(args, "grout_style", "solid") != "solid":
+                suffix += f"-{args.grout_style}"
+            if getattr(args, "grout_color", "black") != "black":
+                suffix += f"-{args.grout_color}"
     else:
         suffix = f"_{args.mode}"
     return output_dir / f"{stem}_{args.engine}_{args.res}{suffix}{ext}"

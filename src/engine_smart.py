@@ -35,7 +35,8 @@ from skimage.measure import find_contours, approximate_polygon
 
 from .spectre_tiling import generate_spectre_tiling
 from .render_control import RenderCancelled
-from .grout import classify_edges, draw_grout, scale_widths, sub7
+from .grout import (classify_edges, draw_grout, resolve_color, scale_widths,
+                    sub7)
 
 # Hi-res tile overlay directory. When a file with the same basename as a
 # library tile exists here, the assembly loop pastes THIS copy instead of the
@@ -2700,13 +2701,16 @@ class SmartEngine:
         print(f"Used-tiles report: {json_path.name} "
               f"({len(report)} unique tiles, {payload['total_placements']} placements)")
 
-    def create_mosaic(self, target_path, output_path, resolution_key, shape_mode, tile_scale, border_mode=False, blend_strength=0.0, tint_strength=0.0, grout_preset=None, grout_level=1, save_used_tiles=False, progress_cb=None, cancel_event=None):
+    def create_mosaic(self, target_path, output_path, resolution_key, shape_mode, tile_scale, border_mode=False, blend_strength=0.0, tint_strength=0.0, grout_preset=None, grout_level=1, grout_style="solid", grout_color="black", save_used_tiles=False, progress_cb=None, cancel_event=None):
         """Public API — resolves resolution_key and delegates to _do_render.
 
         ``grout_preset`` (None | "thin"/"medium"/"thick") is an independent
         opt-in border pass: when set, hierarchical grout lines are drawn on the
         finished mosaic (see _do_render). Orthogonal to ``border_mode`` (the
-        tile-shrink gap), which is left untouched.
+        tile-shrink gap), which is left untouched. ``grout_style`` picks the
+        stroke style (grout.style_names(): "solid" + 10 decorative) and
+        ``grout_color`` the base colour (grout.color_names()); both only
+        matter when ``grout_preset`` is set.
 
         ``save_used_tiles`` (default False) writes ``<stem>_used_tiles.json``
         beside the mosaic — the input for the hi-res upgrade tool
@@ -2722,7 +2726,7 @@ class SmartEngine:
         img_w, img_h = target.size
         scale_res = target_long / max(img_w, img_h)
         target = target.resize((int(img_w * scale_res), int(img_h * scale_res)), Image.Resampling.LANCZOS)
-        result = self._do_render(target, shape_mode, tile_scale, border_mode, blend_strength, tint_strength, grout_preset=grout_preset, grout_level=grout_level, progress_cb=progress_cb, cancel_event=cancel_event)
+        result = self._do_render(target, shape_mode, tile_scale, border_mode, blend_strength, tint_strength, grout_preset=grout_preset, grout_level=grout_level, grout_style=grout_style, grout_color=grout_color, progress_cb=progress_cb, cancel_event=cancel_event)
         save_kwargs = {"quality": 95}
         if str(output_path).lower().endswith((".jpg", ".jpeg")):
             # 4:4:4 chroma (no subsampling): a mosaic is thousands of hard
@@ -2737,7 +2741,7 @@ class SmartEngine:
 
     def render_preview(self, target_path, short_edge=512, shape_mode="hexagon_romb",
                        tile_scale=1.0, border_mode=False, grout_preset=None,
-                       grout_level=1):
+                       grout_level=1, grout_style="solid", grout_color="black"):
         """Return a PIL Image preview at ~short_edge px short side — no file I/O."""
         if not self.paths:
             raise RuntimeError("Index not loaded.")
@@ -2747,7 +2751,7 @@ class SmartEngine:
         prev_w = max(1, int(img_w * scale))
         prev_h = max(1, int(img_h * scale))
         target = target.resize((prev_w, prev_h), Image.Resampling.LANCZOS)
-        return self._do_render(target, shape_mode, tile_scale, border_mode, 0.0, 0.0, grout_preset=grout_preset, grout_level=grout_level)
+        return self._do_render(target, shape_mode, tile_scale, border_mode, 0.0, 0.0, grout_preset=grout_preset, grout_level=grout_level, grout_style=grout_style, grout_color=grout_color)
 
     def _resolve_matching_modes(self):
         """Resolve edge_aware/allow_mirror, degrading on conflicts (warns on stdout).
@@ -3169,7 +3173,7 @@ class SmartEngine:
     _HIERARCHICAL_GROUT = ("square", "triangle", "hexagon", "kites", "poincare")
 
     def _apply_grout(self, mosaic_rgb, shape_mode, target_w, target_h, base_s,
-                     preset, min_level=1):
+                     preset, min_level=1, style="solid", color_name="black"):
         """Draw the grout overlay on the finished RGB mosaic.
 
         Hierarchical shapes (``_HIERARCHICAL_GROUT``) get graded widths from the
@@ -3199,11 +3203,15 @@ class SmartEngine:
             if min_level > 1:
                 print(f"Grout: '{shape_mode}' has no tile grouping — "
                       f"level {min_level} ignored, drawing every seam.")
-        print(f"Grout: drawing {kind} borders '{preset}' over {len(cells)} cells...")
+        deco = "" if (style, color_name) == ("solid", "black") else \
+            f", style={style}, color={color_name}"
+        print(f"Grout: drawing {kind} borders '{preset}'{deco} "
+              f"over {len(cells)} cells...")
         by_level = classify_edges(cells)
-        draw_grout(mosaic_rgb, by_level, level_w, color=(0, 0, 0))
+        draw_grout(mosaic_rgb, by_level, level_w,
+                   color=resolve_color(color_name), style=style)
 
-    def _do_render(self, target, shape_mode, tile_scale, border_mode=False, blend_strength=0.0, tint_strength=0.0, grout_preset=None, grout_level=1, progress_cb=None, cancel_event=None):
+    def _do_render(self, target, shape_mode, tile_scale, border_mode=False, blend_strength=0.0, tint_strength=0.0, grout_preset=None, grout_level=1, grout_style="solid", grout_color="black", progress_cb=None, cancel_event=None):
         """Core rendering kernel — accepts a pre-scaled PIL Image, returns PIL Image.
 
         ``progress_cb``, if given, is called ``progress_cb(done, total)`` after each
@@ -3723,7 +3731,8 @@ class SmartEngine:
         if grout_preset is not None:
             _check_cancel()
             self._apply_grout(mosaic_rgb, shape_mode, target_w, target_h, base_s,
-                              grout_preset, min_level=grout_level)
+                              grout_preset, min_level=grout_level,
+                              style=grout_style, color_name=grout_color)
         # Expose which library tiles were placed (indexed like self.paths) so
         # create_mosaic can dump a used-tiles report for the hi-res upgrade
         # tool (Sprint 3). Kept in memory only; render_preview never writes it

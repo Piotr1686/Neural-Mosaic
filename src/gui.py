@@ -52,6 +52,13 @@ _GROUT_LEVELS = (
     "Outline: super-groups",
 )
 
+# Stroke style + colour choices come from src.grout (single source of truth,
+# same rule as SHAPE_MODES -> shape_names for the shape dropdown).
+from src.grout import color_names as _grout_color_names
+from src.grout import style_names as _grout_style_names
+_GROUT_STYLES = _grout_style_names()
+_GROUT_COLORS = _grout_color_names()
+
 _THUMB_DIR = Path("data/.thumbs")
 _THUMB_CACHE_PX = 200    # resolution stored on disk
 _THUMB_DISPLAY_PX = 120  # size rendered in grid
@@ -443,6 +450,20 @@ class App(ctk.CTk):
         self.combo_grout_level.set(_GROUT_LEVELS[0])
         self.combo_grout_level.pack(pady=(0, 5))
 
+        # Stroke style + colour of the grout lines (user verdict 2026-07-19:
+        # all 10 decorative styles + basic palette). Only read when a
+        # "Grout: ..." preset is active; "solid"/"black" reproduce the
+        # classic pass byte-for-byte.
+        self.combo_grout_style = ctk.CTkOptionMenu(
+            frame, values=[f"Style: {s}" for s in _GROUT_STYLES])
+        self.combo_grout_style.set(f"Style: {_GROUT_STYLES[0]}")
+        self.combo_grout_style.pack(pady=(0, 5))
+
+        self.combo_grout_color = ctk.CTkOptionMenu(
+            frame, values=[f"Color: {c}" for c in _GROUT_COLORS])
+        self.combo_grout_color.set(f"Color: {_GROUT_COLORS[0]}")
+        self.combo_grout_color.pack(pady=(0, 5))
+
         # Opt-in used-tiles report: the JSON is only needed as input for the
         # hi-res upgrade loop (src.tools.upgrade_tiles), so routine renders
         # keep the output directory clean by default.
@@ -715,17 +736,20 @@ class App(ctk.CTk):
     def _border_settings(self):
         """Map the 'Tile Borders' menu to engine kwargs.
 
-        Returns ``(border_mode, grout_preset, grout_level)``: the uniform-gap
-        flag, the grout preset (None when no grout) and the smallest structure
-        the grout outlines. Gap and grout are mutually exclusive by construction.
+        Returns ``(border_mode, grout_preset, grout_level, grout_style,
+        grout_color)``: the uniform-gap flag, the grout preset (None when no
+        grout), the smallest structure the grout outlines, and the stroke
+        style/colour. Gap and grout are mutually exclusive by construction.
         """
         level = _GROUT_LEVELS.index(self.combo_grout_level.get()) + 1
+        style = self.combo_grout_style.get().removeprefix("Style: ")
+        color = self.combo_grout_color.get().removeprefix("Color: ")
         val = self.combo_borders.get()
         if val == "Gap (uniform)":
-            return True, None, level
+            return True, None, level, style, color
         if val.startswith("Grout: "):
-            return False, val.removeprefix("Grout: "), level
-        return False, None, level
+            return False, val.removeprefix("Grout: "), level, style, color
+        return False, None, level, style, color
 
     def _on_shape_selected(self, choice):
         """Show the shape's layout scheme in the preview pane and unlock rendering.
@@ -764,13 +788,16 @@ class App(ctk.CTk):
         # the current settings instead of the last full render's state.
         self.smart_engine.settings["allow_mirror"] = bool(self.check_mirror.get())
         self.smart_engine.settings["edge_aware"] = bool(self.check_edge_aware.get())
-        border_mode, grout_preset, grout_level = self._border_settings()
+        border_mode, grout_preset, grout_level, grout_style, grout_color = \
+            self._border_settings()
         params = {
             "shape_mode": self.combo_shape.get(),
             "tile_scale": float(self.seg_scale_p.get() or "1.0"),
             "border_mode": border_mode,
             "grout_preset": grout_preset,
             "grout_level": grout_level,
+            "grout_style": grout_style,
+            "grout_color": grout_color,
         }
         short_edge = self._ZOOM_SHORT_EDGE.get(self.seg_zoom_p.get(), 900)
         self.btn_preview_p.configure(state="disabled")
@@ -1101,7 +1128,8 @@ class App(ctk.CTk):
         res = self.seg_res_p.get()
         shape = self.combo_shape.get()
         scale = float(self.seg_scale_p.get() or "1.0")
-        border_mode, grout_preset, grout_level = self._border_settings()
+        border_mode, grout_preset, grout_level, grout_style, grout_color = \
+            self._border_settings()
         blend_strength = int((self.seg_blend.get() or "0%").replace("%", "")) / 100.0
         tint_strength = int((self.seg_tint.get() or "0%").replace("%", "")) / 100.0
         save_used_tiles = bool(self.check_used_tiles.get())
@@ -1131,6 +1159,8 @@ class App(ctk.CTk):
                     blend_strength=blend_strength, tint_strength=tint_strength,
                     grout_preset=grout_preset,
                     grout_level=grout_level,
+                    grout_style=grout_style,
+                    grout_color=grout_color,
                     save_used_tiles=save_used_tiles,
                     progress_cb=_progress, cancel_event=cancel_event,
                 )

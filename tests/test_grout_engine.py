@@ -848,3 +848,116 @@ def test_grout_is_noop_for_unsupported_shape():
     before = np.asarray(img).copy()
     e._apply_grout(img, "no_such_shape", 200, 150, 60, "medium")
     assert np.array_equal(before, np.asarray(img))
+
+
+# ---------------------------------------------------------------------------
+# decorative stroke styles + colour palette (2026-07-19)
+# ---------------------------------------------------------------------------
+from src.grout import (GROUT_COLORS, classify_edges as _classify,
+                       color_names, draw_grout as _draw, resolve_color,
+                       style_names)
+
+
+def _style_canvas():
+    """Small synthetic scene: 2x2 squares on a mid-gray canvas -- fast, no
+    render, exercises horizontal, vertical and frame seams."""
+    cells = []
+    for i in range(2):
+        for j in range(2):
+            x, y = i * 100, j * 100
+            cells.append(([(x, y), (x + 100, y), (x + 100, y + 100),
+                           (x, y + 100)], 0, 0))
+    img = Image.new("RGB", (200, 200), (120, 120, 120))
+    return img, _classify(cells)
+
+
+def test_style_names_start_with_solid_and_cover_the_verdict():
+    names = style_names()
+    assert names[0] == "solid"
+    assert set(names[1:]) == {"zigzag", "squiggle", "double", "stitch",
+                              "beads", "rope", "bevel", "neon", "kintsugi",
+                              "brush"}, "accepted style set drifted"
+
+
+def test_solid_default_is_the_classic_pass():
+    # style="solid" must be byte-identical to calling draw_grout without the
+    # style argument at all -- the classic path is the regression anchor.
+    img_a, by_level = _style_canvas()
+    img_b, _ = _style_canvas()
+    _draw(img_a, by_level, {1: 6})
+    _draw(img_b, by_level, {1: 6}, style="solid")
+    assert np.array_equal(np.asarray(img_a), np.asarray(img_b))
+
+
+@pytest.mark.parametrize("style", style_names()[1:])
+def test_each_style_differs_from_solid_and_is_deterministic(style):
+    img_solid, by_level = _style_canvas()
+    _draw(img_solid, by_level, {1: 6})
+    outs = []
+    for _ in range(2):
+        img, lvl = _style_canvas()
+        _draw(img, lvl, {1: 6}, style=style)
+        outs.append(np.asarray(img).copy())
+    assert not np.array_equal(outs[0], np.asarray(img_solid)), (
+        f"style {style!r} rendered identically to solid")
+    assert np.array_equal(outs[0], outs[1]), (
+        f"style {style!r} is not deterministic")
+    assert not np.array_equal(outs[0], np.full_like(outs[0], 120)), (
+        f"style {style!r} drew nothing")
+
+
+def test_short_segments_fall_back_to_solid_capsule_not_garbage():
+    # Densely polygonised curved seams hand the styles segments of a few px;
+    # the contract is a thin solid capsule, so the seam stays a clean line.
+    img = Image.new("RGB", (60, 60), (120, 120, 120))
+    pts = [(10 + i * 2.0, 30 + (i % 2)) for i in range(20)]
+    by_level = {1: list(zip(pts, pts[1:])), 2: [], 3: []}
+    _draw(img, by_level, {1: 6}, style="zigzag")
+    arr = np.asarray(img)
+    assert (arr.sum(axis=2) < 90).sum() > 20, "fallback drew no line at all"
+
+
+def test_grout_color_palette_resolves_and_rejects():
+    assert resolve_color("black") == (0, 0, 0)
+    assert resolve_color("gold") == GROUT_COLORS["gold"]
+    assert len(color_names()) == len(GROUT_COLORS)
+    with pytest.raises(ValueError):
+        resolve_color("chartreuse")
+
+
+def test_unknown_style_raises_value_error():
+    img, by_level = _style_canvas()
+    with pytest.raises(ValueError):
+        _draw(img, by_level, {1: 6}, style="glitter")
+
+
+def test_solid_gold_paints_the_palette_color():
+    img, by_level = _style_canvas()
+    _draw(img, by_level, {1: 6}, color=resolve_color("gold"), style="solid")
+    arr = np.asarray(img)
+    gold = np.array(GROUT_COLORS["gold"])
+    hits = (np.abs(arr.astype(int) - gold).sum(axis=2) < 12).sum()
+    assert hits > 500, "gold grout pixels missing"
+
+
+def test_engine_render_accepts_style_and_color(tmp_path):
+    # End-to-end through _apply_grout: a styled, coloured render differs from
+    # the solid/black one and from the baseline; determinism is covered at the
+    # draw_grout level above.
+    e = _small_engine(tmp_path)
+    tgt = _make_target()
+    p = tmp_path / "target.png"
+    tgt.save(p)
+    base = np.asarray(e.render_preview(str(p), short_edge=200,
+                                       shape_mode="square", tile_scale=1.0,
+                                       grout_preset="thick"))
+    styled = np.asarray(e.render_preview(str(p), short_edge=200,
+                                         shape_mode="square", tile_scale=1.0,
+                                         grout_preset="thick",
+                                         grout_style="kintsugi",
+                                         grout_color="gold"))
+    assert base.shape == styled.shape
+    assert not np.array_equal(base, styled)
+    gold = np.array(GROUT_COLORS["gold"])
+    hits = (np.abs(styled.astype(int) - gold).sum(axis=2) < 40).sum()
+    assert hits > 50, "gold kintsugi pixels missing in the render"
