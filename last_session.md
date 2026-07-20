@@ -1,64 +1,109 @@
 # last_session.md
 
-**Sesja:** 2026-07-19 · dzień-wieczór (~21:00)
+**Sesja:** 2026-07-20 · wieczór (~22:00-23:00)
 **Status:** ✓ Zakończona poprawnie
-**Punkt odniesienia (git):** 667bcf7 @ main (zsynchronizowane z origin/main)
+**Punkt odniesienia (git):** 280abf2 @ main
 
 ---
 
 ## ▸ NASTĘPNY KROK (zacznij tutaj)
 
-**Sprint E6, krok 1: wdrożyć `scales` jako `_gen_scales` w `src/engine_smart.py`** (geometria źródłowa: `gen_scales:847` w `src/tools/gen_extra_shape_schemes.py`).
+**E8 krok 1: montaż zbiorczy wszystkich 59 schematów** — nowe narzędzie
+`src/tools/gen_shape_montage.py`, siatka miniatur z `assets/shape_schemes/*.png`
+z podpisem nazwy pod każdym, zapis do `assets/shape_montage.png`.
 
 Konkretnie:
-1. `scales` = rybia łuska: okręgi promienia r na siatce szachownicowej (`dx=2r, dy=r`, offset r); komórka = kopuła półkolista + 2 wklęsłe łuki zbiegające w dolny wierzchołek; przecięcia okręgów DOKŁADNIE w `(0,−r)` i `(±r,0)`. PRZENIEŚĆ geometrię wprost.
-2. ⚠ **ŁUKI**: krok polygonizacji **MUSI** być `_arc_pitch(r, tol=0.35)` — NIE `seg = base_s/3` (ta pomyłka sfasetowała truchet_hex; promień łuski ~base_s, stały w px przy każdej rozdzielczości).
-3. ⚠ **Instrument pokrycia wg drabinki** (MEMORY [2026-07-19]): krzywe szwy — jeśli łuki współdzielone konstrukcyjnie (ta sama polilinia z obu stron, wzorzec `_sun_arc` / puzzle) → formalny test partycji + pokrycie FLOAT ss=4 (próg 0,45; kalibracja voderberg 0,502); raster binarny 1:1 SKŁAMIE.
-4. ⚠ Dedup KOLEJNYCH duplikatów wierzchołków na złączeniach łuków (parzystość scanline'a Pillow — pasy 1-2 px).
-5. Domknięcie: wpis w `SHAPE_MODES` (aa=4) · goldeny ×2 border_mode w 2 procesach (jeden `PYTHONHASHSEED=1`) · schemat Z SILNIKA (nowy `gen_e6_schemes.py`, wzorzec `gen_e5_schemes.py`) · pełny `pytest`.
-6. Potem `nautilus` (`gen_nautilus:688`; biegun POZA kadrem `(-1.55,-1.30)` — wzorzec „dobrego środka") i `rosette_fractal` (`:935`; sektory ×2 co `m=3` pierścienie, `g=2^(1/m)`; wspólne krawędzie próbkowane identycznie z obu stron) — domykają E6.
+1. Źródło nazw = `shape_names()` z `src/engine_smart.py` (single source of truth,
+   NIE `ls` po katalogu — kolejność rejestru ma się zgadzać z GUI/CLI).
+2. Bramka: dla KAŻDEJ nazwy z `shape_names()` musi istnieć PNG w
+   `assets/shape_schemes/`. Jeśli któregoś brakuje — wypisz listę braków i
+   zregeneruj Z SILNIKA (wzorzec `gen_e6_schemes.py`/`gen_e7_schemes.py`),
+   nigdy nie podstawiaj starego PNG z `assets/proposals/`.
+3. ASCII-only w `print()` (terminal CP1250 — `feedback_windows_cli_ascii`).
+4. Montaż jest DLA USERA do selekcji finalnej — czytelne podpisy ważniejsze niż
+   gęstość; przy 59 kafelkach rozważ siatkę 8×8 lub podział na 2 plansze.
 
-Kontekst: E1–E5 + rodzina puzzle ZAMKNIĘTE (rejestr=53, cel 59). Zostało 6 kształtów: E6 (`scales`/`nautilus`/`rosette_fractal`) + E7 (`sierpinski` ×3). User dał standing approval „rób pozostałe" — po E6 przejść do E7, potem E8 (docs + montaż + selekcja finalna usera).
+Kontekst: rejestr osiągnął **59/59** (cel puli zamknięty). E8 to ostatni etap
+przed galerią 16K: montaż → seria mozaik testowych batch CLI → **selekcja
+finalna usera** → galeria. Montaż idzie pierwszy, bo bez niego user nie ma na
+czym wybierać.
 
 ---
 
 ## Co zrobiono w tej sesji
 
-- ✓ **E3 domknięty**: `braid` (`def6513`, bramka izometryczna `_max_overlap` + zęby na flip parzystości) i `moire` (`3c10f0e`, ostrzeżenie „≡ square" obalone pomiarem: CV pola 0,27, 28% krawędzi osiowych). Rejestr=45.
-- ✓ **Propozycje na życzenie usera**: 5 puzzli + 10 stylów groutu (`86975a5`), potem profil die-cut wg zdjęć referencyjnych (`060b1e5`). Werdykt usera: grout — WSZYSTKIE 10 + kolor; puzzle — classic/ribbon/hex (organic/penrose odrzucone), die-cut jako profil rodziny.
-- ✓ **Grout: 10 stylów kreski + paleta 12 kolorów WDROŻONE** (`8945009`): `draw_grout(style=…, color=…)`, solid bit-identyczny, style per-segment do masek warstwowych, crc32 bez RNG, fallback krótkich segmentów; CLI `--grout-style`/`--grout-color` + GUI 2 menu (też preview).
-- ✓ **Sprint P: rodzina puzzle** (`be64bdc`, rejestr=48): 3 kształty na wspólnej maszynerii tabów (wspólna polilinia per krawędź, crc32); bramka ribbon-vs-classic CV narożników (0 vs 0,046).
-- ✓ **E4: fraktale** (`174a5a3`, rejestr=51): `dragon` (twindragon, pole DOKŁADNE), `koch_island` (żółw na intach, period=4^depth), `koch_snowflake` (2-rozmiarowa, depth STAŁE=4 — RAM-budżet).
-- ✓ **E5: islamskie gwiazdy** (`667bcf7`, rejestr=53): `gereh` (16 latawców/ośmiokąt + ROMBY; **bug schematu złapany bramką**: kwadrat osiowy zamiast rombu = 11k px dziur pod konturami PNG), `rosette` (36 komórek/dwunastokąt; dziury kotwiczone analitycznie — pułapka odfiltrowanego centrum niemożliwa).
-- ✓ **META-LEKCJE opłacone i zapisane** (MEMORY + auto-memory `project_pillow_raster_instrument`): (a) duplikaty kolejnych wierzchołków łamią parzystość scanline'a Pillow (pasy 1-2 px, też w aa=4); (b) drabinka instrumentów pokrycia: proste→raster 1:1 / krzywe współdzielone→partycja formalna+FLOAT / nieparujące→FLOAT; (c) formalna partycja NIE dla kształtów z legalnymi T-junctions.
-- ✓ **442→540 testów**; goldeny ×20 nowych (wszystkie cross-process, PYTHONHASHSEED=1); schematy z silnika (gen_puzzle/e4/e5_schemes.py); wszystko na origin/main.
+- ✓ **E6 `scales`** (`b407d53`, rejestr=54): rybia łuska, okręgi `r=base_s/√2` na
+  siatce szachownicowej. Partycja Z KONSTRUKCJI — brzeg wyłącznie z ĆWIARTEK łuku
+  pobieranych przez `center(i,j)` SĄSIADA (nie przez dodanie `r` do własnego
+  środka: `c_y+r` ≠ `(j+1)*r` bit-w-bit). Pole `2r²` = wyznacznik kraty
+  = niezależny cross-check. Nowy współdzielony `_join_arcs` (dedup złączeń).
+  Wszystkie 7 bramek zielone za pierwszym razem.
+- ✓ **E6 `nautilus`** (`e2c8a91`, rejestr=55): biegun POZA kadrem
+  `(-0,55·cx, -0,30·cy)` — „dobry środek" rozwiązany konstrukcyjnie (najbliższy
+  punkt kadru to zawsze róg `(0,0)` ⇒ pasmo promieni ograniczone z dołu, cap-fan
+  zbędny). Odkrycie: schemat `g=1,16` przy `nsec=40` to DOKŁADNIE relacja
+  `g=1+2π/nsec` ⇒ port, nie przeprojektowanie. Bramka odrębności vs `sunburst`
+  (0,97 vs 0,22 półprzekątnej).
+- ✓ **E6 `rosette_fractal`** (`494772b`, rejestr=56, **E6 ZAMKNIĘTY**):
+  **złapany błąd schematu** — zaszyte `m=3` daje proporcję komórki podwajającą się
+  co okres (63,5:1 po 8 podwojeniach; 16K to ~5). Fix: `m` wyprowadzone,
+  `m = round(ln2/ln(1+2π/N))`; `m=3` wypada naturalnie przy N=24. Partycja
+  FORMALNIE zweryfikowana (0 niesparowanych ×3 kadry).
+- ✓ **E7 sierpiński ×3** (`280abf2`, **REJESTR=59/59, CEL OSIĄGNIĘTY**):
+  `sierpinski`/`sierpinski_d`/`sierpinski_carpet`. T-junctions wbudowane
+  i zamierzone ⇒ pokrycie zamiast partycji, ale proste krawędzie dają
+  **min=1,000**. Przycinanie rekurencji: dywan 42 129 → 167 komórek @800×600.
+- ✓ **Poprawiłem własny fałszywy docstring** (`_gen_sierpinski`): teza o wyrównaniu
+  staggera S/2 słuszna, wniosek „partycja dokładna" fałszywy. Pomiar rozdzielający:
+  brak staggera i S/2 = tak samo 102 szwy, S/3 i S/5 dokładają ~20.
+- ✓ **540 → 594 testy**; goldeny ×12 cross-process (PYTHONHASHSEED=1); schematy
+  Z SILNIKA (`gen_e6_schemes.py`, `gen_e7_schemes.py` — NOWE); surowa ścieżka CLI
+  zweryfikowana dla wszystkich 6 kształtów (punkt 8 checklisty planu).
 
 ## Co zostało (backlog sesji)
 
-- ⟳ **E6 (3 kształty):** `scales` (NASTĘPNY KROK) + `nautilus` + `rosette_fractal`.
-- ⟳ **E7 (3 kształty):** `sierpinski`, `sierpinski_d`, `sierpinski_carpet` (wszystkie 3 — decyzja usera 2026-07-16).
-- ⟳ **E8:** docs + montaż zbiorczy 59 + mozaiki testowe → selekcja finalna usera → galeria 16K.
-- ⟳ README: dokumentacja `--grout-style`/`--grout-color` (i zaległe `--grout`/`--grout-level`); panorama 4,0 GB @324 Mpx osobno od 3,9 GB @16K.
+- ⟳ **E8 krok 1:** montaż zbiorczy 59 (NASTĘPNY KROK).
+- ⟳ **E8 krok 2:** seria mozaik testowych — batch CLI po wszystkich kształtach.
+- ⟳ **E8 krok 3:** selekcja finalna usera → galeria 16K.
+- ⟳ **README EN+PL:** tabela 59 kształtów + zaległa dokumentacja
+  `--grout-style`/`--grout-color`/`--grout`/`--grout-level`; panorama 4,0 GB
+  @324 Mpx osobno od 3,9 GB @16K.
 - ⟳ Hero panorama: lokalna, NIE opublikowana (Wariant C odłożony).
 - ⟳ (przeniesione) PLAN_FRACTAL F1a; escher_lizard sylwetka.
 
 ## Aktywne pliki
 
-- `PLAN_SHAPES_EXTRA.md` — kanoniczny plan (E1–E5 ✓, sekcje E6/E7 z pułapkami — czytać przed E6).
-- `src/engine_smart.py` — generatory: `_gen_braid`/`_gen_moire`/`_puzzle_*`/`_gen_dragon`/`_gen_koch_*`/`_gen_gereh`/`_gen_rosette` (NOWE); następne: `_gen_scales`/`_gen_nautilus`/`_gen_rosette_fractal`.
-- `src/grout.py` — style + kolory (NOWE: `_STYLES`, `GROUT_COLORS`, `_draw_grout_styled`).
-- `src/tools/gen_extra_shape_schemes.py` — źródło geometrii E6/E7 (`gen_scales:847`, `gen_nautilus:688`, `gen_rosette_fractal:935`, `gen_sierpinski:84`…).
-- `tests/test_grout_engine.py` — sekcje puzzle/E4/E5 + style groutu; `tests/test_golden_shapes.py` — 20 nowych goldenów.
-- `assets/proposals/` — propozycje (historia); `assets/shape_schemes/` — schematy wdrożonych (z silnika).
+- `PLAN_SHAPES_EXTRA.md` — kanoniczny plan; E1–E7 ✓, została sekcja E8
+  („Definicja ukończenia" mówi rejestr=56, faktycznie 59 — do korekty przy E8).
+- `src/engine_smart.py` — NOWE generatory: `_gen_scales`, `_gen_nautilus`,
+  `_gen_rosette_fractal`, `_gen_sierpinski`, `_gen_sierpinski_d`,
+  `_gen_sierpinski_carpet`; NOWE helpery: `_join_arcs`, `_sierpinski_cells`,
+  `_sierp4`, `_carpet_cells`, `_tri_outside`.
+- `src/tools/gen_e6_schemes.py`, `src/tools/gen_e7_schemes.py` — NOWE.
+- `tests/test_grout_engine.py` — sekcje E6/E7; `tests/test_golden_shapes.py` —
+  12 nowych goldenów; `_areas_inside` = współdzielony helper pól.
+- `assets/shape_schemes/` — 6 nowych PNG (z silnika).
 
 ## Otwarte pytania
 
-- **Selekcja finalna kształtów przez usera** — po wdrożeniu wszystkich (E8); kandydaci do odrzucenia: `bloom` (subtelny).
+- **Selekcja finalna kształtów przez usera** (E8) — kandydaci do odrzucenia
+  z wcześniejszych notatek: `bloom` (subtelny).
 - **Publikacja hero panoramy** (Wariant C) — decyzja usera.
-- **koch_snowflake depth=4**: szwy sub-pikselowe (min cov 0,686) — jeśli zoom DZI ujawni miękkość szwów, rozważyć depth 5 tylko dla małych kadrów.
-- **Grout styles na 16K**: style testowane na previews; pierwszy render 16K z kintsugi/neon warto obejrzeć (wydajność: capsule per segment — przy gęstych kształtach dużo segmentów).
+- **`koch_snowflake` depth=4**: szwy sub-pikselowe (min cov 0,686) — jeśli zoom
+  DZI ujawni miękkość, rozważyć depth 5 tylko dla małych kadrów.
+- **Grout styles na 16K**: style testowane na previews; pierwszy render 16K
+  z kintsugi/neon warto obejrzeć (capsule per segment — przy gęstych kształtach
+  dużo segmentów; sierpiński/carpet są teraz najgęstsze, 34–41k komórek).
+- **`sierpinski_carpet` przy dużym `base_s`**: gdy `S` przekroczy przekątną kadru,
+  kształt degeneruje się do kilku wielkich kwadratów. Nie blokuje (pokrycie OK),
+  ale przy selekcji warto zobaczyć go w docelowej rozdzielczości.
 
 ## Do MEMORY.md (przeniesiono)
 
-- **repo MEMORY.md:** [2026-07-19] Architektura: grout styles+kolory · rodzina puzzle+E4+E5 (rejestr 43→53, cel 59); Rozwiązane problemy: parzystość scanline'a Pillow + drabinka instrumentów pokrycia + bug schematu gereh.
-- **auto-memory:** `project_pillow_raster_instrument.md` (NOWY — drabinka instrumentów, dedup wierzchołków).
+- **repo MEMORY.md:** Architektura [2026-07-20] „E6 + E7 — REJESTR = 59/59";
+  Rozwiązane problemy [2026-07-20] ×2 — „Stała schematu poprawna LOKALNIE,
+  błędna GLOBALNIE (rosette_fractal m=3)" + „T-junctions WBUDOWANE — czwarta
+  klasa w drabince instrumentów".
+- **auto-memory:** `project_scheme_constant_derive.md` (NOWY);
+  `project_pillow_raster_instrument.md` (ZAKTUALIZOWANY — 4. szczebel drabinki:
+  proste krawędzie + wbudowane T-junctions ⇒ żądaj `min == 1.0`, nie progu).

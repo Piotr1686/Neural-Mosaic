@@ -2,6 +2,74 @@
 
 # last_session.md
 
+**Sesja:** 2026-07-19 · dzień-wieczór (~21:00)
+**Status:** ✓ Zakończona poprawnie
+**Punkt odniesienia (git):** 667bcf7 @ main (zsynchronizowane z origin/main)
+
+---
+
+## ▸ NASTĘPNY KROK (zacznij tutaj)
+
+**Sprint E6, krok 1: wdrożyć `scales` jako `_gen_scales` w `src/engine_smart.py`** (geometria źródłowa: `gen_scales:847` w `src/tools/gen_extra_shape_schemes.py`).
+
+Konkretnie:
+1. `scales` = rybia łuska: okręgi promienia r na siatce szachownicowej (`dx=2r, dy=r`, offset r); komórka = kopuła półkolista + 2 wklęsłe łuki zbiegające w dolny wierzchołek; przecięcia okręgów DOKŁADNIE w `(0,−r)` i `(±r,0)`. PRZENIEŚĆ geometrię wprost.
+2. ⚠ **ŁUKI**: krok polygonizacji **MUSI** być `_arc_pitch(r, tol=0.35)` — NIE `seg = base_s/3` (ta pomyłka sfasetowała truchet_hex; promień łuski ~base_s, stały w px przy każdej rozdzielczości).
+3. ⚠ **Instrument pokrycia wg drabinki** (MEMORY [2026-07-19]): krzywe szwy — jeśli łuki współdzielone konstrukcyjnie (ta sama polilinia z obu stron, wzorzec `_sun_arc` / puzzle) → formalny test partycji + pokrycie FLOAT ss=4 (próg 0,45; kalibracja voderberg 0,502); raster binarny 1:1 SKŁAMIE.
+4. ⚠ Dedup KOLEJNYCH duplikatów wierzchołków na złączeniach łuków (parzystość scanline'a Pillow — pasy 1-2 px).
+5. Domknięcie: wpis w `SHAPE_MODES` (aa=4) · goldeny ×2 border_mode w 2 procesach (jeden `PYTHONHASHSEED=1`) · schemat Z SILNIKA (nowy `gen_e6_schemes.py`, wzorzec `gen_e5_schemes.py`) · pełny `pytest`.
+6. Potem `nautilus` (`gen_nautilus:688`; biegun POZA kadrem `(-1.55,-1.30)` — wzorzec „dobrego środka") i `rosette_fractal` (`:935`; sektory ×2 co `m=3` pierścienie, `g=2^(1/m)`; wspólne krawędzie próbkowane identycznie z obu stron) — domykają E6.
+
+Kontekst: E1–E5 + rodzina puzzle ZAMKNIĘTE (rejestr=53, cel 59). Zostało 6 kształtów: E6 (`scales`/`nautilus`/`rosette_fractal`) + E7 (`sierpinski` ×3). User dał standing approval „rób pozostałe" — po E6 przejść do E7, potem E8 (docs + montaż + selekcja finalna usera).
+
+---
+
+## Co zrobiono w tej sesji
+
+- ✓ **E3 domknięty**: `braid` (`def6513`, bramka izometryczna `_max_overlap` + zęby na flip parzystości) i `moire` (`3c10f0e`, ostrzeżenie „≡ square" obalone pomiarem: CV pola 0,27, 28% krawędzi osiowych). Rejestr=45.
+- ✓ **Propozycje na życzenie usera**: 5 puzzli + 10 stylów groutu (`86975a5`), potem profil die-cut wg zdjęć referencyjnych (`060b1e5`). Werdykt usera: grout — WSZYSTKIE 10 + kolor; puzzle — classic/ribbon/hex (organic/penrose odrzucone), die-cut jako profil rodziny.
+- ✓ **Grout: 10 stylów kreski + paleta 12 kolorów WDROŻONE** (`8945009`): `draw_grout(style=…, color=…)`, solid bit-identyczny, style per-segment do masek warstwowych, crc32 bez RNG, fallback krótkich segmentów; CLI `--grout-style`/`--grout-color` + GUI 2 menu (też preview).
+- ✓ **Sprint P: rodzina puzzle** (`be64bdc`, rejestr=48): 3 kształty na wspólnej maszynerii tabów (wspólna polilinia per krawędź, crc32); bramka ribbon-vs-classic CV narożników (0 vs 0,046).
+- ✓ **E4: fraktale** (`174a5a3`, rejestr=51): `dragon` (twindragon, pole DOKŁADNE), `koch_island` (żółw na intach, period=4^depth), `koch_snowflake` (2-rozmiarowa, depth STAŁE=4 — RAM-budżet).
+- ✓ **E5: islamskie gwiazdy** (`667bcf7`, rejestr=53): `gereh` (16 latawców/ośmiokąt + ROMBY; **bug schematu złapany bramką**: kwadrat osiowy zamiast rombu = 11k px dziur pod konturami PNG), `rosette` (36 komórek/dwunastokąt; dziury kotwiczone analitycznie — pułapka odfiltrowanego centrum niemożliwa).
+- ✓ **META-LEKCJE opłacone i zapisane** (MEMORY + auto-memory `project_pillow_raster_instrument`): (a) duplikaty kolejnych wierzchołków łamią parzystość scanline'a Pillow (pasy 1-2 px, też w aa=4); (b) drabinka instrumentów pokrycia: proste→raster 1:1 / krzywe współdzielone→partycja formalna+FLOAT / nieparujące→FLOAT; (c) formalna partycja NIE dla kształtów z legalnymi T-junctions.
+- ✓ **442→540 testów**; goldeny ×20 nowych (wszystkie cross-process, PYTHONHASHSEED=1); schematy z silnika (gen_puzzle/e4/e5_schemes.py); wszystko na origin/main.
+
+## Co zostało (backlog sesji)
+
+- ⟳ **E6 (3 kształty):** `scales` (NASTĘPNY KROK) + `nautilus` + `rosette_fractal`.
+- ⟳ **E7 (3 kształty):** `sierpinski`, `sierpinski_d`, `sierpinski_carpet` (wszystkie 3 — decyzja usera 2026-07-16).
+- ⟳ **E8:** docs + montaż zbiorczy 59 + mozaiki testowe → selekcja finalna usera → galeria 16K.
+- ⟳ README: dokumentacja `--grout-style`/`--grout-color` (i zaległe `--grout`/`--grout-level`); panorama 4,0 GB @324 Mpx osobno od 3,9 GB @16K.
+- ⟳ Hero panorama: lokalna, NIE opublikowana (Wariant C odłożony).
+- ⟳ (przeniesione) PLAN_FRACTAL F1a; escher_lizard sylwetka.
+
+## Aktywne pliki
+
+- `PLAN_SHAPES_EXTRA.md` — kanoniczny plan (E1–E5 ✓, sekcje E6/E7 z pułapkami — czytać przed E6).
+- `src/engine_smart.py` — generatory: `_gen_braid`/`_gen_moire`/`_puzzle_*`/`_gen_dragon`/`_gen_koch_*`/`_gen_gereh`/`_gen_rosette` (NOWE); następne: `_gen_scales`/`_gen_nautilus`/`_gen_rosette_fractal`.
+- `src/grout.py` — style + kolory (NOWE: `_STYLES`, `GROUT_COLORS`, `_draw_grout_styled`).
+- `src/tools/gen_extra_shape_schemes.py` — źródło geometrii E6/E7 (`gen_scales:847`, `gen_nautilus:688`, `gen_rosette_fractal:935`, `gen_sierpinski:84`…).
+- `tests/test_grout_engine.py` — sekcje puzzle/E4/E5 + style groutu; `tests/test_golden_shapes.py` — 20 nowych goldenów.
+- `assets/proposals/` — propozycje (historia); `assets/shape_schemes/` — schematy wdrożonych (z silnika).
+
+## Otwarte pytania
+
+- **Selekcja finalna kształtów przez usera** — po wdrożeniu wszystkich (E8); kandydaci do odrzucenia: `bloom` (subtelny).
+- **Publikacja hero panoramy** (Wariant C) — decyzja usera.
+- **koch_snowflake depth=4**: szwy sub-pikselowe (min cov 0,686) — jeśli zoom DZI ujawni miękkość szwów, rozważyć depth 5 tylko dla małych kadrów.
+- **Grout styles na 16K**: style testowane na previews; pierwszy render 16K z kintsugi/neon warto obejrzeć (wydajność: capsule per segment — przy gęstych kształtach dużo segmentów).
+
+## Do MEMORY.md (przeniesiono)
+
+- **repo MEMORY.md:** [2026-07-19] Architektura: grout styles+kolory · rodzina puzzle+E4+E5 (rejestr 43→53, cel 59); Rozwiązane problemy: parzystość scanline'a Pillow + drabinka instrumentów pokrycia + bug schematu gereh.
+- **auto-memory:** `project_pillow_raster_instrument.md` (NOWY — drabinka instrumentów, dedup wierzchołków).
+
+
+## ═══ Sesja zarchiwizowana [2026-07-19 21:00] ═══
+
+# last_session.md
+
 **Sesja:** 2026-07-17 · 19:00-21:20
 **Status:** ✓ Zakończona poprawnie
 **Punkt odniesienia (git):** a90f33f @ main (zsynchronizowane z origin/main)
@@ -367,179 +435,4 @@ struktura hiperboliczna jest na renderze subtelna.
   `project_poincare_bpp_plan.md`.
 
 ---
-
-## ═══ Sesja zarchiwizowana [2026-07-15 12:20] ═══
-
-# last_session.md
-
-**Sesja:** 2026-07-15 · w toku (checkpoint /save)
-**Status:** ⏳ W toku — sesja dotąd czysto planistyczna (kod nietknięty)
-**Punkt odniesienia (git):** 8a3fb73 @ main (zsynchronizowane z origin/main; working tree czysty)
-
----
-
-## ▸ NASTĘPNY KROK (zacznij tutaj)
-
-**Wiring poincare wg planu (b++)** — ZATWIERDZONY 2026-07-15 po adwersarialnej
-drugiej opinii agenta `architect`. UNIEWAŻNIA poprzedni opis kroku w punktach:
-BFS NIE jest drogi @16K (obawa z ery modelu dyskowego), `diam<0.02` do USUNIĘCIA
-(nie zachowania), subdywizja OBOWIĄZKOWA (bez niej latawiec ~4000 px @16K z kafla
-~kilkuset px = miękkie w DZI). Szczegóły decyzji: MEMORY.md wpis [2026-07-15].
-
-**Krok 1 (0.5 d) — port BFS do silnika:** `_gen_poincare(engine, w, h, base_s)`.
-BFS ZOSTAJE w dysku (odbicia = inwersje w okręgach, tanie; NIE reimplementować
-w paśmie). Do PASMA przenosi się TYLKO test akceptacji/prune:
-`|band_y| ≤ W+margin ∧ |band_x| ≤ x_max+margin`. Cutoff `diam<0.02` WYLATUJE
-(przy x=3.2 zabija prawdziwe kafle: z≈0.987, dysk-⌀≈0.0155). `depth≤14` zostaje
-(do x=3.2 wystarcza 4-6 pierścieni). Dedup `round(,4)` bezpieczny (do |z|<0.99997).
-
-**Kolejne kroki (b++):**
-2. Subdywizja HIPERBOLICZNO-BIEGUNOWA latawców do ~base_s (2-2.5 d) — NIE euklidesowy
-   quad-split (anizotropia cos(πy/2)→3:1 przy |y|=0.8; band-map konforemna ⇒ podział
-   w metryce hiperbolicznej = izotropia za darmo). ANTY-T-JUNCTION: liczba podziałów
-   krawędzi geodezyjnej = GLOBALNA funkcja krawędzi (obie komórki czytają tę samą).
-3. `_grout_cells_poincare` (g2=latawiec, g3=heptagon) + wpisy `_HIERARCHICAL_GROUT`
-   (~l. 2440) i `GROUT_HIERARCHICAL` (~l. 52) — generyczny fallthrough polygon daje
-   TYLKO płaski grout (1 d). Bez L4/„kwiata" — {7,3} nie ma supergrupy (7 nieparzyste).
-4. Golden ×2 procesy + schemat PNG z geometrii silnika + SHAPE_MODES (rejestr→39)
-   + TEST PARTYCJI: zero krawędzi `len(adj)==1` we WNĘTRZU kadru po `classify_edges`
-   (detektor T-junction; wada widoczna dopiero w zoomie DZI — jak historyczna
-   pikseloza groutu) (1.5 d).
-5. Hero portfolio: panorama 4:1 (np. 36000×9000) → DZI. NAJPIERW zmierzyć peak-RAM
-   (80-150k `_LazyMask` vs inwariant A1 3.9 GB @16K). UWAGA: {7,3} NIE jest okresowe
-   wzdłuż osi pasma — panoramy NIE da się skleić z kopii; pełny BFS wymagany.
-
-Geometria źródłowa: `gen_fable_shape_schemes.py:302-419`. Szacunek całości ~5-5.5 d.
-Liczby (skorygowane przez architekta): heptagon ~0.74 j. pasma (~8300 px @16K square),
-panorama 80-150k komórek, generacja 20-45 s (2-4× girih).
-
-Bramki: render 2K na `input/0013.jpg`, pełny pytest, pokrycie kadru 0% tła
-(wzorzec `src/tools/girih_audit.py`) + NOWA bramka: audyt pokrycia na aspekcie
-panoramicznym (tryby awarii poincare są aspect-driven — jedyny taki kształt).
-
-Kontekst: po poincare zostaje TYLKO pula extra 21-43, potem selekcja finalna
-kształtów przez usera → galeria 16K. User chce WSZYSTKIE kształty przed selekcją.
-
----
-
-## Co zrobiono w tej sesji
-
-- ✓ **`/start`** — stan spójny (HEAD `8a3fb73` = chore-commit z `/end` 14.07;
-  working tree czysty).
-- ✓ **Analiza planu poincare przed wiringiem** (zero zmian w kodzie):
-  - Obawa „BFS najdroższy @16K" OBALONA — dotyczyła modelu DYSKOWEGO (wyrzuconego
-    2026-07-04b); w modelu pasmowym koszt zależy od ASPEKTU kadru, nie pikseli.
-  - Wykryte prawdziwe ryzyka: stała liczba komórek (~230-310 latawców/kadr
-    niezależnie od rozdzielczości) ⇒ latawiec ~4000 px @16K z kafla ~kilkuset px;
-    cutoffy w współrzędnych dysku łamią się na szerokich kadrach.
-  - Rekomendacja (b+): subdywizja do base_s + grout 3-poziomowy + hero-panorama DZI.
-- ✓ **Druga opinia agenta `architect`** (na prośbę usera; mandat adwersarialny).
-  Werdykt: kierunek słuszny, 3 korekty → plan **(b++)**. Nowe znaleziska:
-  T-junctions przy adaptacyjnym quad-splicie (⇒ per-edge-consistent sampling),
-  skinny cells 3:1 (⇒ subdywizja hiperboliczno-biegunowa — konforemność band-map),
-  grout hierarchiczny wymaga dedykowanego `_grout_cells_poincare` (fallthrough =
-  płaski), {7,3} NIEokresowe wzdłuż pasma (panoramy nie da się skleić z kopii),
-  koszt realny ~5-5.5 d (nie 2-3). Skorygowane moje błędy: dedup `round(,4)`
-  bezpieczny; heptagon ~0.74 j. (nie 0.79); komórki panoramy 80-150k (nie 50-80k).
-- ✓ **User ZATWIERDZIŁ (b++)** — plan wpisany jako NASTĘPNY KROK + MEMORY.md
-  [2026-07-15] + auto-memory `project_poincare_bpp_plan.md`.
-
-## Co zostało (backlog sesji)
-
-- ⟳ **PLAN_SHAPES — poincare wg (b++):** kroki 1-5 z NASTĘPNEGO KROKU (~5-5.5 d,
-  wieloseryjne) → potem pula extra 21-43. Po WSZYSTKICH → selekcja finalna usera
-  → galeria 16K.
-- ⟳ **Galeria 16K triangle+hexagon** — odłożona do wdrożenia wszystkich kształtów.
-- ⟳ **PLAN_FRACTAL wykonawczy** — F1a (trójfazowa pętla, golden bit-w-bit).
-- ⟳ escher_lizard: docelowa sylwetka jaszczurki = ręczne dostrojenie offsetów (estetyka).
-- ⟳ (opcjonalny cleanup) migracja kites/spectre do generycznej gałęzi polygon.
-- ⟳ (drobny dług) README nie dokumentuje flag `--grout` / `--grout-level` (nie regresja).
-
-## Aktywne pliki
-
-- (sesja 2026-07-15 dotąd planistyczna — kod nietknięty; poniżej zestaw roboczy kroku 1)
-- `src/engine_smart.py` — cel portu: nowy `_gen_poincare` (~l. 1665, obok `_gen_girih`),
-  wpis `SHAPE_MODES` (~l. 1698); później `_grout_cells_poincare` (~l. 2308),
-  `_HIERARCHICAL_GROUT` (l. 2440), `GROUT_HIERARCHICAL` (l. 52), gałąź
-  `_polygon_grout_cells` (l. 2222).
-- `src/tools/gen_fable_shape_schemes.py:302-419` — geometria źródłowa do portu
-  (`_geo_circle`/`_reflect`/`_edge_arc`/`gen_poincare`).
-- `src/grout.py` — BEZ zmian (konsumuje g2/g3).
-- `tests/test_golden_shapes.py` — dojdą goldeny poincare + NOWY test partycji
-  (zero `len(adj)==1` we wnętrzu kadru).
-
-## Otwarte pytania
-
-- **Selekcja finalna kształtów przez usera** — po wdrożeniu wszystkich (bez zmian).
-- **Peak-RAM panoramy 4:1** (80-150k `_LazyMask` vs inwariant A1 3.9 GB @16K) —
-  zmierzyć w kroku 5, PRZED obietnicą hero-panoramy 36000×9000.
-- (rozstrzygnięte 2026-07-15: „BFS drogi @16K" — obalone, patrz MEMORY [2026-07-15])
-
-## Do MEMORY.md (przeniesiono)
-
-- Repo MEMORY.md: wpis **[2026-07-15]** w „Aktywne TODO" — plan poincare (b++)
-  zatwierdzony (BFS w dysku + prune w paśmie, diam-cutoff wylatuje, subdywizja
-  hiperboliczno-biegunowa, anty-T-junction, grout dedykowany, panorama nieokresowa).
-- Auto-memory: `project_poincare_bpp_plan.md` (unieważnia „BFS drogi @16K"
-  z last_session 2026-07-14).
-- (poprzednia sesja 2026-07-14: `project_girih_lattice.md`, `project_grout_levels.md`)
-
-# last_session.md
-
-**Sesja:** 2026-07-13 · ~11:30-12:30
-**Status:** ✓ Zakończona poprawnie
-**Punkt odniesienia (git):** e8e0b74 @ main (zsynchronizowane z origin/main)
-
----
-
-## ▸ NASTĘPNY KROK (zacznij tutaj)
-
-**Wiring girih** — port `_girih_attempt` (`src/tools/gen_fable_shape_schemes.py:585`) do `engine_smart.py` jako `_gen_girih`, z rozstrzygnięciami z MEMORY [2026-07-11b]:
-1. **Fix `commit()`** (gen_fable:625-627): zamiast pełnej kopii rastra okupacji po każdym kaflu (`occ_np[:] = np.array(occ)` — setki GB memcpy przy 16K) rysować kafel do bufora wielkości bboxa i OR-ować w `occ_np[y0:y1, x0:x1]` ⇒ O(pole kadru).
-2. **`RAD` rosnący z przekątną kadru** (w jednostkach girih) — inwariant „pole dominującego kafla ~ base_s²".
-3. **Inflacja convex-hulla dziur 1.10 → ~1.0** (w silniku nakładka = dwa zdjęcia walczące o piksele; uszczelnienie szwu zostawić `render_padding`).
-4. **Stały `_GIRIH_SEED` + sweep offline**: commitowany skrypt w `src/tools/` drukujący pokrycie per seed; zwycięzca jako stała z komentarzem o zmierzonym pokryciu (NIE `_shape_seed` per-wymiary — preview 2K mógłby trafić dobry patch, a 16K dziurawy).
-5. Bramki jak zawsze: rasteryzacja pokrycia (cel 0% dziur; scratch `check_coverage.py` — wzorzec w archiwum czatu), goldeny both-borders ×2 procesy, render 2K na `input/0013.jpg`, pełny pytest. Spodziewany czas girih @16K po fixie: 1-3 s (najwolniejszy kształt, akceptowalne). Fallback (tylko gdyby za wolno): girih podstawieniowy Lu-Steinhardt — zadanie badawcze, nie zaczynać od niego.
-
-Kontekst: to przedostatnia pozycja PLAN_SHAPES przed pulą extra (kolejność ustalona 2026-07-11: → poincare → extra 21-43). Tier B (truchet/weave) ZAMKNIĘTY w tej sesji. User chce WSZYSTKIE kształty przed selekcją finalną i galerią 16K.
-
----
-
-## Co zrobiono w tej sesji
-
-- ✓ **`/start`** — stan spójny; wypchnięty zaległy commit sesyjny `9eae032`.
-- ✓ **Wiring voderberg + escher_lizard + weave** (`5e27d0c`): voderberg z 2 korektami skali (wygięcie i grubość pierścienia zależne od promienia), escher 1:1, **weave przebudowany na prawdziwą partycję** (widoczne kawałki wstęg + komórki-węzły; schemat PNG zregenerowany z geometrii silnika). Pokrycie: 0-0.01% dziur.
-- ✓ **Wiring truchet + truchet_hex** (`ee00c92`, Tier B zamknięty bez `_CurvedMask`): komórki = regiony wycięte łukami; nowy helper `_arc_pitch(r,tol)` (pułapka: krok `base_s/3` fasetował łuki o promieniu ~base_s/2); orientacja z hasha indeksu (zero RNG, wzór stały między rozdzielczościami); schematy GUI zregenerowane z silnika (`src/tools/gen_truchet_schemes.py`).
-- ✓ **FIX pikselozy groutu** (`e8e0b74`, zgłoszenie usera): `draw_grout` = AA kapsuły ss=4 przez maskę L, downscale BOX (nie LANCZOS — ringing); 16K = 4 s; `grout_preset=None` bit-w-bit. Diagnoza: aliasowane `ImageDraw.line` + tool propozycji rysujący na SS=2 (wada niewidoczna przy akceptacji).
-- ✓ Rejestr `SHAPE_MODES`: 32 → **37**; +10 goldenów cross-proces; **363 testy zielone**; PLAN_SHAPES.md zaktualizowany (S6/S7-połowa/S8 zrobione).
-- ✓ Rendery testowe 2K: `output/new3_{voderberg,escher_lizard,weave,truchet,truchet_hex}.jpg`; zoom groutu: `output/grout_aa_zoom.png`.
-
-## Co zostało (backlog sesji)
-
-- ⟳ **PLAN_SHAPES — ostatnie kształty:** girih (NASTĘPNY KROK) → poincare (model pasmowy, BFS odbić — najdroższy) → pula extra 21-43. Po WSZYSTKICH → selekcja finalna usera.
-- ⟳ **Galeria 16K triangle+hexagon** — odłożona do wdrożenia wszystkich kształtów.
-- ⟳ **PLAN_FRACTAL wykonawczy** — F1a (trójfazowa pętla, golden bit-w-bit).
-- ⟳ escher_lizard: docelowa sylwetka jaszczurki = ręczne dostrojenie offsetów polilinii (zadanie estetyczne z userem, geometria bez zmian).
-- ⟳ (opcjonalny cleanup) migracja kites/spectre do generycznej gałęzi polygon.
-
-## Aktywne pliki
-
-- `src/engine_smart.py` — +5 generatorów (`_gen_voderberg`, `_gen_escher`, `_gen_weave`, `_gen_truchet`, `_gen_truchet_hex`), helpery `_arc_pitch`/`_truchet_flip`, rejestr 37; `_apply_grout` woła nowe `draw_grout(img,…)`.
-- `src/grout.py` — `draw_grout` przepisany (AA kapsuły ss=4, maska L, BOX).
-- `src/tools/gen_fable_shape_schemes.py` (`gen_weave` = partycja), `src/tools/gen_truchet_schemes.py` (NOWY), `src/tools/gen_grout_proposals.py` (caller).
-- `tests/test_golden_shapes.py` (+10 goldenów), `tests/test_grout.py` (nowa sygnatura).
-- `assets/shape_schemes/{weave,truchet,truchet_hex}.png` — zregenerowane z geometrii silnika.
-- `PLAN_SHAPES.md` — S8 zamknięty, wpisy weave/truchet zaktualizowane.
-
-## Otwarte pytania
-
-- **Selekcja finalna kształtów przez usera** — po wdrożeniu wszystkich (bez zmian).
-- Girih: fallback podstawieniowy (Lu-Steinhardt) TYLKO jeśli greedy po fixie `commit()` przekroczy kilka sekund przy 16K.
-
-## Do MEMORY.md (przeniesiono)
-
-- Repo MEMORY.md: wpis **[2026-07-13]** w „Aktywne TODO" — 5 kształtów (korekty skali voderberga, weave-partycja, pułapka `_arc_pitch`, truchet bez RNG) + fix groutu (BOX nie LANCZOS, lekcja „tool propozycji musi rasteryzować jak silnik").
-- Auto-memory: `project_grout_aa_fix.md` (diagnoza + fix pikselozy groutu).
-
-==============================================================================
 
