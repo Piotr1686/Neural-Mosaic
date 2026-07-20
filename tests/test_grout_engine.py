@@ -26,7 +26,9 @@ from src.engine_smart import (SHAPE_MODES, SmartEngine, _poincare_cells,
                               _gen_koch_snowflake, _twindragon_boundary,
                               _gen_gereh, _gen_rosette, _gen_scales,
                               _gen_nautilus, _gen_sunburst,
-                              _gen_rosette_fractal,
+                              _gen_rosette_fractal, _gen_sierpinski,
+                              _gen_sierpinski_d, _gen_sierpinski_carpet,
+                              _sierpinski_cells, _tri_outside,
                               _GOLDEN_ANGLE, _LUCAS_ANGLE)
 from src.grout import classify_edges
 from tests.test_golden_shapes import _build_library, _make_target
@@ -1611,3 +1613,130 @@ def test_rosette_fractal_scales_to_16k_within_budget():
         max_verts = max(max_verts, len(poly))
     assert n < 120000, f"{n} cells at 16K — RAM budget (A1) at risk"
     assert max_verts < 64
+
+
+# --- E7: Sierpinski family --------------------------------------------------
+# T-JUNCTIONS BY CONSTRUCTION, and deliberately so: a hole is ONE cell (one
+# large photo — the whole point of the shape) while the gasket triangles
+# around it are subdivided by their own recursion, so a level-d hole edge
+# faces 2^(d-1) segments. A formal partition test is therefore the WRONG
+# instrument. All edges are straight, so coverage is exact: min == 1.000, no
+# gaps and no seam dust at all.
+
+_SIERP_GENS = {"sierpinski": _gen_sierpinski,
+               "sierpinski_d": _gen_sierpinski_d,
+               "sierpinski_carpet": _gen_sierpinski_carpet}
+
+
+@pytest.mark.parametrize("name", sorted(_SIERP_GENS))
+def test_sierpinski_family_covers_the_frame_exactly(name):
+    w, h, base_s, ss = 800, 600, 60, 4
+    acc = np.zeros((h, w), dtype=np.float64)
+    for poly in _SIERP_GENS[name](None, w, h, base_s):
+        m = Image.new("L", (w * ss, h * ss), 0)
+        ImageDraw.Draw(m).polygon([(x * ss, y * ss) for x, y in poly], fill=255)
+        acc += np.asarray(m.resize((w, h), Image.BOX), dtype=np.float64) / 255.0
+    assert acc.min() == pytest.approx(1.0, abs=1e-9), (
+        f"{name}: min coverage {acc.min():.4f} — straight-edged cells must "
+        f"tile the frame with no gaps and no seam dust")
+
+
+@pytest.mark.parametrize("name", sorted(_SIERP_GENS))
+@pytest.mark.parametrize("w,h,base_s", [
+    (800, 600, 60), (1200, 300, 50), (900, 900, 60),
+])
+def test_sierpinski_family_mean_area_tracks_base_s(name, w, h, base_s):
+    areas = _areas_inside(_SIERP_GENS[name], w, h, base_s)
+    assert sum(areas) / len(areas) == pytest.approx(base_s ** 2, rel=0.25)
+
+
+def test_sierpinski_brick_stagger_adds_no_t_junctions():
+    # The stagger is S/2 = four of the eight sub-segments a depth-3 edge is
+    # cut into, so the shifted row's subdivision points land on the row
+    # below's. Verified by sweeping the offset: S/2 costs nothing over no
+    # stagger at all, while offsets that are NOT multiples of S/8 add ~20
+    # extra unpaired seams. (The 102 baseline is the inherent hole ones.)
+    w, h, base_s, PAD = 800, 600, 60, 2.0
+
+    def unpaired(frac):
+        S = base_s * math.sqrt(160.0 / math.sqrt(3.0))
+        H = S * math.sqrt(3.0) / 2.0
+        cells = []
+        for r in range(-1, int(h / H) + 2):
+            y0 = r * H
+            xoff = (S * frac) if (r % 2) else 0.0
+            for c in range(-2, int(w / S) + 3):
+                x0 = c * S + xoff
+                up = (complex(x0, y0), complex(x0 + S, y0),
+                      complex(x0 + S / 2, y0 + H))
+                dn = (complex(x0 + S / 2, y0 + H),
+                      complex(x0 + 1.5 * S, y0 + H), complex(x0 + S, y0))
+                for tri in (up, dn):
+                    if _tri_outside(tri, w, h):
+                        continue
+                    out = []
+                    _sierpinski_cells(tri[0], tri[1], tri[2], 3, out)
+                    for cell in out:
+                        cells.append(([(z.real, z.imag) for z in cell], 0, 0))
+        by_level = classify_edges(cells)
+        return len([1 for a, b in by_level[3]
+                    if all(PAD < p[0] < w - PAD and PAD < p[1] < h - PAD
+                           for p in (a, b))])
+
+    assert unpaired(0.5) == unpaired(0.0), "S/2 stagger misaligned the rows"
+    assert unpaired(1.0 / 3.0) > unpaired(0.5)
+    assert unpaired(0.2) > unpaired(0.5)
+
+
+def test_sierpinski_d_checkerboard_spreads_the_big_holes():
+    # Variant D's reason to exist: carrier = (t + r) % 2 offsets the largest
+    # holes row to row instead of stacking them into columns. Measured on the
+    # BIG cells (area > 4x the mean): their x-positions must not collapse
+    # onto a few columns the way an unshifted carrier would.
+    w, h, base_s = 1200, 900, 55
+    polys = [list(p) for p in _gen_sierpinski_d(None, w, h, base_s)]
+    big = []
+    for p in polys:
+        a = 0.0
+        for k in range(len(p)):
+            x0, y0 = p[k]
+            x1, y1 = p[(k + 1) % len(p)]
+            a += x0 * y1 - x1 * y0
+        a = abs(a) / 2.0
+        cx = sum(q[0] for q in p) / len(p)
+        cy = sum(q[1] for q in p) / len(p)
+        if a > 4.0 * base_s ** 2 and 0 <= cx < w and 0 <= cy < h:
+            big.append((cx, cy))
+    assert len(big) >= 4, "no big holes found — carrier logic broken"
+    S = base_s * math.sqrt(184.0 / math.sqrt(3.0))
+    bands = {}
+    for cx, cy in big:
+        bands.setdefault(round(cy / (S * math.sqrt(3.0) / 2.0)), []).append(cx)
+    keys = sorted(k for k, v in bands.items() if len(v) >= 2)
+    assert len(keys) >= 2, "big holes confined to one row band"
+    # within a band the big holes sit one lattice period apart...
+    for k in keys:
+        xs = sorted(bands[k])
+        assert xs[1] - xs[0] == pytest.approx(S, rel=0.02)
+    # ...and consecutive bands are offset by HALF a period — that is the
+    # checkerboard doing its job (measured: 283.4 vs 566.9 with S = 566.9).
+    phase = [sorted(bands[k])[0] % S for k in keys[:2]]
+    assert abs(phase[0] - phase[1]) == pytest.approx(S / 2.0, rel=0.05), (
+        f"big holes stack into columns: phases {phase} with S={S:.1f}")
+
+
+def test_sierpinski_family_scales_to_16k_within_budget():
+    # Pruning matters here: an unpruned depth-4 carpet emits 4681 cells per
+    # lattice position regardless of how little shows (42k cells for the ~155
+    # that touch an 800x600 frame). With pruning all three stay ~40k at 16K.
+    for name, gen in _SIERP_GENS.items():
+        n = sum(1 for _ in gen(None, 16384, 12288, 75))
+        assert n < 120000, f"{name}: {n} cells at 16K — RAM budget (A1) at risk"
+
+
+def test_sierpinski_carpet_pruning_keeps_only_relevant_cells():
+    # The pruning must not change WHAT is drawn, only how much is built: the
+    # frame stays fully covered (asserted above) while the cell count drops by
+    # two orders of magnitude.
+    n = sum(1 for _ in _gen_sierpinski_carpet(None, 800, 600, 60))
+    assert n < 1000, f"{n} cells — recursion pruning is not firing"

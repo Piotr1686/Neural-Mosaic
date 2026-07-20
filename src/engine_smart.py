@@ -1760,6 +1760,171 @@ def _gen_rosette_fractal(engine, target_w, target_h, base_s):
                                  _edge(i + 1, 2 * k + 1, i, k + 1))
 
 
+# --- E7: Sierpinski family -------------------------------------------------
+# Every triangle/square is a CELL — gasket and hole alike, so there are no
+# actual gaps. The fractal reads through photo SCALE (holes become
+# progressively larger single photos), not through empty space; that is the
+# approved photo-mapping plan and the reason a hole is emitted rather than
+# skipped.
+def _sierpinski_cells(A, B, C, depth, out):
+    """Classic recursion: the 3 corner sub-triangles recurse, the central
+    inverted sub-triangle is emitted as a cell at this level. A triangle of
+    side S at depth 3 yields 27 leaves (S/8) + 9 + 3 + 1 holes = 40 cells."""
+    if depth == 0:
+        out.append((A, B, C))
+        return
+    ab, bc, ca = (A + B) / 2, (B + C) / 2, (C + A) / 2
+    _sierpinski_cells(A, ab, ca, depth - 1, out)
+    _sierpinski_cells(ab, B, bc, depth - 1, out)
+    _sierpinski_cells(ca, bc, C, depth - 1, out)
+    out.append((ab, bc, ca))                    # central hole at this level
+
+
+def _sierp4(A, B, C, depth, out):
+    """Non-carrier treatment: split into 4 half-size sub-triangles (the
+    central inverted one included) and run a depth-`depth` gasket in each.
+    Caps the largest hole at HALF the carrier hole, so the big holes live only
+    on carrier triangles — and, crucially, subdivides the outer edges into the
+    same 2^(depth+1) segments a carrier does, so seams still pair."""
+    ab, bc, ca = (A + B) / 2, (B + C) / 2, (C + A) / 2
+    for tri in ((A, ab, ca), (ab, B, bc), (ca, bc, C), (ab, bc, ca)):
+        _sierpinski_cells(tri[0], tri[1], tri[2], depth, out)
+
+
+def _tri_outside(tri, w, h):
+    """True when a lattice triangle cannot touch the frame, so its whole
+    40/52-cell gasket can be skipped before it is ever built."""
+    xs = [z.real for z in tri]
+    ys = [z.imag for z in tri]
+    return max(xs) < 0 or min(xs) > w or max(ys) < 0 or min(ys) > h
+
+
+def _gen_sierpinski(engine, target_w, target_h, base_s):
+    """Sierpinski triangles tiling the plane (up + down interlock), depth 3,
+    with ODD ROWS SHIFTED by half a period so the big level-3 holes spread
+    evenly instead of lining up in columns.
+
+    COVERAGE IS THE INSTRUMENT, not a formal partition — and not because of
+    the stagger. The whole family has T-junctions BY CONSTRUCTION: a hole is
+    ONE cell, but the three gasket triangles around it are subdivided by their
+    own recursion, so a level-d hole edge faces 2^(d-1) segments. That is
+    exactly the point of the shape (a hole becomes one large photo), and it
+    costs nothing: coverage measures min=1.000, i.e. no gaps and not even seam
+    dust, since every edge is straight.
+
+    The stagger itself is clean: S/2 is four of the eight sub-segments a
+    depth-3 edge is cut into, so the shifted row's subdivision points land on
+    the row below's. Measured at 800x600 — no stagger and S/2 both leave 102
+    unpaired seams (the inherent hole ones), while S/3 or S/5 add ~20 more.
+
+    40 cells per triangle, 2 triangles per lattice cell of area S^2*sqrt(3)/2
+    -> mean cell = S^2*sqrt(3)/160 = base_s^2."""
+    S = base_s * math.sqrt(160.0 / math.sqrt(3.0))
+    H = S * math.sqrt(3.0) / 2.0
+    for r in range(-1, int(target_h / H) + 2):
+        y0 = r * H
+        xoff = (S / 2.0) if (r % 2) else 0.0        # brick stagger per row
+        for c in range(-2, int(target_w / S) + 3):
+            x0 = c * S + xoff
+            up = (complex(x0, y0), complex(x0 + S, y0),
+                  complex(x0 + S / 2, y0 + H))
+            dn = (complex(x0 + S / 2, y0 + H), complex(x0 + 1.5 * S, y0 + H),
+                  complex(x0 + S, y0))
+            for tri in (up, dn):
+                if _tri_outside(tri, target_w, target_h):
+                    continue
+                out = []
+                _sierpinski_cells(tri[0], tri[1], tri[2], 3, out)
+                for cell in out:
+                    yield [(z.real, z.imag) for z in cell]
+
+
+def _gen_sierpinski_d(engine, target_w, target_h, base_s):
+    """Variant D — CHECKERBOARD (the 2026-07-04b verdict; variants B and C
+    were rejected): carriers alternate with capped triangles every second
+    triangle SEQUENTIALLY within a row regardless of orientation, and the
+    pattern shifts by ONE triangle each row — carrier = (t + r) % 2 == 0.
+
+    The grid is deliberately NOT row-staggered here: aligned rows are what
+    lets the carrier pattern offset the big holes row to row. With a stagger
+    the per-row carrier picks land in the same columns again — that was the
+    variant-C failure.
+
+    Carrier = 40 cells (depth 3), capped = 4 x 13 = 52 cells (_sierp4 at
+    depth 2); exactly half are carriers, so 46 cells per triangle on average
+    -> S^2*sqrt(3)/184 = base_s^2."""
+    S = base_s * math.sqrt(184.0 / math.sqrt(3.0))
+    H = S * math.sqrt(3.0) / 2.0
+    for r in range(-1, int(target_h / H) + 2):
+        y0 = r * H
+        for c in range(-2, int(target_w / S) + 3):
+            x0 = c * S
+            up = (complex(x0, y0), complex(x0 + S, y0),
+                  complex(x0 + S / 2, y0 + H))
+            dn = (complex(x0 + S / 2, y0 + H), complex(x0 + 1.5 * S, y0 + H),
+                  complex(x0 + S, y0))
+            for tri, t in ((up, 2 * c), (dn, 2 * c + 1)):
+                if _tri_outside(tri, target_w, target_h):
+                    continue
+                out = []
+                if (t + r) % 2 == 0:
+                    _sierpinski_cells(tri[0], tri[1], tri[2], 3, out)
+                else:
+                    _sierp4(tri[0], tri[1], tri[2], 2, out)
+                for cell in out:
+                    yield [(z.real, z.imag) for z in cell]
+
+
+def _carpet_cells(x, y, s, depth, out, clip=None):
+    """Sierpinski carpet recursion. The 8 ring sub-squares recurse and the
+    centre is a hole cell — EXCEPT at depth 1, where the centre is emitted as
+    an ordinary solid: a level-1 hole is the SAME size as the background
+    cells, so it would vanish once photos replace colours. Solids therefore
+    recurse one level deeper than holes, making the smallest real hole (1/27)
+    always 3x the background cell (1/81).
+
+    `clip` is a (w, h) frame: a sub-square entirely outside it is pruned
+    WHOLE, recursion and all. Without that a depth-4 carpet emits 4681 cells
+    per lattice position no matter how little of it shows — measured 42k cells
+    for the ~155 that touch an 800x600 frame."""
+    if clip is not None and (x > clip[0] or y > clip[1]
+                             or x + s < 0 or y + s < 0):
+        return
+    if depth == 0:
+        out.append((x, y, s))
+        return
+    t = s / 3.0
+    for a in range(3):
+        for b in range(3):
+            if a == 1 and b == 1:
+                out.append((x + t, y + t, t))
+            else:
+                _carpet_cells(x + a * t, y + b * t, t, depth - 1, out, clip)
+
+
+def _gen_sierpinski_carpet(engine, target_w, target_h, base_s):
+    """Sierpinski carpet, depth 4 — a true partition into axis-aligned
+    squares. The carpet is a rep-tile, so tiling the frame with carpets of
+    side S is seamless (the scheme fits exactly one to its square frame; the
+    engine must handle any aspect, hence the lattice).
+
+    N(d) = 1 + 8*N(d-1), N(4) = 4681 cells of total area S^2 -> S = 68.4
+    base_s. Background cells are 1/81 of the carpet and holes run 1/27 to 1/3,
+    which is the intended photo-scale gradient. The 1.05 factor corrects the
+    VISIBLE mean: a frame rarely shows a whole carpet, and the parts it cuts
+    off are biased toward the big central holes.
+
+    Like the triangles, holes face subdivided neighbours -> T-junctions by
+    construction, coverage (min=1.000) is the instrument."""
+    S = base_s * math.sqrt(4681.0) * 1.05
+    for i in range(-1, int(target_w / S) + 2):
+        for j in range(-1, int(target_h / S) + 2):
+            out = []
+            _carpet_cells(i * S, j * S, S, 4, out, clip=(target_w, target_h))
+            for x, y, s in out:
+                yield [(x, y), (x + s, y), (x + s, y + s), (x, y + s)]
+
+
 def _gen_cairo(engine, target_w, target_h, base_s):
     """Cairo pentagonal tiling: 4 congruent equilateral-parameter pentagons
     around every (i+j even) node of a unit square lattice. Pentagon area is
@@ -3191,6 +3356,9 @@ SHAPE_MODES = {
     "scales":        ShapeSpec("polygon", _gen_scales, aa=4),
     "nautilus":      ShapeSpec("polygon", _gen_nautilus, aa=4),
     "rosette_fractal": ShapeSpec("polygon", _gen_rosette_fractal, aa=4),
+    "sierpinski":      ShapeSpec("polygon", _gen_sierpinski, aa=4),
+    "sierpinski_d":    ShapeSpec("polygon", _gen_sierpinski_d, aa=4),
+    "sierpinski_carpet": ShapeSpec("polygon", _gen_sierpinski_carpet, aa=4),
     "kites":         ShapeSpec("polygon", _gen_kites, aa=1),
     "spectre":       ShapeSpec("polygon", _gen_spectre, aa=4),
     "sunflower_grande":         ShapeSpec("polygon", _gen_sunflower_grande, aa=4),

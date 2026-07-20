@@ -251,6 +251,25 @@ GOLDEN = {
     # Verified across two interpreters, one with PYTHONHASHSEED=1.
     ("rosette_fractal", False): "fe32fdc187f5544e3e9ac1596f31d062a260115e10bd3b27a6437dccd4225d0f",
     ("rosette_fractal", True): "d794018172c7f4c23319dd196c8c27fe90c9415cc3ec5c93a087da668fffe1bf",
+    # E7 (2026-07-20). The Sierpinski family emits EVERY triangle/square as a
+    # cell, gasket and hole alike — the fractal reads through photo SCALE
+    # (holes become progressively larger single photos), not empty space.
+    # T-junctions are inherent and intended: a hole is one cell facing
+    # subdivided gasket neighbours, so coverage (min == 1.000, straight edges)
+    # is the instrument, never a formal partition. sierpinski: depth 3 with an
+    # S/2 brick stagger, verified to add no T-junctions beyond the inherent
+    # ones (S/3 and S/5 do). sierpinski_d: checkerboard carrier (t+r)%2 on a
+    # deliberately UNstaggered grid, big holes offset half a period per row.
+    # carpet: depth 4, holes only from level 2 so the smallest is always 3x
+    # the background cell; recursion pruned against the frame (42k -> 167
+    # cells at 800x600). Pure integer/midpoint arithmetic, no RNG; verified
+    # across two interpreters, one with PYTHONHASHSEED=1.
+    ("sierpinski", False): "2077d0b94a11d64eb5eaebec1b51ddeeef24151978f1f0561c88042cbfb41122",
+    ("sierpinski", True): "98d2601095731c9f246ac3545de0efa78f10e2bf860633d0bc2b8b064faacfe7",
+    ("sierpinski_d", False): "16590113fe6a50cc6bfe493b9f07e0ec071242ba2ee9827975a2fbbe380f81f3",
+    ("sierpinski_d", True): "d7e41203c17abdd62a4ea6eea978e9f0900c0bebe48b6e8152a8d6972e24ac3b",
+    ("sierpinski_carpet", False): "582eaaba8cc7c74afb680de323f97c734da81d06aa41d518a457cb6c1948dfe9",
+    ("sierpinski_carpet", True): "0e99837621d3b35279e5ddc419b293166d1fe4d071d3c4788294da2e5b3b3bb2",
 }
 
 
