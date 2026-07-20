@@ -18,7 +18,8 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-from src.engine_smart import _gen_nautilus, _gen_scales
+from src.engine_smart import (_gen_nautilus, _gen_rosette_fractal,
+                              _gen_scales)
 
 log = logging.getLogger(__name__)
 
@@ -29,6 +30,7 @@ OUTLINE = (16, 16, 20)
 SHAPES = [
     ("scales", _gen_scales, 46, (0.47, 0.55)),      # teal -> sea blue
     ("nautilus", _gen_nautilus, 44, (0.05, 0.12)),  # shell amber
+    ("rosette_fractal", _gen_rosette_fractal, 40, (0.22, 0.32)),  # aloe
 ]
 
 
@@ -46,12 +48,17 @@ def main():
         draw = ImageDraw.Draw(img)
         polys = [[tuple(p) for p in poly] for poly in gen(None, SIZE, SIZE, base_s)]
         row_h = base_s / math.sqrt(2.0)
-        for poly in polys:
+        for idx, poly in enumerate(polys):
             cx, cy = _centroid(poly)
             t = ((cx / SIZE) * 0.6 + (cy / SIZE) * 0.4) % 1.0
             hue = h0 + (h1 - h0) * t
             if name == "scales":
                 band = int(round(cy / row_h))
+            elif name == "rosette_fractal":
+                # leaf/gap alternation IS the motif (the aloe's leaves and the
+                # shadows between them): cells are emitted leaf-then-gap, so
+                # the emission parity separates them; radius only tints.
+                band = (idx % 2) * 3
             else:                       # chamber index from the pole
                 band = int(math.hypot(cx + 0.55 * SIZE / 2,
                                       cy + 0.30 * SIZE / 2) / row_h)

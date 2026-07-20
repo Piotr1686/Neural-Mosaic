@@ -241,6 +241,16 @@ GOLDEN = {
     # interpreters, one with PYTHONHASHSEED=1.
     ("nautilus", False): "384d829b93e441f460c70d691f77e5cf0a1e6e9976fed43561fe544e199bf514",
     ("nautilus", True): "249bd49993a4f37efc547628490c367fc86c3e19c1e2383ba9305c1fa1ae404a",
+    # rosette_fractal: triangulated log-polar aloe whose sector count doubles
+    # outward (the pole fix). The rings-per-doubling is DERIVED, m =
+    # round(ln2/ln(1+2pi/N)), not the scheme's fixed 3 — a fixed m doubles the
+    # cell aspect ratio every period (64:1 by the 8th doubling, ~5 of which a
+    # 16K frame spans); the derived m holds it at 0.79-1.00 and reproduces
+    # m=3 at N=24. Seams are _edge polylines addressed by (ring, vertex), so
+    # both sides sample identically -> formally verified exact partition.
+    # Verified across two interpreters, one with PYTHONHASHSEED=1.
+    ("rosette_fractal", False): "fe32fdc187f5544e3e9ac1596f31d062a260115e10bd3b27a6437dccd4225d0f",
+    ("rosette_fractal", True): "d794018172c7f4c23319dd196c8c27fe90c9415cc3ec5c93a087da668fffe1bf",
 }
 
 

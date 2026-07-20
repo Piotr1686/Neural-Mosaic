@@ -26,6 +26,7 @@ from src.engine_smart import (SHAPE_MODES, SmartEngine, _poincare_cells,
                               _gen_koch_snowflake, _twindragon_boundary,
                               _gen_gereh, _gen_rosette, _gen_scales,
                               _gen_nautilus, _gen_sunburst,
+                              _gen_rosette_fractal,
                               _GOLDEN_ANGLE, _LUCAS_ANGLE)
 from src.grout import classify_edges
 from tests.test_golden_shapes import _build_library, _make_target
@@ -1499,3 +1500,114 @@ def test_nautilus_arcs_stay_smooth():
             chord = math.hypot(poly[j][0] - poly[k][0], poly[j][1] - poly[k][1])
             worst = max(worst, chord ** 2 / (8.0 * rs[k]))
     assert worst < 0.5, f"arc sagitta {worst:.3f} px — visible faceting"
+
+
+# --- E6: rosette_fractal (spiral aloe) --------------------------------------
+# Every seam is an _edge polyline addressed by (ring, vertex) pairs in each
+# ring's own units, so both cells generate the same points -> shared polylines
+# -> the FORMAL partition test is the right instrument here (unlike nautilus,
+# whose ring phase makes legal T-junctions).
+
+def _areas_inside(gen, w, h, base_s):
+    out = []
+    for poly in gen(None, w, h, base_s):
+        poly = list(poly)
+        cx = sum(q[0] for q in poly) / len(poly)
+        cy = sum(q[1] for q in poly) / len(poly)
+        if not (0 <= cx < w and 0 <= cy < h):
+            continue
+        a = 0.0
+        for k in range(len(poly)):
+            x0, y0 = poly[k]
+            x1, y1 = poly[(k + 1) % len(poly)]
+            a += x0 * y1 - x1 * y0
+        out.append(abs(a) / 2.0)
+    return out
+
+
+@pytest.mark.parametrize("w,h,base_s", [
+    (800, 600, 60),
+    (1200, 300, 50),
+    (384, 288, 50),
+])
+def test_rosette_fractal_is_an_exact_partition(w, h, base_s):
+    PAD = 2.0
+    cells = [(list(poly), 0, 0)
+             for poly in _gen_rosette_fractal(None, w, h, base_s)]
+    by_level = classify_edges(cells)
+    interior_unpaired = [
+        (a, b) for a, b in by_level[3]
+        if all(PAD < p[0] < w - PAD and PAD < p[1] < h - PAD for p in (a, b))
+    ]
+    assert not interior_unpaired, (
+        f"{len(interior_unpaired)} unpaired interior seam segment(s) at "
+        f"{w}x{h} base_s={base_s}: {interior_unpaired[:3]}")
+
+
+def test_rosette_fractal_covers_via_engine_masks():
+    w, h, base_s, ss = 800, 600, 60, 4
+    acc = np.zeros((h, w), dtype=np.float64)
+    for poly in _gen_rosette_fractal(None, w, h, base_s):
+        m = Image.new("L", (w * ss, h * ss), 0)
+        ImageDraw.Draw(m).polygon([(x * ss, y * ss) for x, y in poly], fill=255)
+        acc += np.asarray(m.resize((w, h), Image.BOX), dtype=np.float64) / 255.0
+    below = int((acc < 0.45).sum())
+    assert below == 0, (
+        f"rosette_fractal: {below} px under 45% engine-mask coverage "
+        f"(min={acc.min():.3f}) — real holes, not seam dust")
+
+
+def test_rosette_fractal_rings_per_doubling_keep_cells_square():
+    # THE fix over the scheme. Within a doubling period N is constant while r
+    # doubles, so the radial depth r*(g-1) doubles; at the doubling N halves
+    # the tangential size but not the depth, so a FIXED m makes the aspect
+    # ratio double every period. Derived m = round(ln2/ln(1+2pi/N)) — the
+    # sunburst square-cell relation snapped onto the doubling grid — holds it
+    # flat. Over 8 doublings: fixed m=3 reaches 64:1, derived stays under 1.01.
+    def aspects(fixed):
+        N, out = 12, []
+        for _ in range(8):
+            m = 3 if fixed else max(
+                1, round(math.log(2.0) / math.log(1.0 + 2.0 * math.pi / N)))
+            out.append(N * (2.0 ** (1.0 / m) - 1.0) / (2.0 * math.pi))
+            N *= 2
+        return out
+
+    assert max(aspects(fixed=False)) < 1.01
+    assert min(aspects(fixed=False)) > 0.75
+    assert max(aspects(fixed=True)) > 50.0, (
+        "the scheme's fixed m=3 no longer diverges — re-check the derivation")
+    # m=3 must still fall out naturally at N=24 (the scheme's own value)
+    assert round(math.log(2.0) / math.log(1.0 + 2.0 * math.pi / 24)) == 3
+
+
+def test_rosette_fractal_cell_size_resets_at_each_doubling():
+    # The pole fix, measured on the real generator: cell size oscillates
+    # within a period and RESETS at every doubling, so the spread stays
+    # bounded (~1.8x linear) instead of growing with the frame — contrast
+    # nautilus, whose pole-outside field has a monotone 4.4x gradient.
+    areas = _areas_inside(_gen_rosette_fractal, 900, 900, 60)
+    spread = math.sqrt(max(areas) / min(areas))
+    assert spread < 2.2, f"linear cell-size spread {spread:.2f}x"
+
+
+@pytest.mark.parametrize("w,h,base_s", [
+    (800, 600, 60),
+    (1200, 300, 50),
+    (900, 900, 60),
+    (1600, 1200, 80),
+])
+def test_rosette_fractal_mean_area_is_base_s_squared(w, h, base_s):
+    areas = _areas_inside(_gen_rosette_fractal, w, h, base_s)
+    assert sum(areas) / len(areas) == pytest.approx(base_s ** 2, rel=0.12)
+
+
+def test_rosette_fractal_scales_to_16k_within_budget():
+    # A log-polar field doubling outward could explode; the derived m keeps
+    # the ring count logarithmic. 16K measured: ~42k cells, all small polys.
+    n, max_verts = 0, 0
+    for poly in _gen_rosette_fractal(None, 16384, 12288, 75):
+        n += 1
+        max_verts = max(max_verts, len(poly))
+    assert n < 120000, f"{n} cells at 16K — RAM budget (A1) at risk"
+    assert max_verts < 64

@@ -1647,6 +1647,119 @@ def _gen_nautilus(engine, target_w, target_h, base_s):
             yield poly
 
 
+def _gen_rosette_fractal(engine, target_w, target_h, base_s):
+    """Spiral aloe (Aloe polyphylla): a triangulated log-polar field of leaf
+    and gap triangles whose sector count DOUBLES outward, so nothing shrinks
+    to nothing at the pole (the 2026-07-04b 'impractical centre' revision).
+    Self-similar in log r — the pattern repeats identically at every doubling
+    of the radius, which is what makes it the FRACTAL rosette.
+
+    RINGS-PER-DOUBLING IS DERIVED, NOT FIXED AT 3. The scheme hard-codes m=3
+    with g=2^(1/m), which only keeps cells square while N=24; a straight port
+    diverges badly. Within a period N is constant while r doubles, so the
+    radial depth r*(g-1) doubles too, and at the next doubling N halves the
+    tangential size but leaves the depth alone -> the aspect ratio DOUBLES per
+    period. Measured on a 16K frame that is ~5 doublings: 16:1 rim slivers,
+    useless as photo tiles (and invisible at the scheme's 720 px, which shows
+    barely one doubling). The fix keeps the construction and re-derives m from
+    the CURRENT sector count, m = round(ln2 / ln(1 + 2*pi/N)), which is the
+    sunburst square-cell relation g = 1 + 2*pi/N rounded onto the doubling
+    grid. Aspect then measures 0.79-1.00 at every N, and m=3 falls out
+    naturally at N=24 -- the scheme's value, now a consequence instead of a
+    constant. Cell size oscillates 2x within a period and RESETS at each
+    doubling (bounded, unlike nautilus's monotone 4.4x gradient).
+
+    EXACT PARTITION. Every seam is an `_edge` polyline addressed by its two
+    endpoint (ring, vertex) pairs in each ring's OWN sector units, so the two
+    cells sharing it generate the same points; traversal direction differs but
+    an edge omits its far endpoint and the neighbouring edge supplies it, so
+    both rings carry the identical point chain. Doubling strips fan a coarse
+    sector into 3 triangles against fine vertices 2k, 2k+1, 2k+2 — still in
+    fine units, so the strip above matches. Hence the FORMAL partition test
+    applies here (unlike nautilus).
+
+    The pole is closed by a fan of N0 leaf/gap triangles of the same shape as
+    the rings, converging tip-first — no separate cap disk."""
+    cx, cy = target_w / 2.0, target_h / 2.0
+    r_max = math.hypot(cx, cy) * 1.01
+    N0 = 12
+    delta = 0.62                                  # spiral twist, sector units
+    # mean cell = base_s^2. A quad of tangential size t splits into 2
+    # triangles, so t = sqrt(2)*base_s -> r0 = N0*t/(2*pi).
+    r0 = N0 * base_s * math.sqrt(2.0) / (2.0 * math.pi) * 0.86   # calibrated
+    radii, Ns = [r0], [N0]
+    N = N0
+    r_period = r0                                 # radius at the last doubling
+    while radii[-1] < r_max:
+        m = max(1, round(math.log(2.0) / math.log(1.0 + 2.0 * math.pi / N)))
+        g = 2.0 ** (1.0 / m)
+        radii.append(radii[-1] * g)
+        if radii[-1] >= r_period * 2.0 - 1e-9:    # a full doubling of r
+            N *= 2
+            r_period = radii[-1]
+        Ns.append(N)
+    offs = [0.0]
+    for i in range(1, len(radii)):
+        offs.append(offs[-1] + delta * 2.0 * math.pi / Ns[i])
+
+    def vang(i, k):
+        return offs[i] + 2.0 * math.pi * k / Ns[i]
+
+    def _edge(i0, k0, i1, k1):
+        """Polyline from vertex k0 of ring i0 to vertex k1 of ring i1 (each k
+        in its OWN ring's units), straight in (log r, theta). The far endpoint
+        is omitted -- the next edge of the ring supplies it. The segment count
+        is derived SYMMETRICALLY (geometric mean radius), so the neighbour
+        walking this seam backwards computes the same nseg and the same
+        points: exact seams at any resolution."""
+        ra, rb = radii[i0], radii[i1]
+        rg = math.sqrt(ra * rb)
+        u0, u1 = math.log(ra), math.log(rb)
+        a0, a1 = vang(i0, k0), vang(i1, k1)
+        span = math.hypot(rb - ra, rg * (a1 - a0))
+        nseg = max(2, int(span / _arc_pitch(rg)) + 1)
+        pts = []
+        for t in range(nseg):
+            f = t / nseg
+            u = u0 + (u1 - u0) * f
+            a = a0 + (a1 - a0) * f
+            r = math.exp(u)
+            pts.append((cx + r * math.cos(a), cy + r * math.sin(a)))
+        return pts
+
+    # centre fan: N0 triangles converging tip-first at the pole; the outer
+    # edge reuses _edge, so the fan meets ring 0 with identical sampling
+    for k in range(N0):
+        a1 = vang(0, k + 1)
+        yield _join_arcs([(cx, cy)], _edge(0, k, 0, k + 1),
+                         [(cx + radii[0] * math.cos(a1),
+                           cy + radii[0] * math.sin(a1))])
+    for i in range(len(radii) - 1):
+        Ni, Nj = Ns[i], Ns[i + 1]
+        if Nj == Ni:
+            # plain strip: leaf (tip outward) + gap (tip inward) per sector
+            for k in range(Ni):
+                yield _join_arcs(_edge(i, k, i, k + 1),
+                                 _edge(i, k + 1, i + 1, k),
+                                 _edge(i + 1, k, i, k))
+                yield _join_arcs(_edge(i, k + 1, i + 1, k + 1),
+                                 _edge(i + 1, k + 1, i + 1, k),
+                                 _edge(i + 1, k, i, k + 1))
+        else:
+            # doubling strip: coarse sector k fans into 3 triangles against
+            # fine vertices 2k, 2k+1, 2k+2 (leaf points outward in the middle)
+            for k in range(Ni):
+                yield _join_arcs(_edge(i, k, i + 1, 2 * k + 1),
+                                 _edge(i + 1, 2 * k + 1, i + 1, 2 * k),
+                                 _edge(i + 1, 2 * k, i, k))
+                yield _join_arcs(_edge(i, k, i, k + 1),
+                                 _edge(i, k + 1, i + 1, 2 * k + 1),
+                                 _edge(i + 1, 2 * k + 1, i, k))
+                yield _join_arcs(_edge(i, k + 1, i + 1, 2 * k + 2),
+                                 _edge(i + 1, 2 * k + 2, i + 1, 2 * k + 1),
+                                 _edge(i + 1, 2 * k + 1, i, k + 1))
+
+
 def _gen_cairo(engine, target_w, target_h, base_s):
     """Cairo pentagonal tiling: 4 congruent equilateral-parameter pentagons
     around every (i+j even) node of a unit square lattice. Pentagon area is
@@ -3077,6 +3190,7 @@ SHAPE_MODES = {
     "rosette":       ShapeSpec("polygon", _gen_rosette, aa=4),
     "scales":        ShapeSpec("polygon", _gen_scales, aa=4),
     "nautilus":      ShapeSpec("polygon", _gen_nautilus, aa=4),
+    "rosette_fractal": ShapeSpec("polygon", _gen_rosette_fractal, aa=4),
     "kites":         ShapeSpec("polygon", _gen_kites, aa=1),
     "spectre":       ShapeSpec("polygon", _gen_spectre, aa=4),
     "sunflower_grande":         ShapeSpec("polygon", _gen_sunflower_grande, aa=4),
