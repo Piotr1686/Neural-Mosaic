@@ -25,6 +25,7 @@ from src.engine_smart import (SHAPE_MODES, SmartEngine, _poincare_cells,
                               _gen_dragon, _gen_koch_island,
                               _gen_koch_snowflake, _twindragon_boundary,
                               _gen_gereh, _gen_rosette, _gen_scales,
+                              _gen_nautilus, _gen_sunburst,
                               _GOLDEN_ANGLE, _LUCAS_ANGLE)
 from src.grout import classify_edges
 from tests.test_golden_shapes import _build_library, _make_target
@@ -1360,3 +1361,141 @@ def test_scales_has_no_consecutive_duplicate_vertices():
             a, b = p[k], p[(k + 1) % len(p)]
             assert math.hypot(a[0] - b[0], a[1] - b[1]) > 1e-9, (
                 f"duplicate vertex at index {k}: {a}")
+
+
+# --- E6: nautilus (log-spiral chambers, pole outside the frame) -------------
+# Per-ring phase (swirl + brick offset) means a ring arc is cut differently on
+# its two sides: LEGAL T-junctions, the voderberg/sunburst precedent. So per
+# the ladder the gate is FLOAT coverage only — a formal partition test would
+# be the wrong instrument and would fail on a correct shape.
+
+def test_nautilus_covers_via_engine_masks():
+    w, h, base_s, ss = 800, 600, 60, 4
+    acc = np.zeros((h, w), dtype=np.float64)
+    for poly in _gen_nautilus(None, w, h, base_s):
+        m = Image.new("L", (w * ss, h * ss), 0)
+        ImageDraw.Draw(m).polygon([(x * ss, y * ss) for x, y in poly], fill=255)
+        acc += np.asarray(m.resize((w, h), Image.BOX), dtype=np.float64) / 255.0
+    below = int((acc < 0.45).sum())
+    assert below == 0, (
+        f"nautilus: {below} px under 45% engine-mask coverage "
+        f"(min={acc.min():.3f}) — real holes, not seam dust")
+
+
+def test_nautilus_pole_lies_outside_the_frame():
+    # THE distinctness gate against sunburst (same log-polar machinery). The
+    # smallest cell always sits closest to the pole; sunburst's pole is the
+    # frame centre, nautilus's is beyond the top-left corner. Measured in
+    # half-diagonals: nautilus 0.97, sunburst 0.22.
+    def smallest_cell_offset(gen):
+        w, h = 800, 600
+        best = None
+        for poly in gen(None, w, h, 60):
+            poly = list(poly)
+            cx = sum(q[0] for q in poly) / len(poly)
+            cy = sum(q[1] for q in poly) / len(poly)
+            if not (0 <= cx < w and 0 <= cy < h):
+                continue
+            a = 0.0
+            for k in range(len(poly)):
+                x0, y0 = poly[k]
+                x1, y1 = poly[(k + 1) % len(poly)]
+                a += x0 * y1 - x1 * y0
+            a = abs(a) / 2.0
+            if best is None or a < best[0]:
+                best = (a, cx, cy)
+        _, cx, cy = best
+        return math.hypot(cx - w / 2, cy - h / 2) / math.hypot(w / 2, h / 2)
+
+    assert smallest_cell_offset(_gen_nautilus) > 0.7, "nautilus pole drifted inward"
+    assert smallest_cell_offset(_gen_sunburst) < 0.4, "sunburst is no longer centred"
+
+
+def test_nautilus_has_no_shrinking_singularity():
+    # The 'good centre' rule. A log-polar field ALWAYS has a size gradient
+    # (cell size ~ r); what the outside pole buys is that the visible radius
+    # band is bounded AWAY FROM ZERO, so no cell collapses. With the pole at
+    # the frame centre (sunburst) the inner cells would tend to nothing and
+    # only a cap fan saves them. Measured smallest chamber: 0.39*base_s.
+    base_s = 60
+    areas = []
+    for poly in _gen_nautilus(None, 800, 600, base_s):
+        poly = list(poly)
+        cx = sum(q[0] for q in poly) / len(poly)
+        cy = sum(q[1] for q in poly) / len(poly)
+        if not (0 <= cx < 800 and 0 <= cy < 600):
+            continue
+        a = 0.0
+        for k in range(len(poly)):
+            x0, y0 = poly[k]
+            x1, y1 = poly[(k + 1) % len(poly)]
+            a += x0 * y1 - x1 * y0
+        areas.append(abs(a) / 2.0)
+    assert math.sqrt(min(areas)) > 0.3 * base_s, "a chamber collapsed"
+
+
+def test_nautilus_chambers_are_square_in_log_polar():
+    # THE invariant behind g = 1 + 2*pi/nsec: the radial depth of a chamber
+    # equals its arc width at the same radius, so cells read as ~square at
+    # every radius even though they grow outward. This is what makes the size
+    # gradient acceptable rather than a distortion.
+    for poly in _gen_nautilus(None, 800, 600, 60):
+        poly = list(poly)
+        px, py = -0.55 * 400.0, -0.30 * 300.0
+        rs = [math.hypot(x - px, y - py) for x, y in poly]
+        r_in, r_out = min(rs), max(rs)
+        depth = r_out - r_in
+        # arc width at mid radius: the inner arc's polyline length
+        inner = [p for p, r in zip(poly, rs) if r < (r_in + r_out) / 2]
+        width = sum(math.hypot(inner[k + 1][0] - inner[k][0],
+                               inner[k + 1][1] - inner[k][1])
+                    for k in range(len(inner) - 1))
+        width *= ((r_in + r_out) / 2) / r_in          # scale to mid radius
+        assert 0.8 < depth / width < 1.25, (
+            f"chamber aspect {depth / width:.2f} — g/nsec relation broken")
+
+
+@pytest.mark.parametrize("w,h,base_s", [
+    (800, 600, 60),
+    (1200, 300, 50),
+    (900, 900, 60),
+])
+def test_nautilus_mean_area_tracks_base_s(w, h, base_s):
+    # Looser than the lattice shapes' 2-5%: a log-polar field has a genuine
+    # 2x linear size gradient across the frame, so `base_s` sets the MEAN
+    # chamber, and the aspect ratio shifts which part of the radius band is
+    # visible (measured 0.90-1.05 linear across the pool's test frames).
+    areas = []
+    for poly in _gen_nautilus(None, w, h, base_s):
+        poly = list(poly)
+        cx = sum(q[0] for q in poly) / len(poly)
+        cy = sum(q[1] for q in poly) / len(poly)
+        if not (0 <= cx < w and 0 <= cy < h):
+            continue
+        a = 0.0
+        for k in range(len(poly)):
+            x0, y0 = poly[k]
+            x1, y1 = poly[(k + 1) % len(poly)]
+            a += x0 * y1 - x1 * y0
+        areas.append(abs(a) / 2.0)
+    assert sum(areas) / len(areas) == pytest.approx(base_s ** 2, rel=0.25)
+
+
+def test_nautilus_arcs_stay_smooth():
+    # _arc_pitch per ring: sagitta under a pixel on every chord, both sides of
+    # a shared ring arc using the SAME pitch (same radius -> same call).
+    # Only ARC chords are checked: the two long radial seams joining the inner
+    # and outer arcs are STRAIGHT by construction and have no sagitta at all
+    # (measuring them was this test's first, wrong, formulation).
+    px, py = -0.55 * 400.0, -0.30 * 300.0
+    worst = 0.0
+    for poly in _gen_nautilus(None, 800, 600, 60):
+        poly = list(poly)
+        rs = [math.hypot(x - px, y - py) for x, y in poly]
+        for k in range(len(poly)):
+            j = (k + 1) % len(poly)
+            if abs(rs[k] - rs[j]) > 1e-6:
+                continue                      # radial seam, not an arc chord
+            chord = math.hypot(poly[j][0] - poly[k][0], poly[j][1] - poly[k][1])
+            worst = max(worst, chord ** 2 / (8.0 * rs[k]))
+    assert worst < 0.5, f"arc sagitta {worst:.3f} px — visible faceting"

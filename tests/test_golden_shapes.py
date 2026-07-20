@@ -231,6 +231,16 @@ GOLDEN = {
     # interpreters, one with PYTHONHASHSEED=1.
     ("scales", False): "400f430b60ebbb176506e09f8b8b68546a277adffe525c00baa933d62407d084",
     ("scales", True): "de4a239d4e444e68f30a6ab3dc050ddb86b4fa42face787dd72e37dcadd2f34e",
+    # nautilus: log-polar chambers about a pole OUTSIDE the frame
+    # (-0.55*cx, -0.30*cy — the scheme's (-1.55, -1.30) in half-frame units),
+    # constant nsec + g = 1 + 2*pi/nsec so chambers stay square as they grow.
+    # The outside pole IS the 'good centre' answer: the visible radius band is
+    # bounded away from zero, so no cap fan and nothing collapses. Per-ring
+    # swirl makes ring arcs T-junction (voderberg precedent) — coverage is
+    # gated in FLOAT, not by a formal partition. Verified across two
+    # interpreters, one with PYTHONHASHSEED=1.
+    ("nautilus", False): "384d829b93e441f460c70d691f77e5cf0a1e6e9976fed43561fe544e199bf514",
+    ("nautilus", True): "249bd49993a4f37efc547628490c367fc86c3e19c1e2383ba9305c1fa1ae404a",
 }
 
 

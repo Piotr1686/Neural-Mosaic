@@ -1587,6 +1587,66 @@ def _gen_scales(engine, target_w, target_h, base_s):
             )
 
 
+def _gen_nautilus(engine, target_w, target_h, base_s):
+    """Chambered log-spiral growth with the pole OUTSIDE the frame — the
+    approved answer to the 'good centre' rule (a radial family whose cells
+    would otherwise shrink to nothing at the singularity). The scheme puts the
+    pole beyond the near corner at (-1.55, -1.30) in half-frame units; here
+    that is `(-0.55*cx, -0.30*cy)`, so the proportions hold at any aspect
+    ratio and the visible field is all sweeping arc chambers that grow across
+    the canvas.
+
+    Log-polar with a CONSTANT sector count and geometric radii: cells stay
+    ~square at every radius, since g = 1 + 2*pi/nsec makes the radial step
+    equal the arc step (the sunburst relation — the scheme's g=1.16 at nsec=40
+    is exactly that, so this is a port, not a redesign). Because the pole sits
+    outside, the whole frame lives in a band of BOUNDED radius, which is what
+    keeps the cell-size spread small.
+
+    NO CAP DISK. The pole formula always lands at x<0 and y<0, so the frame's
+    nearest point is the corner (0, 0); starting the ring stack one step below
+    that radius puts the innermost ring boundary outside the frame, and the
+    corner is covered by ordinary chambers.
+
+    COVERAGE INSTRUMENT: rings carry a per-ring phase (swirl + a half-sector
+    brick offset), so a ring arc is cut into sectors differently on its two
+    sides — legal T-junctions, the accepted voderberg/sunburst precedent. A
+    FORMAL partition test would therefore be the wrong gate (MEMORY's ladder:
+    non-pairing seams -> FLOAT coverage only). `_arc_pitch(r)` per ring keeps
+    every sagitta under 0.35 px and, crucially, gives BOTH sides of a shared
+    ring arc the same pitch."""
+    cx, cy = target_w / 2.0, target_h / 2.0
+    px, py = -0.55 * cx, -0.30 * cy                 # pole, outside the frame
+    r_near = math.hypot(px, py)                     # to the corner (0, 0)
+    r_far = math.hypot(target_w - px, target_h - py)
+    r_ref = math.sqrt(r_near * r_far) * 1.15        # calibrated so the mean
+    # VISIBLE chamber lands on base_s^2. The geometric mean of the radius band
+    # is the natural log-polar midpoint, but the outer (bigger) rings hold more
+    # cells than the inner ones, so the raw midpoint overshoots by ~1.15.
+    nsec = max(16, int(round(2.0 * math.pi * r_ref / base_s)))
+    d = 2.0 * math.pi / nsec
+    g = 1.0 + d                                     # square cells: dr = arc
+    swirl = 2.674 * d                               # scheme: 0.42 rad at nsec=40
+    radii = [r_near / g]
+    while radii[-1] < r_far:
+        radii.append(radii[-1] * g)
+    for k in range(len(radii) - 1):
+        r_in, r_out = radii[k], radii[k + 1]
+        seg_in, seg_out = _arc_pitch(r_in), _arc_pitch(r_out)
+        base_a = k * swirl + (d / 2.0) * (k % 2)    # half-sector brick offset
+        for i in range(nsec):
+            a0 = base_a + d * i
+            a1 = a0 + d
+            poly = (_sun_arc(r_in, a0, a1, px, py, seg_in)
+                    + _sun_arc(r_out, a1, a0, px, py, seg_out))
+            xs = [p[0] for p in poly]
+            ys = [p[1] for p in poly]
+            if (max(xs) < 0 or min(xs) > target_w
+                    or max(ys) < 0 or min(ys) > target_h):
+                continue                            # wedge misses the frame
+            yield poly
+
+
 def _gen_cairo(engine, target_w, target_h, base_s):
     """Cairo pentagonal tiling: 4 congruent equilateral-parameter pentagons
     around every (i+j even) node of a unit square lattice. Pentagon area is
@@ -3016,6 +3076,7 @@ SHAPE_MODES = {
     "gereh":         ShapeSpec("polygon", _gen_gereh, aa=4),
     "rosette":       ShapeSpec("polygon", _gen_rosette, aa=4),
     "scales":        ShapeSpec("polygon", _gen_scales, aa=4),
+    "nautilus":      ShapeSpec("polygon", _gen_nautilus, aa=4),
     "kites":         ShapeSpec("polygon", _gen_kites, aa=1),
     "spectre":       ShapeSpec("polygon", _gen_spectre, aa=4),
     "sunflower_grande":         ShapeSpec("polygon", _gen_sunflower_grande, aa=4),

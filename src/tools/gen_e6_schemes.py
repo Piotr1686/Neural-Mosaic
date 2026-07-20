@@ -18,7 +18,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-from src.engine_smart import _gen_scales
+from src.engine_smart import _gen_nautilus, _gen_scales
 
 log = logging.getLogger(__name__)
 
@@ -27,7 +27,8 @@ BG = (20, 20, 24)
 OUTLINE = (16, 16, 20)
 
 SHAPES = [
-    ("scales", _gen_scales, 46, (0.47, 0.55)),   # teal -> sea blue
+    ("scales", _gen_scales, 46, (0.47, 0.55)),      # teal -> sea blue
+    ("nautilus", _gen_nautilus, 44, (0.05, 0.12)),  # shell amber
 ]
 
 
@@ -49,7 +50,12 @@ def main():
             cx, cy = _centroid(poly)
             t = ((cx / SIZE) * 0.6 + (cy / SIZE) * 0.4) % 1.0
             hue = h0 + (h1 - h0) * t
-            val = 0.52 + 0.34 * (int(round(cy / row_h)) % 4) / 3.0
+            if name == "scales":
+                band = int(round(cy / row_h))
+            else:                       # chamber index from the pole
+                band = int(math.hypot(cx + 0.55 * SIZE / 2,
+                                      cy + 0.30 * SIZE / 2) / row_h)
+            val = 0.52 + 0.34 * (band % 4) / 3.0
             r, g, b = colorsys.hsv_to_rgb(hue, 0.58, val)
             draw.polygon(poly, fill=(int(r * 255), int(g * 255), int(b * 255)),
                          outline=OUTLINE)
