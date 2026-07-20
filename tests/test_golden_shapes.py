@@ -221,6 +221,16 @@ GOLDEN = {
     ("gereh", True): "e35cf3a98363541bc808963b38a2ee2a75a6c703fe1912726e6782c7f41e3ebe",
     ("rosette", False): "79566de37822130179642527ed067573af28ccc6fa8c4bad35c51624d2e7a5c4",
     ("rosette", True): "9f279666088fa1df78d0a29842a7eda47f10f2745ab0f5a4cff4c36095594d72",
+    # E6 (2026-07-20). scales: circles of r=base_s/sqrt(2) on the checkerboard
+    # lattice (dx=2r, dy=r); each cell = its disk minus the two disks of the
+    # row below, which cut it exactly at (+-r, 0) and (0, r). The boundary is
+    # assembled from QUARTER arcs fetched through center(i, j), so a bite is
+    # bit-for-bit the neighbour's dome quarter -> exact partition, no slivers.
+    # Pitch from _arc_pitch (the scale radius does not grow with the frame —
+    # the truchet_hex faceting trap). Pure trig, no RNG; verified across two
+    # interpreters, one with PYTHONHASHSEED=1.
+    ("scales", False): "400f430b60ebbb176506e09f8b8b68546a277adffe525c00baa933d62407d084",
+    ("scales", True): "de4a239d4e444e68f30a6ab3dc050ddb86b4fa42face787dd72e37dcadd2f34e",
 }
 
 

@@ -1502,6 +1502,91 @@ def _gen_rosette(engine, target_w, target_h, base_s):
                     yield [(z.real, z.imag) for z in tri]
 
 
+def _join_arcs(*arcs):
+    """Concatenate polylines into one ring, dropping CONSECUTIVE duplicate
+    points at the joints (and the closing point if it repeats the start).
+
+    Sprint P lesson (MEMORY 2026-07-19): Pillow's scanline parity counts a
+    repeated vertex twice, which flips the inside/outside test for that row and
+    leaves 1-2 px stripes -- visible even with aa=4. Arc chains ALWAYS produce
+    such duplicates, because each arc ends where the next one begins."""
+    ring = []
+    for arc in arcs:
+        for p in arc:
+            if ring and abs(p[0] - ring[-1][0]) < 1e-9 and abs(p[1] - ring[-1][1]) < 1e-9:
+                continue
+            ring.append(p)
+    while (len(ring) > 1
+           and abs(ring[0][0] - ring[-1][0]) < 1e-9
+           and abs(ring[0][1] - ring[-1][1]) < 1e-9):
+        ring.pop()
+    return ring
+
+
+def _gen_scales(engine, target_w, target_h, base_s):
+    """Fish scales (imbricated scallops): circles of radius r on the
+    checkerboard lattice (dx=2r, dy=r, odd rows offset by r) cover the plane
+    exactly, and each scale is its own disk MINUS the two disks of the row
+    below. Those disks sit at distance r*sqrt(2), so they cut the circle
+    exactly at its side points (+-r, 0) and at the bottom point (0, r): every
+    cell is the classic shield -- a semicircular dome plus two concave arcs
+    meeting in a bottom tip.
+
+    EXACT PARTITION BY CONSTRUCTION. The boundary is assembled from QUARTER
+    arcs only, and each quarter is fetched through `center(i, j)` for the cell
+    that owns it -- never by adding r to our own centre. So the arc a scale
+    bites out of itself is bit-for-bit the same polyline as the upper-left
+    quarter of the dome of the scale below it (same r, same angles, same
+    centre floats, hence the same `_sun_arc` sampling). Reversal is the only
+    difference. This is the `_sun_arc`/puzzle "shared polyline" pattern; a
+    naive parametrisation would sample the shared arc over pi/2 on one side
+    and as part of a pi dome on the other -> sub-pixel slivers.
+
+    ARC PITCH: `_arc_pitch(r)`, NOT base_s/3. The scale radius is ~base_s at
+    EVERY resolution (it does not grow with the frame), so a base_s-derived
+    pitch would leave a 1-3 px facet on every arc -- the truchet_hex mistake.
+
+    Area: the two bites are lens-shaped, each of area pi*r^2/2 - r^2, and they
+    only touch (the lower disks are tangent at (0, r)), so the cell keeps
+    pi*r^2 - (pi*r^2 - 2*r^2) = 2*r^2. That equals the lattice determinant
+    |(2r,0) x (r,r)| = 2r^2 (one scale per lattice point), which is the
+    partition cross-check. Mean cell area = base_s^2 -> r = base_s/sqrt(2)."""
+    r = base_s / math.sqrt(2.0)
+    seg = _arc_pitch(r)
+    half = math.pi / 2.0
+
+    def center(i, j):
+        return (i * 2.0 * r + (r if (j % 2) else 0.0), j * r)
+
+    def quarter(i, j, k):
+        """Quarter arc k of the circle owned by cell (i, j): k=0 spans
+        pi..3pi/2 (from the left point to the top point), k=1 spans
+        3pi/2..2pi (top point to right point)."""
+        cx, cy = center(i, j)
+        a0 = math.pi + k * half
+        return _sun_arc(r, a0, a0 + half, cx, cy, seg)
+
+    j0 = -2
+    j1 = int(math.ceil((target_h + r) / r)) + 1
+    for j in range(j0, j1 + 1):
+        off = r if (j % 2) else 0.0
+        i0 = int(math.floor((-r - off) / (2.0 * r))) - 1
+        i1 = int(math.ceil((target_w + r - off) / (2.0 * r))) + 1
+        for i in range(i0, i1 + 1):
+            # the two scales of the row below that bite into this one; their
+            # lattice indices depend on the row parity (see center())
+            if j % 2:
+                br_i, bl_i = i + 1, i
+            else:
+                br_i, bl_i = i, i - 1
+            yield _join_arcs(
+                quarter(i, j, 0),                            # dome: left -> top
+                quarter(i, j, 1),                            # dome: top -> right
+                reversed(quarter(br_i, j + 1, 0)),           # right bite -> tip
+                reversed(quarter(bl_i, j + 1, 1)),           # tip -> left point
+            )
+
+
 def _gen_cairo(engine, target_w, target_h, base_s):
     """Cairo pentagonal tiling: 4 congruent equilateral-parameter pentagons
     around every (i+j even) node of a unit square lattice. Pentagon area is
@@ -2930,6 +3015,7 @@ SHAPE_MODES = {
     "koch_snowflake": ShapeSpec("polygon", _gen_koch_snowflake, aa=4),
     "gereh":         ShapeSpec("polygon", _gen_gereh, aa=4),
     "rosette":       ShapeSpec("polygon", _gen_rosette, aa=4),
+    "scales":        ShapeSpec("polygon", _gen_scales, aa=4),
     "kites":         ShapeSpec("polygon", _gen_kites, aa=1),
     "spectre":       ShapeSpec("polygon", _gen_spectre, aa=4),
     "sunflower_grande":         ShapeSpec("polygon", _gen_sunflower_grande, aa=4),

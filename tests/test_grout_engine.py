@@ -24,7 +24,7 @@ from src.engine_smart import (SHAPE_MODES, SmartEngine, _poincare_cells,
                               _gen_puzzle_ribbon, _gen_puzzle_hex,
                               _gen_dragon, _gen_koch_island,
                               _gen_koch_snowflake, _twindragon_boundary,
-                              _gen_gereh, _gen_rosette,
+                              _gen_gereh, _gen_rosette, _gen_scales,
                               _GOLDEN_ANGLE, _LUCAS_ANGLE)
 from src.grout import classify_edges
 from tests.test_golden_shapes import _build_library, _make_target
@@ -1277,3 +1277,86 @@ def test_engine_render_accepts_style_and_color(tmp_path):
     gold = np.array(GROUT_COLORS["gold"])
     hits = (np.abs(styled.astype(int) - gold).sum(axis=2) < 40).sum()
     assert hits > 50, "gold kintsugi pixels missing in the render"
+
+
+# --- E6: scales (fish scales) ----------------------------------------------
+# Curved seams shared CONSTRUCTIONALLY (each bite arc is literally the
+# neighbour's dome quarter, same _sun_arc call), so per the coverage-instrument
+# ladder (MEMORY 2026-07-19) the gates are: a FORMAL partition test via
+# classify_edges + FLOAT coverage on the engine's own ss=4 + BOX path. A 1:1
+# binary raster would LIE here (whole rows lost on curve chains).
+
+@pytest.mark.parametrize("w,h,base_s", [
+    (800, 600, 60),
+    (1200, 300, 50),
+    (384, 288, 100),
+])
+def test_scales_is_an_exact_partition(w, h, base_s):
+    PAD = 2.0
+    cells = [(list(poly), 0, 0) for poly in _gen_scales(None, w, h, base_s)]
+    by_level = classify_edges(cells)
+    interior_unpaired = [
+        (a, b) for a, b in by_level[3]
+        if all(PAD < p[0] < w - PAD and PAD < p[1] < h - PAD for p in (a, b))
+    ]
+    assert not interior_unpaired, (
+        f"{len(interior_unpaired)} unpaired interior seam segment(s) at "
+        f"{w}x{h} base_s={base_s}: {interior_unpaired[:3]}")
+
+
+def test_scales_covers_via_engine_masks():
+    w, h, base_s, ss = 800, 600, 60, 4
+    acc = np.zeros((h, w), dtype=np.float64)
+    for poly in _gen_scales(None, w, h, base_s):
+        m = Image.new("L", (w * ss, h * ss), 0)
+        ImageDraw.Draw(m).polygon([(x * ss, y * ss) for x, y in poly], fill=255)
+        acc += np.asarray(m.resize((w, h), Image.BOX), dtype=np.float64) / 255.0
+    below = int((acc < 0.45).sum())
+    assert below == 0, (
+        f"scales: {below} px under 45% engine-mask coverage "
+        f"(min={acc.min():.3f}) — real holes, not seam dust")
+
+
+def test_scales_mean_area_is_base_s_squared():
+    # Cell = disk minus two tangent lenses -> 2*r^2 = lattice determinant.
+    # r = base_s/sqrt(2) is what makes that base_s^2 (the pool's convention).
+    base_s = 60
+    areas = []
+    for p in _gen_scales(None, 900, 900, base_s):
+        p = list(p)
+        s = 0.0
+        for k in range(len(p)):
+            x0, y0 = p[k]
+            x1, y1 = p[(k + 1) % len(p)]
+            s += x0 * y1 - x1 * y0
+        areas.append(abs(s) / 2.0)
+    assert sum(areas) / len(areas) == pytest.approx(base_s ** 2, rel=0.02)
+
+
+def test_scales_arc_pitch_keeps_the_dome_smooth():
+    # The truchet_hex trap: a base_s-derived pitch would facet an arc whose
+    # radius does NOT grow with the frame. Assert the sagitta of every chord
+    # stays sub-pixel, and that the cell therefore carries many vertices.
+    base_s = 60
+    r = base_s / math.sqrt(2.0)
+    polys = [list(p) for p in _gen_scales(None, 600, 600, base_s)]
+    worst = 0.0
+    for p in polys[:200]:
+        for k in range(len(p)):
+            x0, y0 = p[k]
+            x1, y1 = p[(k + 1) % len(p)]
+            worst = max(worst, math.hypot(x1 - x0, y1 - y0))
+    sagitta = worst ** 2 / (8.0 * r)
+    assert sagitta < 0.5, f"chord {worst:.2f}px -> sagitta {sagitta:.2f}px"
+    assert min(len(p) for p in polys) >= 12
+
+
+def test_scales_has_no_consecutive_duplicate_vertices():
+    # Arc chains always join end-to-end; a leftover duplicate flips Pillow's
+    # scanline parity and stripes the render (sprint P lesson).
+    for p in _gen_scales(None, 600, 600, 60):
+        p = list(p)
+        for k in range(len(p)):
+            a, b = p[k], p[(k + 1) % len(p)]
+            assert math.hypot(a[0] - b[0], a[1] - b[1]) > 1e-9, (
+                f"duplicate vertex at index {k}: {a}")
