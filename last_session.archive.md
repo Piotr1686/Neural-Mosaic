@@ -1,3 +1,115 @@
+## ═══ Sesja zarchiwizowana [2026-07-20 23:00] ═══
+
+# last_session.md
+
+**Sesja:** 2026-07-20 · wieczór (~22:00-23:00)
+**Status:** ✓ Zakończona poprawnie
+**Punkt odniesienia (git):** 280abf2 @ main
+
+---
+
+## ▸ NASTĘPNY KROK (zacznij tutaj)
+
+**E8 krok 1: montaż zbiorczy wszystkich 59 schematów** — nowe narzędzie
+`src/tools/gen_shape_montage.py`, siatka miniatur z `assets/shape_schemes/*.png`
+z podpisem nazwy pod każdym, zapis do `assets/shape_montage.png`.
+
+Konkretnie:
+1. Źródło nazw = `shape_names()` z `src/engine_smart.py` (single source of truth,
+   NIE `ls` po katalogu — kolejność rejestru ma się zgadzać z GUI/CLI).
+2. Bramka: dla KAŻDEJ nazwy z `shape_names()` musi istnieć PNG w
+   `assets/shape_schemes/`. Jeśli któregoś brakuje — wypisz listę braków i
+   zregeneruj Z SILNIKA (wzorzec `gen_e6_schemes.py`/`gen_e7_schemes.py`),
+   nigdy nie podstawiaj starego PNG z `assets/proposals/`.
+3. ASCII-only w `print()` (terminal CP1250 — `feedback_windows_cli_ascii`).
+4. Montaż jest DLA USERA do selekcji finalnej — czytelne podpisy ważniejsze niż
+   gęstość; przy 59 kafelkach rozważ siatkę 8×8 lub podział na 2 plansze.
+
+Kontekst: rejestr osiągnął **59/59** (cel puli zamknięty). E8 to ostatni etap
+przed galerią 16K: montaż → seria mozaik testowych batch CLI → **selekcja
+finalna usera** → galeria. Montaż idzie pierwszy, bo bez niego user nie ma na
+czym wybierać.
+
+---
+
+## Co zrobiono w tej sesji
+
+- ✓ **E6 `scales`** (`b407d53`, rejestr=54): rybia łuska, okręgi `r=base_s/√2` na
+  siatce szachownicowej. Partycja Z KONSTRUKCJI — brzeg wyłącznie z ĆWIARTEK łuku
+  pobieranych przez `center(i,j)` SĄSIADA (nie przez dodanie `r` do własnego
+  środka: `c_y+r` ≠ `(j+1)*r` bit-w-bit). Pole `2r²` = wyznacznik kraty
+  = niezależny cross-check. Nowy współdzielony `_join_arcs` (dedup złączeń).
+  Wszystkie 7 bramek zielone za pierwszym razem.
+- ✓ **E6 `nautilus`** (`e2c8a91`, rejestr=55): biegun POZA kadrem
+  `(-0,55·cx, -0,30·cy)` — „dobry środek" rozwiązany konstrukcyjnie (najbliższy
+  punkt kadru to zawsze róg `(0,0)` ⇒ pasmo promieni ograniczone z dołu, cap-fan
+  zbędny). Odkrycie: schemat `g=1,16` przy `nsec=40` to DOKŁADNIE relacja
+  `g=1+2π/nsec` ⇒ port, nie przeprojektowanie. Bramka odrębności vs `sunburst`
+  (0,97 vs 0,22 półprzekątnej).
+- ✓ **E6 `rosette_fractal`** (`494772b`, rejestr=56, **E6 ZAMKNIĘTY**):
+  **złapany błąd schematu** — zaszyte `m=3` daje proporcję komórki podwajającą się
+  co okres (63,5:1 po 8 podwojeniach; 16K to ~5). Fix: `m` wyprowadzone,
+  `m = round(ln2/ln(1+2π/N))`; `m=3` wypada naturalnie przy N=24. Partycja
+  FORMALNIE zweryfikowana (0 niesparowanych ×3 kadry).
+- ✓ **E7 sierpiński ×3** (`280abf2`, **REJESTR=59/59, CEL OSIĄGNIĘTY**):
+  `sierpinski`/`sierpinski_d`/`sierpinski_carpet`. T-junctions wbudowane
+  i zamierzone ⇒ pokrycie zamiast partycji, ale proste krawędzie dają
+  **min=1,000**. Przycinanie rekurencji: dywan 42 129 → 167 komórek @800×600.
+- ✓ **Poprawiłem własny fałszywy docstring** (`_gen_sierpinski`): teza o wyrównaniu
+  staggera S/2 słuszna, wniosek „partycja dokładna" fałszywy. Pomiar rozdzielający:
+  brak staggera i S/2 = tak samo 102 szwy, S/3 i S/5 dokładają ~20.
+- ✓ **540 → 594 testy**; goldeny ×12 cross-process (PYTHONHASHSEED=1); schematy
+  Z SILNIKA (`gen_e6_schemes.py`, `gen_e7_schemes.py` — NOWE); surowa ścieżka CLI
+  zweryfikowana dla wszystkich 6 kształtów (punkt 8 checklisty planu).
+
+## Co zostało (backlog sesji)
+
+- ⟳ **E8 krok 1:** montaż zbiorczy 59 (NASTĘPNY KROK).
+- ⟳ **E8 krok 2:** seria mozaik testowych — batch CLI po wszystkich kształtach.
+- ⟳ **E8 krok 3:** selekcja finalna usera → galeria 16K.
+- ⟳ **README EN+PL:** tabela 59 kształtów + zaległa dokumentacja
+  `--grout-style`/`--grout-color`/`--grout`/`--grout-level`; panorama 4,0 GB
+  @324 Mpx osobno od 3,9 GB @16K.
+- ⟳ Hero panorama: lokalna, NIE opublikowana (Wariant C odłożony).
+- ⟳ (przeniesione) PLAN_FRACTAL F1a; escher_lizard sylwetka.
+
+## Aktywne pliki
+
+- `PLAN_SHAPES_EXTRA.md` — kanoniczny plan; E1–E7 ✓, została sekcja E8
+  („Definicja ukończenia" mówi rejestr=56, faktycznie 59 — do korekty przy E8).
+- `src/engine_smart.py` — NOWE generatory: `_gen_scales`, `_gen_nautilus`,
+  `_gen_rosette_fractal`, `_gen_sierpinski`, `_gen_sierpinski_d`,
+  `_gen_sierpinski_carpet`; NOWE helpery: `_join_arcs`, `_sierpinski_cells`,
+  `_sierp4`, `_carpet_cells`, `_tri_outside`.
+- `src/tools/gen_e6_schemes.py`, `src/tools/gen_e7_schemes.py` — NOWE.
+- `tests/test_grout_engine.py` — sekcje E6/E7; `tests/test_golden_shapes.py` —
+  12 nowych goldenów; `_areas_inside` = współdzielony helper pól.
+- `assets/shape_schemes/` — 6 nowych PNG (z silnika).
+
+## Otwarte pytania
+
+- **Selekcja finalna kształtów przez usera** (E8) — kandydaci do odrzucenia
+  z wcześniejszych notatek: `bloom` (subtelny).
+- **Publikacja hero panoramy** (Wariant C) — decyzja usera.
+- **`koch_snowflake` depth=4**: szwy sub-pikselowe (min cov 0,686) — jeśli zoom
+  DZI ujawni miękkość, rozważyć depth 5 tylko dla małych kadrów.
+- **Grout styles na 16K**: style testowane na previews; pierwszy render 16K
+  z kintsugi/neon warto obejrzeć (capsule per segment — przy gęstych kształtach
+  dużo segmentów; sierpiński/carpet są teraz najgęstsze, 34–41k komórek).
+- **`sierpinski_carpet` przy dużym `base_s`**: gdy `S` przekroczy przekątną kadru,
+  kształt degeneruje się do kilku wielkich kwadratów. Nie blokuje (pokrycie OK),
+  ale przy selekcji warto zobaczyć go w docelowej rozdzielczości.
+
+## Do MEMORY.md (przeniesiono)
+
+- **repo MEMORY.md:** Architektura [2026-07-20] „E6 + E7 — REJESTR = 59/59";
+  Rozwiązane problemy [2026-07-20] ×2 — „Stała schematu poprawna LOKALNIE,
+  błędna GLOBALNIE (rosette_fractal m=3)" + „T-junctions WBUDOWANE — czwarta
+  klasa w drabince instrumentów".
+- **auto-memory:** `project_scheme_constant_derive.md` (NOWY);
+  `project_pillow_raster_instrument.md` (ZAKTUALIZOWANY — 4. szczebel drabinki:
+  proste krawędzie + wbudowane T-junctions ⇒ żądaj `min == 1.0`, nie progu).
+
 ## ═══ Sesja zarchiwizowana [2026-07-19 21:00] ═══
 
 # last_session.md
@@ -330,109 +442,3 @@ decyzja usera) · E8 docs+montaż+selekcja finalna → galeria 16K.
 - `project_poincare_bpp_plan.md` — krok 5 zamknięty, model RAM, decyzja o bramce.
 - `project_extra_15_shapes.md` — stan zweryfikowany kodem, wskaźnik na
   PLAN_SHAPES_EXTRA.md, korekta moire/braid/sierpinski_b-c.
-
-## ═══ Sesja zarchiwizowana [2026-07-15 22:25] ═══
-
-# last_session.md
-
-**Sesja:** 2026-07-15 · ~11:15-12:20
-**Status:** ✓ Zakończona poprawnie
-**Punkt odniesienia (git):** f26c3aa @ main (zsynchronizowane z origin/main)
-
----
-
-## ▸ NASTĘPNY KROK (zacznij tutaj)
-
-**Krok 3 planu (b++): `_grout_cells_poincare`** w `src/engine_smart.py`:
-
-1. Nowa metoda obok `_grout_cells_kites` (~l. 2390+): re-yield
-   `_poincare_cells(w, h, base_s)` jako `(poly, g2=hi*7+k, g3=hi)` —
-   `_poincare_cells` JUŻ zwraca `(poly, hept_idx, kite_idx)`, więc to
-   ~10 linii. L1=subkomórka, L2=latawiec, L3=heptagon (kwiat 7 siatek).
-2. Wpis `"poincare"` do `_HIERARCHICAL_GROUT` (~l. 2550) i `GROUT_HIERARCHICAL`
-   (~l. 53) — bez tego generyczny fallthrough polygon daje TYLKO płaski grout.
-   Sprawdzić, że gałąź dedykowana odpala PRZED generycznym fallthrough
-   w `_grout_cells` (wzorzec kites).
-3. +2 testy w `tests/test_grout_engine.py`: (a) hierarchia — 7 komórek
-   z tym samym g2 na latawiec... UWAGA: g2 grupuje SUBKOMÓRKI latawca
-   (nd² sztuk), a 7 latawców dzieli g3; wzorzec asercji z
-   `test_kites_cells` dostosować; (b) poziomy `--grout-level` na realnej
-   geometrii poincare (pułapka kierunku: selekcja `>= N`).
-4. Bramka: render 2K `0013.jpg` `--grout thin --grout-level 1/2/3` —
-   L3 ma pokazać kwiaty heptagonów, L2 latawce; pełny pytest.
-
-Kontekst: kroki 1-2 (b++) WDROŻONE i wypchnięte (da891fc, f26c3aa) — BFS w dysku
-+ prune w paśmie + subdywizja hiperboliczna quad-mesh do ~base_s; partycja
-zweryfikowana (0 niesparowanych segmentów wewnętrznych na 5 kadrach). Grout
-hierarchiczny to ostatni element wizualny przed goldenami (krok 4) — bez niego
-struktura hiperboliczna jest na renderze subtelna.
-
----
-
-## Co zrobiono w tej sesji
-
-- ✓ **Analiza planu + druga opinia `architect`** (adwersarialna, na prośbę usera)
-  → plan **(b++)** ZATWIERDZONY: subdywizja do base_s + grout 3-poziomowy +
-  hero-panorama DZI; szczegóły MEMORY.md [2026-07-15]. Tasks #1-5 założone.
-- ✓ **Krok 1 (da891fc): port BFS poincare do silnika** — rejestr SHAPE_MODES=39.
-  BFS odbić w DYSKU, akceptacja/prune w PAŚMIE; `diam<0.02` usunięty; depth-cap
-  z okna (4:3→13, 4:1→19). **Bug złapany audytem:** margines y prune 0.25
-  przekraczał horyzont pasma (0.8+0.25=1.05>1) → prune po y martwy → BFS gonił
-  pył do zdegenerowanych krawędzi (sqrt domain error). Fix: `m_y=min(m,(1-W)/2)`
-  + guard `r2<=0` w `_poincare_geo_circle`.
-- ✓ **Krok 2 (f26c3aa): subdywizja hiperboliczna** — `_poincare_hyp_frac`
-  (Möbius) + `_poincare_cells`: siatka quad transfinita per latawiec, `nd`
-  per heptagon. DWIE zmiany vs szkic architekta: (1) quad-mesh zamiast
-  biegunowej (biegunowa = szpic 4.5:1 przy C); (2) anty-T-junction
-  KONSTRUKCYJNY — podziały łuków snapowane do globalnej siatki próbek,
-  komórki emitują wszystkie próbki jako wierzchołki → segmenty pasują przy
-  różnych nd sąsiadów; maszyneria „conforming subdivision" (2-2.5 d wyceny)
-  okazała się zbędna.
-- ✓ **Bramki:** audyt pokrycia ss=4 × 6 kadrów (w tym 4:1 panorama) — max
-  szczelina 1 subpx, zero dziur geometrycznych; smoke-test partycji
-  `classify_edges` × 5 kadrów — 0 niesparowanych segmentów wewnętrznych;
-  2× pełny pytest **367/367**; 2 rendery 2K `0013.jpg` (przed/po subdywizji:
-  201 → 1378 komórek); t_gen ≤ 0.11 s, BFS 2-25 ms.
-- ✓ Oba commity wypchnięte na origin (`da891fc`, `f26c3aa`).
-
-## Co zostało (backlog sesji)
-
-- ⟳ **Krok 3 (b++):** `_grout_cells_poincare` (NASTĘPNY KROK).
-- ⟳ **Krok 4 (b++):** goldeny ×2 procesy + schemat PNG z geometrii silnika
-  (`gen_poincare_scheme.py` wzorem girih) + formalny test partycji w pytest
-  (zero `len(adj)==1` we wnętrzu; smoke-test w scratchpadzie sesji był zielony).
-- ⟳ **Krok 5 (b++):** pomiar peak-RAM panoramy 4:1 → hero DZI (dopiero po pomiarze).
-- ⟳ Po poincare: pula extra 21-43 → selekcja finalna usera → galeria 16K.
-- ⟳ (przeniesione) PLAN_FRACTAL F1a; escher_lizard sylwetka; README --grout/--grout-level.
-- ⟳ Tasks w harness: #3/#4/#5 (pending) odpowiadają krokom 3/4/5.
-
-## Aktywne pliki
-
-- `src/engine_smart.py` — blok POINCARE po `_gen_girih`: `_POINCARE_W/_MARGIN`,
-  `_poincare_band/_geo_circle/_reflect/_edge_arc/_heptagons/_hyp_frac/_cells`
-  + `_gen_poincare` + wpis SHAPE_MODES (39). Krok 3 doda `_grout_cells_poincare`
-  + wpisy `_HIERARCHICAL_GROUT`/`GROUT_HIERARCHICAL`.
-- Scratchpad sesji (poza repo): `audit_poincare.py` (audyt pokrycia ss=4,
-  6 kadrów), `smoke_partition.py` (detektor T-junctions) — do kroku 4 warto
-  przenieść logikę partycji do pytest.
-- `output/0013_smart_2K_poincare.jpg` — render weryfikacyjny (nadpisywany).
-
-## Otwarte pytania
-
-- **Peak-RAM panoramy 4:1** (krok 5): ~58k komórek @36000×9000 — zmierzyć
-  PRZED obietnicą hero (inwariant A1 3.9 GB @16K).
-- **Preview vs render:** nd zależy od skali px → podgląd ma grubszą siatkę niż
-  finalny render (analogia: seeded voronoi). Zaakceptowane milcząco — jeśli
-  user zauważy, rozważyć nd z rozdzielczości docelowej.
-- Selekcja finalna kształtów przez usera — po wdrożeniu wszystkich (bez zmian).
-
-## Do MEMORY.md (przeniesiono)
-
-- Repo MEMORY.md: wpis **[2026-07-15b]** — kroki 1-2 wdrożone: bug marginesu
-  ponad horyzontem, quad-mesh zamiast biegunowej, snapping = anty-T-junction
-  konstrukcyjny, wyniki bramek, `_poincare_cells` zwraca grupy dla kroku 3.
-- (z /save w tej sesji) wpis **[2026-07-15]** — plan (b++) + auto-memory
-  `project_poincare_bpp_plan.md`.
-
----
-
