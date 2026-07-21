@@ -47,10 +47,15 @@ from PIL import Image, ImageDraw
 # (supersample 2, ~26-tile canvas -> hex edge ~55 px); the engine rescales them
 # to its own tile size via ``scale_widths``. Ratios between levels are the
 # user-facing "look" and are preserved by the scaling.
+# Level-1 widths chosen by A/B on the real 8K render (2026-07-21): at the
+# project's default tile_scale 0.75 (base_s=75, factor 75/55=1.36) the L1 values
+# below resolve to thin=1px, medium=3px, thick=5px -- the "each tile" uniform
+# grout the GUI/CLI draw at level 1. L2/L3 stay ~2.5x/5x for the graded look at
+# an explicit level 2/3 request.
 PRESETS = {
-    "thin":   {1: 2, 2: 5,  3: 10},
-    "medium": {1: 3, 2: 8,  3: 16},
-    "thick":  {1: 5, 2: 12, 3: 24},
+    "thin":   {1: 1, 2: 3,  3: 5},
+    "medium": {1: 2, 2: 5,  3: 10},
+    "thick":  {1: 4, 2: 10, 3: 20},
 }
 DEFAULT_PRESET = "medium"
 

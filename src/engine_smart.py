@@ -4148,7 +4148,17 @@ class SmartEngine:
             print(f"Grout: '{shape_mode}' has no grouping yet — grout skipped.")
             return
         hierarchical = shape_mode in self._HIERARCHICAL_GROUT
-        if hierarchical:
+        if hierarchical and min_level == 1:
+            # "each tile": outline every seam at a single uniform width (the
+            # preset's L1), exactly like the flat shapes. The graded L1<L2<L3
+            # widths made the tile-group / super-group boundaries read as heavy
+            # higher-order structure even though the user asked for "each tile";
+            # grading is now reserved for an explicit level 2/3 request (which
+            # still drops the lower levels and grades the survivors).
+            w = scale_widths(preset, base_s)[1]
+            level_w = {1: w, 2: w, 3: w}
+            kind = "hierarchical -> uniform (level 1 = each tile)"
+        elif hierarchical:
             level_w = scale_widths(preset, base_s, min_level=min_level)
             kind = f"hierarchical, from level {min_level}"
         else:
@@ -4455,7 +4465,11 @@ class SmartEngine:
                             if safe[2]<=safe[0]: continue
                             s_img = target.crop(safe)
                             if s_img.size != (tile_w, tile_h):
-                                tmp = Image.new("RGB", (tile_w, tile_h), (0,0,0)); tmp.paste(s_img, (0,0)); s_img = tmp
+                                # Partial edge tile: mean-fill + true-position
+                                # paste (see the standard-grid branch below).
+                                fill = s_img.resize((1, 1)).getpixel((0, 0))
+                                tmp = Image.new("RGB", (tile_w, tile_h), fill)
+                                tmp.paste(s_img, (safe[0] - spx, safe[1] - spy)); s_img = tmp
 
                             # Each romb mask covers ~1/3 of the tile canvas;
                             # mean-fill the rest so neighbouring rombs don't
@@ -4475,7 +4489,15 @@ class SmartEngine:
                     if safe[2]<=safe[0]: continue
                     s_img = target.crop(safe)
                     if s_img.size != (tile_w, tile_h):
-                        tmp = Image.new("RGB", (tile_w, tile_h), (0,0,0)); tmp.paste(s_img, (0,0)); s_img = tmp
+                        # Partial edge tile: fill the off-canvas remainder with
+                        # the crop's MEAN colour (not black) and paste the visible
+                        # content at its TRUE position. Black padding dragged the
+                        # LAB feature dark -> a dark tile got matched, leaving
+                        # mismatched dark slivers along offset-row edges
+                        # (brick_wall's left half-bricks were the worst case).
+                        fill = s_img.resize((1, 1)).getpixel((0, 0))
+                        tmp = Image.new("RGB", (tile_w, tile_h), fill)
+                        tmp.paste(s_img, (safe[0] - px, safe[1] - py)); s_img = tmp
 
                     current_mask = mask_flip if is_flipped else mask_norm
                     # Non-rectangular grid masks (triangle ~50%, hexagon ~25%,

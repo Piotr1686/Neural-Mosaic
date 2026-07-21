@@ -30,10 +30,17 @@ from src.engine_smart import SmartEngine
 # full-canvas mask makes mean-fill a numeric no-op and yields wmask=None,
 # which skips the weighted re-scoring — the plain GEMM path is untouched.
 GOLDEN = {
-    ("square", False): "a1c3eefa031fbee1d02f13dcd53303b6539cab58cab9f1a23934e2565022c599",
-    ("square", True): "dd0806d49fcf2ebdaa6353c50c38f2d709884465cd9be50da027f4eb823a1c46",
-    ("hexagon_romb", False): "eb6b5e97c966b70236626d85c1c4e7911201927fdf96502ec2b514d7d0a5020a",
-    ("hexagon_romb", True): "2877bad908ef6b6b7a167394959c635868e136b7764416d8d2c97ed9f7f4f71b",
+    # 2026-07-21: square + hexagon_romb regenerated after the standard-grid /
+    # hexagon_romb branches stopped BLACK-padding partial edge crops (they now
+    # mean-fill the off-canvas remainder and paste the visible content at its
+    # true position). Deliberate matching fix: black padding was dragging edge
+    # tiles' LAB features dark and matching dark tiles (brick_wall's left
+    # half-bricks). Only these grid goldens moved; kites/spectre/polygon use
+    # branches that already pasted at the true offset and are unchanged.
+    ("square", False): "d69fdf1cae64499be5679b495ee165fc559c83af57745b74628ce4926cae8968",
+    ("square", True): "41b4218a579b160081a13ec14beb6b9d40f7190f325577272446f19c6651a4ee",
+    ("hexagon_romb", False): "6e549f03d91bc27f2ec2950ac14ad2746e97c05232f3ac4ae9ae5ffe5c6259a8",
+    ("hexagon_romb", True): "d12fae64c86ef0352504ddcd23b3c3d13d2dbeaed5ed49d585527f23f8d4755f",
     ("kites", False): "7689265c540dd537b1f3a42ed26354c577ff78a1d02601fe2747543b061b8ed5",
     ("kites", True): "d9f3c83beb7b4f5be302af04e54016f4cba52ee2838a916031efee8fe95d31ae",
     ("spectre", False): "ed5ad4f4c582341daba6cb2cf61ec021bac48d9bfa7f0fac9fd41cc4ca5bc5dc",
