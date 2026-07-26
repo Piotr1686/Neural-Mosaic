@@ -116,16 +116,49 @@ class _LazyMask:
 # ==========================================================================
 # SHAPE REGISTRY  (single source of truth for the shape list + geometry)
 # ==========================================================================
-def _gen_kites(engine, target_w, target_h, base_s):
-    """Yield per-kite polygons of the deltoidal trihexagonal grid, in image
-    space (y down).
+def _kite_poly(cx, cy, s, k):
+    """The 4 vertices of one kite on a flat-topped hexagonal grid, y-up.
 
-    Each hexagon on the flat-topped grid splits into 6 kites; every kite is its
-    own sector. The (q, r, k) iteration order is a pure function of geometry, so
-    preview and render stay reproducible (no RNG). The Cartesian kites are built
-    y-up, filtered by their (unflipped) centroid, then each vertex is flipped to
-    image space here — the y-flip stays inside the generator so `_polygon_sector`
-    is orientation-agnostic (see PLAN_SHAPES.md Sprint 2, contract point 2).
+    Args:
+        cx, cy: Cartesian centre of the parent hexagon.
+        s:      Hexagon side length in pixels.
+        k:      Kite index within the hexagon (0-5).
+
+    Returns:
+        [hex_centre, edge_mid(k-1), vertex(k), edge_mid(k)].
+    """
+    r3 = math.sqrt(3)
+
+    def P(idx):
+        angle = math.radians(idx * 60)
+        return (cx + s * math.cos(angle), cy + s * math.sin(angle))
+
+    def M(idx):
+        angle = math.radians(idx * 60 + 30)
+        return (cx + s * r3 / 2 * math.cos(angle), cy + s * r3 / 2 * math.sin(angle))
+
+    return [(cx, cy), M((k - 1) % 6), P(k), M(k)]
+
+
+def _kite_lattice(target_w, target_h, base_s):
+    """Walk the deltoidal trihexagonal lattice once; yield (q, r, k, cx, cy, poly).
+
+    `poly` is y-up Cartesian (callers flip). The (q, r, k) order is a pure
+    function of geometry, so preview and render stay reproducible (no RNG).
+
+    SINGLE SOURCE OF TRUTH for the walk. It used to be copy-pasted three times
+    — here, in the dedicated kites branch of `_do_render`, and in
+    `_grout_cells_kites` — and the 2026-07-26 border fix applied to this copy
+    alone did not change the rendered mosaic at all (the golden did not even
+    move), because production renders through the second copy.
+
+    A kite is kept when its bbox OVERLAPS the frame. The old rule was "centroid
+    inside the frame", which dropped every border kite whole and left a
+    saw-tooth of bare canvas: 2.35% of a 1200x900 frame uncovered, up to 12.6%
+    inside the bottom band. (The left edge looked clean only because
+    cx = 1.5*s*q puts a hexagon centre exactly on x = 0.) Overlap keeps the
+    lattice an exact partition — the kites still abut, the consumers clip them
+    to the frame — so the extra cells add coverage with no double-paint.
     """
     s = base_s
     r3 = math.sqrt(3)
@@ -140,13 +173,28 @@ def _gen_kites(engine, target_w, target_h, base_s):
         for r in range(r_mid - range_r, r_mid + range_r):
             cx = 1.5 * s * q
             cy = r3 * s * (r + q / 2.0)
-            if -2 * s < cx < target_w + 2 * s and -2 * s < cy < target_h + 2 * s:
-                for k in range(6):
-                    poly = engine._get_kite_poly(cx, cy, s, k)
-                    cent_x = sum(p[0] for p in poly) / 4
-                    cent_y = sum(p[1] for p in poly) / 4
-                    if 0 <= cent_x < target_w and 0 <= cent_y < target_h:
-                        yield [(px, target_h - py) for px, py in poly]
+            if not (-2 * s < cx < target_w + 2 * s
+                    and -2 * s < cy < target_h + 2 * s):
+                continue
+            for k in range(6):
+                poly = _kite_poly(cx, cy, s, k)
+                xs = [p[0] for p in poly]
+                ys = [p[1] for p in poly]
+                if (min(xs) < target_w and max(xs) > 0
+                        and min(ys) < target_h and max(ys) > 0):
+                    yield q, r, k, cx, cy, poly
+
+
+def _gen_kites(engine, target_w, target_h, base_s):
+    """Yield per-kite polygons of the deltoidal trihexagonal grid, in image
+    space (y down).
+
+    Each hexagon on the flat-topped grid splits into 6 kites; every kite is its
+    own sector. The y-flip stays inside the generator so `_polygon_sector` is
+    orientation-agnostic (see PLAN_SHAPES.md Sprint 2, contract point 2).
+    """
+    for _q, _r, _k, _cx, _cy, poly in _kite_lattice(target_w, target_h, base_s):
+        yield [(px, target_h - py) for px, py in poly]
 
 
 def _gen_spectre(engine, target_w, target_h, base_s):
@@ -3092,24 +3140,10 @@ class SmartEngine:
     def _get_kite_poly(self, cx, cy, s, k):
         """Return the 4 vertices of a single kite on a flat-topped hexagonal grid.
 
-        Args:
-            cx, cy: Cartesian centre of the parent hexagon.
-            s:      Hexagon side length in pixels.
-            k:      Kite index within the hexagon (0–5).
-
-        Returns:
-            List of four (x, y) tuples: [hex_centre, edge_mid(k-1), vertex(k), edge_mid(k)].
+        Thin method wrapper kept for the existing callers; the geometry lives in
+        the module-level `_kite_poly` so `_kite_lattice` needs no engine.
         """
-        r3 = math.sqrt(3)
-        def P(idx):
-            angle = math.radians(idx * 60)
-            return (cx + s * math.cos(angle), cy + s * math.sin(angle))
-
-        def M(idx):
-            angle = math.radians(idx * 60 + 30)
-            return (cx + s * r3/2 * math.cos(angle), cy + s * r3/2 * math.sin(angle))
-
-        return [(cx, cy), M((k-1) % 6), P(k), M(k)]
+        return _kite_poly(cx, cy, s, k)
 
     def _transform_kite_index(self, base_q, base_r, base_k, offset_q, offset_r, rot, flip):
         """Apply a topological transformation to kite axial coordinates (q, r, k).
@@ -3583,28 +3617,12 @@ class SmartEngine:
         return cells
 
     def _grout_cells_kites(self, target_w, target_h, base_s):
-        # Mirrors _gen_kites (same q,r,k iteration and y-flip) so lines sit on
-        # the composited kite edges; L2 = parent hexagon, L3 = its 7-flower.
-        s = base_s
-        r3 = math.sqrt(3)
-        range_q = int(target_w / (1.5 * s)) + 3
-        range_r = int(target_h / (r3 * s)) + 3
-        cells = []
-        for q in range(-range_q, range_q):
-            r_mid = -(q // 2)
-            for r in range(r_mid - range_r, r_mid + range_r):
-                cx = 1.5 * s * q
-                cy = r3 * s * (r + q / 2.0)
-                if -2 * s < cx < target_w + 2 * s and -2 * s < cy < target_h + 2 * s:
-                    g3 = sub7(q, r)
-                    for k in range(6):
-                        poly = self._get_kite_poly(cx, cy, s, k)
-                        cent_x = sum(p[0] for p in poly) / 4
-                        cent_y = sum(p[1] for p in poly) / 4
-                        if 0 <= cent_x < target_w and 0 <= cent_y < target_h:
-                            img_poly = [(px, target_h - py) for px, py in poly]
-                            cells.append((img_poly, (q, r), g3))
-        return cells
+        # Same `_kite_lattice` walk (and y-flip) the render uses, so the lines
+        # sit on the composited kite edges; L2 = parent hexagon, L3 = its
+        # 7-flower.
+        return [([(px, target_h - py) for px, py in poly], (q, r), sub7(q, r))
+                for q, r, _k, _cx, _cy, poly
+                in _kite_lattice(target_w, target_h, base_s)]
 
     def _grout_cells_poincare(self, target_w, target_h, base_s):
         # Re-yield the step-2 hyperbolic quad mesh (_poincare_cells already emits
@@ -3815,32 +3833,15 @@ class SmartEngine:
             # and the _neighbors_cache entry keyed by _nkey is stable.
             print(f"Mode: Kite tiling (deltoidal, per-tile). Borders: {border_mode}")
 
-            s  = base_s
-            r3 = math.sqrt(3)
-
-            range_q = int(target_w / (1.5 * s)) + 3
-            range_r = int(target_h / (r3 * s)) + 3
+            s = base_s
 
             print("Building kite grid...")
-            target_kites = []
-            for q in range(-range_q, range_q):
-                _check_cancel()
-                # centre the r-window on -q/2 (same fix as _gen_kites): the shear
-                # term q/2 in cy displaced the scanned band at large |q|, leaving
-                # the bottom-right corner without kites (fixed 2026-07-04)
-                r_mid = -(q // 2)
-                for r in range(r_mid - range_r, r_mid + range_r):
-                    cx = 1.5 * s * q
-                    cy = r3 * s * (r + q / 2.0)
-
-                    if -2*s < cx < target_w + 2*s and -2*s < cy < target_h + 2*s:
-                        for k in range(6):
-                            poly   = self._get_kite_poly(cx, cy, s, k)
-                            cent_x = sum(p[0] for p in poly) / 4
-                            cent_y = sum(p[1] for p in poly) / 4
-
-                            if 0 <= cent_x < target_w and 0 <= cent_y < target_h:
-                                target_kites.append((cx, cy, k))
+            # Shared walk (`_kite_lattice`) — this branch used to carry its own
+            # copy, so a border fix applied to `_gen_kites` alone never reached
+            # the rendered mosaic.
+            target_kites = [(cx, cy, k) for _q, _r, k, cx, cy, _poly
+                            in _kite_lattice(target_w, target_h, s)]
+            _check_cancel()
 
             print(f"Rendering {len(target_kites)} kites...")
             for i_kite, (cx, cy, k) in enumerate(tqdm(target_kites, desc="Sampling kite sectors")):

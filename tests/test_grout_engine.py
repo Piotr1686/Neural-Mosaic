@@ -18,6 +18,7 @@ import pytest
 from PIL import Image, ImageDraw
 
 from src.engine_smart import (SHAPE_MODES, SmartEngine, _poincare_cells,
+                              _kite_lattice,
                               _gen_penrose_p2, _gen_pebbles, _gen_bloom,
                               _gen_phyllotaxis, _gen_stagger_tri, _gen_braid,
                               _gen_moire, _gen_puzzle_classic,
@@ -1691,3 +1692,83 @@ def test_sierpinski_family_scales_to_16k_within_budget():
     for name, gen in _SIERP_GENS.items():
         n = sum(1 for _ in gen(None, 16384, 12288, 75))
         assert n < 120000, f"{name}: {n} cells at 16K — RAM budget (A1) at risk"
+
+
+# --- kites: the frame edge (2026-07-26) -------------------------------------
+# The lattice tiles the whole plane, so the only way it can leave the frame
+# bare is the border cull. It used to keep a kite when its CENTROID was inside
+# the frame, which dropped every border kite whole: 2.35% of a 1200x900 frame
+# uncovered, up to 12.6% inside the bottom band, as a saw-tooth of bare canvas.
+# The visible defect was in the rendered mosaic, and the walk existed in THREE
+# copies (generator, the dedicated render branch, the grout mirror), so fixing
+# only the generator changed nothing on screen. They now share `_kite_lattice`;
+# the second test pins that sharing, since the other two have no golden.
+_KITE_FRAMES = [(1200, 900, 75), (800, 600, 60), (900, 900, 55), (500, 375, 100)]
+
+
+def _shoelace(poly):
+    n = len(poly)
+    return abs(sum(poly[i][0] * poly[(i + 1) % n][1]
+                   - poly[(i + 1) % n][0] * poly[i][1] for i in range(n))) / 2.0
+
+
+def _clip_to_frame(poly, w, h):
+    """Sutherland-Hodgman clip of a convex-or-not polygon to [0,w]x[0,h]."""
+    out = list(poly)
+    for edge in range(4):
+        inp, out = out, []
+        if not inp:
+            return []
+
+        def inside(pt):
+            return (pt[0] >= 0, pt[0] <= w, pt[1] >= 0, pt[1] <= h)[edge]
+
+        def cut(a, b):
+            if edge < 2:
+                x = 0.0 if edge == 0 else float(w)
+                t = (x - a[0]) / (b[0] - a[0])
+                return (x, a[1] + t * (b[1] - a[1]))
+            y = 0.0 if edge == 2 else float(h)
+            t = (y - a[1]) / (b[1] - a[1])
+            return (a[0] + t * (b[0] - a[0]), y)
+
+        for i in range(len(inp)):
+            a, b = inp[i - 1], inp[i]
+            if inside(b):
+                if not inside(a):
+                    out.append(cut(a, b))
+                out.append(b)
+            elif inside(a):
+                out.append(cut(a, b))
+    return out
+
+
+@pytest.mark.parametrize("w,h,base_s", _KITE_FRAMES)
+def test_kites_is_an_exact_partition_of_the_frame(w, h, base_s):
+    # Straight edges only, so the formal instrument applies: the clipped cell
+    # areas must sum to the frame area EXACTLY. That catches gaps (sum < area)
+    # and double-paint (sum > area) in one number, unlike a raster test.
+    total = 0.0
+    for poly in SHAPE_MODES["kites"].generator(_engine(), w, h, base_s):
+        clipped = _clip_to_frame(list(poly), w, h)
+        if len(clipped) >= 3:
+            total += _shoelace(clipped)
+    assert total == pytest.approx(float(w * h), rel=1e-9), (
+        f"kites at {w}x{h} base_s={base_s}: clipped area {total:.1f} vs frame "
+        f"{w * h} — a shortfall is bare canvas, an excess is double-paint")
+
+
+@pytest.mark.parametrize("w,h,base_s", _KITE_FRAMES)
+def test_kites_render_and_grout_share_the_generator_walk(w, h, base_s):
+    # kites does NOT flow through the generic polygon dispatch: _do_render has
+    # its own branch and the grout its own cell builder. They used to carry
+    # copy-pasted walks, and fixing only `_gen_kites` left the rendered mosaic
+    # serrated (the golden did not even move). All three now consume
+    # `_kite_lattice`; this pins the two that have no golden of their own.
+    e = _engine()
+    n_gen = sum(1 for _ in SHAPE_MODES["kites"].generator(e, w, h, base_s))
+    n_walk = sum(1 for _ in _kite_lattice(w, h, base_s))
+    n_grout = len(e._grout_cells_kites(w, h, base_s))
+    assert n_gen == n_walk == n_grout, (
+        f"kites walks diverged at {w}x{h} base_s={base_s}: generator {n_gen}, "
+        f"lattice {n_walk}, grout {n_grout}")

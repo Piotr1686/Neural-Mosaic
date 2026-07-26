@@ -41,8 +41,14 @@ GOLDEN = {
     ("square", True): "41b4218a579b160081a13ec14beb6b9d40f7190f325577272446f19c6651a4ee",
     ("hexagon_romb", False): "6e549f03d91bc27f2ec2950ac14ad2746e97c05232f3ac4ae9ae5ffe5c6259a8",
     ("hexagon_romb", True): "d12fae64c86ef0352504ddcd23b3c3d13d2dbeaed5ed49d585527f23f8d4755f",
-    ("kites", False): "7689265c540dd537b1f3a42ed26354c577ff78a1d02601fe2747543b061b8ed5",
-    ("kites", True): "d9f3c83beb7b4f5be302af04e54016f4cba52ee2838a916031efee8fe95d31ae",
+    # 2026-07-26: kites regenerated after the border cull changed from
+    # "centroid inside the frame" to "bbox overlaps the frame". The old test
+    # dropped every border kite whose centre fell outside, leaving a saw-tooth
+    # of bare canvas along the right/bottom/top edges (2.35% of the frame, up
+    # to 12.6% inside the bottom band). Deliberate coverage fix — see
+    # test_kites_covers_the_whole_frame in tests/test_grout_engine.py.
+    ("kites", False): "475e55cee9db9121041dc081b3f58658f3e434b6b1d9184374d948c5da3c39aa",
+    ("kites", True): "f282c01b9e2ceec9748386542d341ca446c5cba2a438c38c25f41cbabf30b038",
     ("spectre", False): "ed5ad4f4c582341daba6cb2cf61ec021bac48d9bfa7f0fac9fd41cc4ca5bc5dc",
     ("spectre", True): "998a645f47ef0d222add0f32fce9276002fdd8505f10944e1b3860ac19a500a8",
     # New polygon shape wired via the generic dispatch + _polygon_sector
