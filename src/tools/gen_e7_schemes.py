@@ -1,4 +1,4 @@
-"""Regenerate the GUI scheme previews for sprint E7 (Sierpinski family).
+"""Regenerate the GUI scheme preview for sprint E7 (Sierpinski).
 
 Drawn FROM THE ENGINE generators (the girih/poincare/truchet lesson). The
 colouring encodes the shape's whole idea: a cell's tone comes from its AREA,
@@ -15,8 +15,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-from src.engine_smart import (_gen_sierpinski, _gen_sierpinski_carpet,
-                              _gen_sierpinski_d)
+from src.engine_smart import _gen_sierpinski
 
 log = logging.getLogger(__name__)
 
@@ -24,10 +23,11 @@ SIZE = 720
 BG = (20, 20, 24)
 OUTLINE = (16, 16, 20)
 
+# sierpinski_d / sierpinski_carpet dropped from the project
+# 2026-07-26 (user selection): the carpet degenerated into a few huge
+# squares at production base_s, and variant D read as the same shape.
 SHAPES = [
     ("sierpinski", _gen_sierpinski, 26),
-    ("sierpinski_d", _gen_sierpinski_d, 26),
-    ("sierpinski_carpet", _gen_sierpinski_carpet, 9),
 ]
 
 

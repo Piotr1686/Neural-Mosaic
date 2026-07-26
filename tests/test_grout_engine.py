@@ -25,9 +25,8 @@ from src.engine_smart import (SHAPE_MODES, SmartEngine, _poincare_cells,
                               _gen_dragon, _gen_koch_island,
                               _gen_koch_snowflake, _twindragon_boundary,
                               _gen_gereh, _gen_rosette, _gen_scales,
-                              _gen_nautilus, _gen_sunburst,
+                              _gen_nautilus,
                               _gen_rosette_fractal, _gen_sierpinski,
-                              _gen_sierpinski_d, _gen_sierpinski_carpet,
                               _sierpinski_cells, _tri_outside,
                               _GOLDEN_ANGLE, _LUCAS_ANGLE)
 from src.grout import classify_edges
@@ -242,15 +241,14 @@ def test_pebbles_covers_the_frame(w, h, base_s):
 
 
 _VORONOI_FAMILY = ["voronoi", "pebbles", "phyllotaxis", "bloom",
-                   "sunflower_grande", "sunflower_grande_xl",
-                   "sunflower_grande_soft", "sunflower_grande_inverse",
-                   "sunflower_soft", "sunflower_rings", "sunflower_disc"]
+                   "sunflower_grande", "sunflower_grande_inverse",
+                   "sunflower_soft", "sunflower_rings"]
 
 
 @pytest.mark.parametrize("name", _VORONOI_FAMILY)
 @pytest.mark.parametrize("w,h,base_s", [
     (384, 288, 100),     # the golden frame at a coarse tile
-    (300, 300, 120),     # the sunflower_disc worst case (was 41.6% holes)
+    (300, 300, 120),     # the family's coarse worst case (was 41.6% holes)
     (500, 375, 100),     # the voronoi worst case (was 16.0% holes)
 ])
 def test_voronoi_family_covers_coarse_frames(name, w, h, base_s):
@@ -967,7 +965,7 @@ def test_polygon_registry_shapes_get_flat_cells():
     # generic case: their SHAPE_MODES generator re-yields the tile polygons as
     # flat cells (uniform group ids -> L1 seams, L3 frame).
     e = _engine()
-    for shape in ("voronoi", "phyllotaxis", "sunflower_grande", "rhombs_star"):
+    for shape in ("voronoi", "phyllotaxis", "sunflower_grande", "pebbles"):
         cells = e._grout_cells(shape, 400, 300, 100)
         assert cells, shape
         assert all(len(poly) >= 3 for poly, _, _ in cells), shape
@@ -1386,10 +1384,11 @@ def test_nautilus_covers_via_engine_masks():
 
 
 def test_nautilus_pole_lies_outside_the_frame():
-    # THE distinctness gate against sunburst (same log-polar machinery). The
-    # smallest cell always sits closest to the pole; sunburst's pole is the
-    # frame centre, nautilus's is beyond the top-left corner. Measured in
-    # half-diagonals: nautilus 0.97, sunburst 0.22.
+    # THE "good centre" rule for a log-polar field: the smallest cell always
+    # sits closest to the pole, so the pole's position decides whether the
+    # shape has a shrinking singularity in view. Nautilus puts it beyond the
+    # top-left corner. Measured in half-diagonals: nautilus 0.97 (a
+    # frame-centred pole, the rejected sunburst, scored 0.22).
     def smallest_cell_offset(gen):
         w, h = 800, 600
         best = None
@@ -1411,15 +1410,14 @@ def test_nautilus_pole_lies_outside_the_frame():
         return math.hypot(cx - w / 2, cy - h / 2) / math.hypot(w / 2, h / 2)
 
     assert smallest_cell_offset(_gen_nautilus) > 0.7, "nautilus pole drifted inward"
-    assert smallest_cell_offset(_gen_sunburst) < 0.4, "sunburst is no longer centred"
 
 
 def test_nautilus_has_no_shrinking_singularity():
     # The 'good centre' rule. A log-polar field ALWAYS has a size gradient
     # (cell size ~ r); what the outside pole buys is that the visible radius
     # band is bounded AWAY FROM ZERO, so no cell collapses. With the pole at
-    # the frame centre (sunburst) the inner cells would tend to nothing and
-    # only a cap fan saves them. Measured smallest chamber: 0.39*base_s.
+    # the frame centre the inner cells would tend to nothing and only a cap
+    # fan could save them. Measured smallest chamber: 0.39*base_s.
     base_s = 60
     areas = []
     for poly in _gen_nautilus(None, 800, 600, base_s):
@@ -1623,9 +1621,7 @@ def test_rosette_fractal_scales_to_16k_within_budget():
 # instrument. All edges are straight, so coverage is exact: min == 1.000, no
 # gaps and no seam dust at all.
 
-_SIERP_GENS = {"sierpinski": _gen_sierpinski,
-               "sierpinski_d": _gen_sierpinski_d,
-               "sierpinski_carpet": _gen_sierpinski_carpet}
+_SIERP_GENS = {"sierpinski": _gen_sierpinski}
 
 
 @pytest.mark.parametrize("name", sorted(_SIERP_GENS))
@@ -1688,43 +1684,6 @@ def test_sierpinski_brick_stagger_adds_no_t_junctions():
     assert unpaired(0.2) > unpaired(0.5)
 
 
-def test_sierpinski_d_checkerboard_spreads_the_big_holes():
-    # Variant D's reason to exist: carrier = (t + r) % 2 offsets the largest
-    # holes row to row instead of stacking them into columns. Measured on the
-    # BIG cells (area > 4x the mean): their x-positions must not collapse
-    # onto a few columns the way an unshifted carrier would.
-    w, h, base_s = 1200, 900, 55
-    polys = [list(p) for p in _gen_sierpinski_d(None, w, h, base_s)]
-    big = []
-    for p in polys:
-        a = 0.0
-        for k in range(len(p)):
-            x0, y0 = p[k]
-            x1, y1 = p[(k + 1) % len(p)]
-            a += x0 * y1 - x1 * y0
-        a = abs(a) / 2.0
-        cx = sum(q[0] for q in p) / len(p)
-        cy = sum(q[1] for q in p) / len(p)
-        if a > 4.0 * base_s ** 2 and 0 <= cx < w and 0 <= cy < h:
-            big.append((cx, cy))
-    assert len(big) >= 4, "no big holes found — carrier logic broken"
-    S = base_s * math.sqrt(184.0 / math.sqrt(3.0))
-    bands = {}
-    for cx, cy in big:
-        bands.setdefault(round(cy / (S * math.sqrt(3.0) / 2.0)), []).append(cx)
-    keys = sorted(k for k, v in bands.items() if len(v) >= 2)
-    assert len(keys) >= 2, "big holes confined to one row band"
-    # within a band the big holes sit one lattice period apart...
-    for k in keys:
-        xs = sorted(bands[k])
-        assert xs[1] - xs[0] == pytest.approx(S, rel=0.02)
-    # ...and consecutive bands are offset by HALF a period — that is the
-    # checkerboard doing its job (measured: 283.4 vs 566.9 with S = 566.9).
-    phase = [sorted(bands[k])[0] % S for k in keys[:2]]
-    assert abs(phase[0] - phase[1]) == pytest.approx(S / 2.0, rel=0.05), (
-        f"big holes stack into columns: phases {phase} with S={S:.1f}")
-
-
 def test_sierpinski_family_scales_to_16k_within_budget():
     # Pruning matters here: an unpruned depth-4 carpet emits 4681 cells per
     # lattice position regardless of how little shows (42k cells for the ~155
@@ -1732,11 +1691,3 @@ def test_sierpinski_family_scales_to_16k_within_budget():
     for name, gen in _SIERP_GENS.items():
         n = sum(1 for _ in gen(None, 16384, 12288, 75))
         assert n < 120000, f"{name}: {n} cells at 16K — RAM budget (A1) at risk"
-
-
-def test_sierpinski_carpet_pruning_keeps_only_relevant_cells():
-    # The pruning must not change WHAT is drawn, only how much is built: the
-    # frame stays fully covered (asserted above) while the cell count drops by
-    # two orders of magnitude.
-    n = sum(1 for _ in _gen_sierpinski_carpet(None, 800, 600, 60))
-    assert n < 1000, f"{n} cells — recursion pruning is not firing"

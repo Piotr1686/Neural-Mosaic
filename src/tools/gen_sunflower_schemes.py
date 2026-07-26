@@ -497,15 +497,9 @@ def coverage_report(polys, world, res=600):
 # raster gap/overlap report (Voronoi = partition by construction).
 ACCEPTED = [
     ("sunflower_soft", gen_sunflower_soft),
-    ("sunflower_disc", gen_sunflower_disc),
     ("sunflower_rings", gen_sunflower_rings),
     ("sunflower_grande", gen_sunflower_grande),
-    ("sunflower_grande_xl", gen_sunflower_grande_xl),
-    ("sunflower_grande_soft", gen_sunflower_grande_soft),
     ("sunflower_grande_inverse", gen_sunflower_grande_inverse),
-    ("rhombs_nopole", gen_rhombs_nopole),
-    ("rhombs_funnel", gen_rhombs_funnel),
-    ("rhombs_star", gen_rhombs_star),
 ]
 
 ASSETS_DIR = Path("assets/shape_schemes")

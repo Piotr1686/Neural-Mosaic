@@ -20,6 +20,7 @@ load_dotenv()
 
 import numpy as np
 import customtkinter as ctk
+import tkinter
 from tkinter import filedialog
 import threading
 from datetime import datetime
@@ -78,6 +79,35 @@ _TEX_THRESHOLD = 0.10
 # thousands of tiles) can never flood the Tk widget tree or RAM.
 _LIB_PAGE_SIZE = 200   # tiles added to the grid per Refresh / Load More
 _LIB_SCAN_CAP = 2000   # max files examined per click (thumbnail cost)
+
+
+def _spread_dropdown_columns(widget, columns=2):
+    """Lay a CTk dropdown out in `columns` side-by-side columns.
+
+    The shape list is 50 entries long — as one column that is taller than the
+    screen, so Tk turns it into a scrolling menu and the list can only be read
+    by dragging. A CTk dropdown is a ``tkinter.Menu`` underneath, and Tk menus
+    support a per-entry ``columnbreak``: the entry it is set on starts a new
+    column, so the whole list opens at once.
+
+    Safe to call on any CTkComboBox/CTkOptionMenu; a no-op if the widget has no
+    dropdown or Tk refuses the option. Values are fixed at construction here, so
+    one call after building the widget is enough (Tk rebuilds the entries only
+    when ``values`` is reconfigured).
+    """
+    menu = getattr(widget, "_dropdown_menu", None)
+    if menu is None or columns < 2:
+        return
+    try:
+        last = menu.index("end")
+        if last is None:
+            return
+        count = last + 1
+        per_column = -(-count // columns)      # ceil, so the last column is the short one
+        for i in range(per_column, count, per_column):
+            menu.entryconfigure(i, columnbreak=1)
+    except tkinter.TclError:
+        pass                                    # older Tk: fall back to one column
 
 
 class _TextboxStream:
@@ -403,12 +433,15 @@ class App(ctk.CTk):
         self.seg_scale_p.pack(pady=5)
 
         ctk.CTkLabel(frame, text="Tile Shape").pack(pady=(10, 0))
-        # Single source of truth: the engine's SHAPE_MODES registry.
+        # Single source of truth: the engine's SHAPE_MODES registry, which is
+        # ordered alphabetically so this list is scannable by name.
         self.combo_shape = ctk.CTkComboBox(
             frame, values=shape_names(), command=self._on_shape_selected,
         )
         self.combo_shape.set("")
         self.combo_shape.pack(pady=5)
+        # 50 shapes do not fit on screen as one column — open them as two.
+        _spread_dropdown_columns(self.combo_shape, columns=2)
 
         self.check_mirror = ctk.CTkCheckBox(
             frame, text="Allow Mirroring  (small library)",

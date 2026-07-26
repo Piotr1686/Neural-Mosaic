@@ -1034,7 +1034,6 @@ def gen_rosette_fractal():
 # ==========================================
 SHAPES = [
     ("sierpinski", gen_sierpinski, "21. TROJKAT SIERPINSKIEGO", "[B] cegielkowy rozklad dziur, kazdy trojkat=foto"),
-    ("sierpinski_d", gen_sierpinski_d, "21d. SIERPINSKI SZACHOWNICA", "[B] dziury co drugi trojkat w rzedzie, +1 co rzad"),
     ("gereh", gen_gereh, "23. GEREH (partycja)", "[B] same czworokaty: 8 rombow gwiazdy + latawce"),
     ("dragon", gen_dragon, "24. TWINDRAGON (reptile)", "[B] smoki kafelkuja plaszczyzne, zero nakladania"),
     ("koch_snowflake", gen_koch_snowflake, "25. PLATEK KOCHA (2 rozmiary)", "[B] duze+male platki brzeg-w-brzeg"),
@@ -1049,7 +1048,6 @@ SHAPES = [
     ("scales", gen_scales, "37. LUSKI (scales)", "[B] rybie luski: kopula + 2 luki, partycja"),
     ("pebbles", gen_pebbles, "38. PEBBLES (kamyki)", "[B] Voronoi o zmiennej gestosci ziaren"),
     ("rosette_fractal", gen_rosette_fractal, "39. ROZETA SPIRALNA (aloes)", "[B] liscie x2 co 3 pierscienie, srodek=wachlarz lisci"),
-    ("sierpinski_carpet", gen_sierpinski_carpet, "40. DYWAN SIERPINSKIEGO", "[B] tlo 1/81, najmniejsza dziura 3x wieksza od tla"),
 ]
 
 

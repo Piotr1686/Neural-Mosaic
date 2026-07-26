@@ -382,17 +382,6 @@ def _gen_sunflower_grande(engine, target_w, target_h, base_s):
     yield from _graded_sunflower(target_w, target_h, base_s, power=0.66)
 
 
-def _gen_sunflower_grande_xl(engine, target_w, target_h, base_s):
-    """Steeper growth r = c*n^0.75: tiny centre, huge rim seeds."""
-    yield from _graded_sunflower(target_w, target_h, base_s, power=0.75)
-
-
-def _gen_sunflower_grande_soft(engine, target_w, target_h, base_s):
-    """grande geometry + 1 Lloyd pass: rounder cells, gentler size ramp."""
-    yield from _graded_sunflower(target_w, target_h, base_s, power=0.66,
-                                 lloyd_iters=1)
-
-
 def _gen_sunflower_grande_inverse(engine, target_w, target_h, base_s):
     """Reversed gradient r = c*n^0.40: large centre seeds shrinking to a
     fine rim."""
@@ -422,262 +411,6 @@ def _gen_sunflower_rings(engine, target_w, target_h, base_s):
         aa = k * _GOLDEN_ANGLE
         pts.append((rr * math.cos(aa), rr * math.sin(aa)))
     yield from _emit_cells(pts, target_w, target_h)
-
-
-def _gen_sunflower_disc(engine, target_w, target_h, base_s):
-    """Two-zone head: fine disc florets in the centre, coarser seeds outside
-    (real flower-head anatomy). K florets fill a disc of radius 0.42 at
-    area-uniform spacing; the rim continues area-uniform but 1.7x coarser.
-    K/N is fixed at ~1/7.5 so the two zones keep their proportion at any
-    seed count."""
-    n = _sunflower_n_seeds(target_w, target_h, base_s)
-    disc_r = 0.42
-    K = max(4, int(n / 7.487))
-    c1 = disc_r / math.sqrt(K)
-    c2 = 1.7 * c1
-    pts = []
-    for k in range(1, n + 1):
-        if k <= K:
-            rr = c1 * math.sqrt(k)
-        else:
-            rr = math.sqrt(disc_r ** 2 + c2 ** 2 * (k - K))
-        aa = k * _GOLDEN_ANGLE
-        pts.append((rr * math.cos(aa), rr * math.sin(aa)))
-    yield from _emit_cells(pts, target_w, target_h)
-
-
-# --- Log-spiral rhombus mesh (rhombs family) -------------------------------
-# Ported from gen_sunflower_schemes. Seeds r = r0*exp(k*n), theta = n*golden
-# angle give a SELF-SIMILAR quad mesh (every cell a rotated+scaled copy of its
-# neighbour), so a fixed parastichy pair (F1, F2) stays embedded at every
-# radius and the inner hole ALWAYS has F1+F2 boundary edges regardless of the
-# density k. That invariant lets base_s scale k freely: the mesh densifies
-# while the centre closures (funnel rings / star rosette), which only touch the
-# F1+F2-edge boundary loop, stay valid. tile_scale is honoured by solving k so
-# the in-frame cell count ~ frame_area / base_s^2 (count ~ 1/k^2).
-def _emit_polys(polys, target_w, target_h, R=1.0):
-    """Clip explicit world-space [-R, R]^2 polygons to the frame and map them
-    affinely onto the target rectangle (y-flip folded in). Unlike _emit_cells
-    these polygons are already a partition (mesh quads / closure cells), so no
-    Voronoi step -- just clip + map."""
-    sx = target_w / (2.0 * R)
-    sy = target_h / (2.0 * R)
-    for poly in polys:
-        cl = _clip_square(poly, R)
-        if len(cl) >= 3:
-            yield [((x + R) * sx, (R - y) * sy) for x, y in cl]
-
-
-def _log_quads(F1, F2, r0, k, N0, N, pole):
-    """Self-similar mesh quads as world-space 4-vertex polygons (no loop)."""
-    quads = []
-    for n in range(N0, N + 1):
-        pts = []
-        for m in (n, n + F1, n + F1 + F2, n + F2):
-            rr = r0 * math.exp(k * m)
-            aa = m * _GOLDEN_ANGLE
-            pts.append((pole[0] + rr * math.cos(aa), pole[1] + rr * math.sin(aa)))
-        quads.append((n, pts))
-    return quads
-
-
-def _log_mesh(F1, F2, r0, k, N0, N, pole):
-    """Return (quad_polys, loop): the mesh quads plus the ordered inner-boundary
-    vertex loop (F1+F2 vertices walked CCW around the pole)."""
-    quads = _log_quads(F1, F2, r0, k, N0, N, pole)
-    edge_count = {}
-    for _, q in quads:
-        for a, b in zip(q, q[1:] + q[:1]):
-            edge_count[tuple(sorted((a, b)))] = edge_count.get(tuple(sorted((a, b))), 0) + 1
-    r_inner = r0 * math.exp(k * (N0 + F1 + F2)) * 1.25
-    binner = {}
-    for (a, b), cnt in edge_count.items():
-        if cnt != 1:
-            continue
-        da = math.hypot(a[0] - pole[0], a[1] - pole[1])
-        db = math.hypot(b[0] - pole[0], b[1] - pole[1])
-        if da < r_inner and db < r_inner:
-            binner.setdefault(a, []).append(b)
-            binner.setdefault(b, []).append(a)
-    start = next(iter(binner))
-    loop, prev, cur = [start], None, start
-    while True:
-        nxt = [v for v in binner[cur] if v != prev][0]
-        if nxt == start:
-            break
-        loop.append(nxt)
-        prev, cur = cur, nxt
-    area2 = sum(x1 * y2 - x2 * y1
-               for (x1, y1), (x2, y2) in zip(loop, loop[1:] + loop[:1]))
-    if area2 < 0:
-        loop.reverse()
-    return [q for _, q in quads], loop
-
-
-def _group_loop(L, T):
-    """Split L boundary edges into T contiguous groups of ~2 edges each."""
-    sizes = [2] * T
-    extra = L - 2 * T
-    i = 0
-    while extra != 0:
-        step = 1 if extra > 0 else -1
-        sizes[i % T] += step
-        extra -= step
-        i += 1
-    bounds, acc = [], 0
-    for s in sizes:
-        bounds.append((acc, acc + s))
-        acc += s
-    return bounds
-
-
-def _align_rot(anchors, T):
-    """Rotation best aligning T uniformly spaced vertices with `anchors`."""
-    step = 2 * math.pi / T
-    sc = ss = 0.0
-    for j, (x, y) in enumerate(anchors):
-        d = math.atan2(y, x) - j * step
-        sc += math.cos(d)
-        ss += math.sin(d)
-    return math.atan2(ss, sc)
-
-
-def _circle_pts(T, radius, rot):
-    step = 2 * math.pi / T
-    return [(radius * math.cos(rot + j * step),
-             radius * math.sin(rot + j * step)) for j in range(T)]
-
-
-def _rosette(m, r_side, rot):
-    """Rosette of m TRUE rhombi meeting at the pole (apex 2*pi/m, side r_side).
-    Returns (cells, zigzag outer boundary of 2m vertices)."""
-    step = 2 * math.pi / m
-    S = [(r_side * math.cos(rot + j * step),
-          r_side * math.sin(rot + j * step)) for j in range(m)]
-    F = [(S[j][0] + S[(j + 1) % m][0], S[j][1] + S[(j + 1) % m][1])
-         for j in range(m)]
-    cells = [[(0.0, 0.0), S[j], F[j], S[(j + 1) % m]] for j in range(m)]
-    zig = []
-    for j in range(m):
-        zig.extend((S[j], F[j]))
-    return cells, zig
-
-
-def _bridge(loop, target, bands=1):
-    """Ring cells connecting the jagged mesh boundary `loop` to `target` (a
-    polygon of len(target) vertices). Loop edges group ~2 per target edge;
-    intermediate bands interpolate. Returns world-space polygons (no colour)."""
-    L, T = len(loop), len(target)
-    bounds = _group_loop(L, T)
-    anchors = [loop[a] for a, _ in bounds]
-    levels = []
-    for lev in range(1, bands + 1):
-        t = lev / bands
-        levels.append([(ax + (zx - ax) * t, ay + (zy - ay) * t)
-                       for (ax, ay), (zx, zy) in zip(anchors, target)])
-    cells = []
-    inner = levels[0]
-    for j, (a, b) in enumerate(bounds):
-        outer = [loop[kk % L] for kk in range(b, a - 1, -1)]
-        cells.append([inner[j], inner[(j + 1) % T]] + outer)
-    for lev in range(1, bands):
-        out_pts, in_pts = levels[lev - 1], levels[lev]
-        for j in range(T):
-            cells.append([in_pts[j], in_pts[(j + 1) % T],
-                          out_pts[(j + 1) % T], out_pts[j]])
-    return cells
-
-
-def _solve_k(build_count, n_target, k0, iters=4):
-    """Solve for the log-mesh density k so the in-frame cell count ~ n_target,
-    exploiting count ~ 1/k^2 (each Newton-ish step multiplies k by the sqrt of
-    the count ratio). Converges in a few steps; guarded against empty meshes."""
-    k = k0
-    for _ in range(iters):
-        c = build_count(k)
-        if c <= 0:
-            break
-        k *= math.sqrt(c / n_target)
-    return k
-
-
-def _rhombs_n_target(target_w, target_h, base_s):
-    return max(40, int(target_w * target_h / (base_s * base_s)))
-
-
-def _count_in_frame(polys):
-    return sum(1 for p in polys if len(_clip_square(p, 1.0)) >= 3)
-
-
-def _gen_rhombs_nopole(engine, target_w, target_h, base_s):
-    """Centre variant 1: the pole sits OUTSIDE the frame (nautilus precedent),
-    so the frame holds nothing but proper mesh rhombi. Dense parastichy pair
-    (34, 55) keeps the swirl visible far from the pole."""
-    F1, F2, r0, pole = 34, 55, 0.055, (-1.35, -1.28)
-
-    def mesh(k):
-        N0 = int(math.log(0.30 / r0) / k) - (F1 + F2)
-        N = int(math.log(3.7 / r0) / k)
-        return _log_quads(F1, F2, r0, k, N0, N, pole)
-
-    n_target = _rhombs_n_target(target_w, target_h, base_s)
-    k = _solve_k(lambda kk: _count_in_frame([q for _, q in mesh(kk)]),
-                 n_target, 0.0015)
-    yield from _emit_polys([q for _, q in mesh(k)], target_w, target_h)
-
-
-# Funnel/star share the tight (21, 34) mesh centred on the origin; the central
-# hole is kept at a fixed world radius as k varies so the closure keeps scale.
-_RH_F1, _RH_F2, _RH_r0 = 21, 34, 0.055
-_RH_HOLE, _RH_OUTER = 0.34, math.sqrt(2.0) + 0.6
-
-
-def _rh_mesh_k(k):
-    N0 = int(math.log(_RH_HOLE / _RH_r0) / k) - (_RH_F1 + _RH_F2)
-    N = int(math.log(_RH_OUTER / _RH_r0) / k)
-    return _log_mesh(_RH_F1, _RH_F2, _RH_r0, k, N0, N, (0.0, 0.0))
-
-
-def _rh_solve_k(target_w, target_h, base_s):
-    n_target = _rhombs_n_target(target_w, target_h, base_s)
-
-    def count(k):
-        polys, _ = _rh_mesh_k(k)
-        return _count_in_frame(polys)
-
-    return _solve_k(count, n_target, 0.0042)
-
-
-def _gen_rhombs_funnel(engine, target_w, target_h, base_s):
-    """Centre variant 2: funnel of quad rings 28 -> 14 -> 7 (each ring halves
-    the count so cells keep the mesh aspect) closed by one small 7-gon pole
-    tile."""
-    k = _rh_solve_k(target_w, target_h, base_s)
-    polys, loop = _rh_mesh_k(k)
-    r_mean = sum(math.hypot(*v) for v in loop) / len(loop)
-    cells = list(polys)
-    cur = loop
-    for T, frac in [(28, 0.80), (14, 0.55), (7, 0.28)]:
-        rot = _align_rot([cur[a] for a, _ in _group_loop(len(cur), T)], T)
-        target = _circle_pts(T, frac * r_mean, rot)
-        cells.extend(_bridge(cur, target, bands=1))
-        cur = target
-    cells.append(cur)                              # single pole tile (7-gon)
-    yield from _emit_polys(cells, target_w, target_h)
-
-
-def _gen_rhombs_star(engine, target_w, target_h, base_s):
-    """Centre variant 3: rosette of 14 TRUE rhombi meeting at the pole, bridged
-    to the mesh by two interpolated quad rings."""
-    k = _rh_solve_k(target_w, target_h, base_s)
-    polys, loop = _rh_mesh_k(k)
-    r_mean = sum(math.hypot(*v) for v in loop) / len(loop)
-    cells = list(polys)
-    rot = _align_rot([loop[a] for a, _ in _group_loop(len(loop), 28)], 28)
-    rosette, zig = _rosette(14, 0.36 * r_mean, rot)
-    cells.extend(_bridge(loop, zig, bands=2))
-    cells.extend(rosette)
-    yield from _emit_polys(cells, target_w, target_h)
 
 
 # --- Uniform Voronoi + canonical phyllotaxis (PLAN_SHAPES S5) ---------------
@@ -1523,6 +1256,23 @@ def _join_arcs(*arcs):
     return ring
 
 
+def _sun_arc(r, a0, a1, cx, cy, seg_px):
+    """Polygonised arc from angle a0 to a1 at radius r (image-space points).
+    The segment pitch is fixed in px, so the sagitta of every chord stays
+    sub-pixel and abutting rings rasterise without visible slivers even
+    though their chord endpoints differ (T-junctions on ring arcs, the
+    accepted voderberg precedent).
+
+    Named after the (removed) sunburst shape that introduced it; scales,
+    nautilus, voderberg and truchet all share it — neighbouring cells call it
+    with the SAME arguments so they emit the SAME polyline and cannot leave a
+    seam between them.
+    """
+    n = max(2, int(abs(a1 - a0) * r / seg_px) + 1)
+    return [(cx + r * math.cos(a0 + (a1 - a0) * k / n),
+             cy + r * math.sin(a0 + (a1 - a0) * k / n)) for k in range(n + 1)]
+
+
 def _gen_scales(engine, target_w, target_h, base_s):
     """Fish scales (imbricated scallops): circles of radius r on the
     checkerboard lattice (dx=2r, dy=r, odd rows offset by r) cover the plane
@@ -1780,17 +1530,6 @@ def _sierpinski_cells(A, B, C, depth, out):
     out.append((ab, bc, ca))                    # central hole at this level
 
 
-def _sierp4(A, B, C, depth, out):
-    """Non-carrier treatment: split into 4 half-size sub-triangles (the
-    central inverted one included) and run a depth-`depth` gasket in each.
-    Caps the largest hole at HALF the carrier hole, so the big holes live only
-    on carrier triangles — and, crucially, subdivides the outer edges into the
-    same 2^(depth+1) segments a carrier does, so seams still pair."""
-    ab, bc, ca = (A + B) / 2, (B + C) / 2, (C + A) / 2
-    for tri in ((A, ab, ca), (ab, B, bc), (ca, bc, C), (ab, bc, ca)):
-        _sierpinski_cells(tri[0], tri[1], tri[2], depth, out)
-
-
 def _tri_outside(tri, w, h):
     """True when a lattice triangle cannot touch the frame, so its whole
     40/52-cell gasket can be skipped before it is ever built."""
@@ -1837,92 +1576,6 @@ def _gen_sierpinski(engine, target_w, target_h, base_s):
                 _sierpinski_cells(tri[0], tri[1], tri[2], 3, out)
                 for cell in out:
                     yield [(z.real, z.imag) for z in cell]
-
-
-def _gen_sierpinski_d(engine, target_w, target_h, base_s):
-    """Variant D — CHECKERBOARD (the 2026-07-04b verdict; variants B and C
-    were rejected): carriers alternate with capped triangles every second
-    triangle SEQUENTIALLY within a row regardless of orientation, and the
-    pattern shifts by ONE triangle each row — carrier = (t + r) % 2 == 0.
-
-    The grid is deliberately NOT row-staggered here: aligned rows are what
-    lets the carrier pattern offset the big holes row to row. With a stagger
-    the per-row carrier picks land in the same columns again — that was the
-    variant-C failure.
-
-    Carrier = 40 cells (depth 3), capped = 4 x 13 = 52 cells (_sierp4 at
-    depth 2); exactly half are carriers, so 46 cells per triangle on average
-    -> S^2*sqrt(3)/184 = base_s^2."""
-    S = base_s * math.sqrt(184.0 / math.sqrt(3.0))
-    H = S * math.sqrt(3.0) / 2.0
-    for r in range(-1, int(target_h / H) + 2):
-        y0 = r * H
-        for c in range(-2, int(target_w / S) + 3):
-            x0 = c * S
-            up = (complex(x0, y0), complex(x0 + S, y0),
-                  complex(x0 + S / 2, y0 + H))
-            dn = (complex(x0 + S / 2, y0 + H), complex(x0 + 1.5 * S, y0 + H),
-                  complex(x0 + S, y0))
-            for tri, t in ((up, 2 * c), (dn, 2 * c + 1)):
-                if _tri_outside(tri, target_w, target_h):
-                    continue
-                out = []
-                if (t + r) % 2 == 0:
-                    _sierpinski_cells(tri[0], tri[1], tri[2], 3, out)
-                else:
-                    _sierp4(tri[0], tri[1], tri[2], 2, out)
-                for cell in out:
-                    yield [(z.real, z.imag) for z in cell]
-
-
-def _carpet_cells(x, y, s, depth, out, clip=None):
-    """Sierpinski carpet recursion. The 8 ring sub-squares recurse and the
-    centre is a hole cell — EXCEPT at depth 1, where the centre is emitted as
-    an ordinary solid: a level-1 hole is the SAME size as the background
-    cells, so it would vanish once photos replace colours. Solids therefore
-    recurse one level deeper than holes, making the smallest real hole (1/27)
-    always 3x the background cell (1/81).
-
-    `clip` is a (w, h) frame: a sub-square entirely outside it is pruned
-    WHOLE, recursion and all. Without that a depth-4 carpet emits 4681 cells
-    per lattice position no matter how little of it shows — measured 42k cells
-    for the ~155 that touch an 800x600 frame."""
-    if clip is not None and (x > clip[0] or y > clip[1]
-                             or x + s < 0 or y + s < 0):
-        return
-    if depth == 0:
-        out.append((x, y, s))
-        return
-    t = s / 3.0
-    for a in range(3):
-        for b in range(3):
-            if a == 1 and b == 1:
-                out.append((x + t, y + t, t))
-            else:
-                _carpet_cells(x + a * t, y + b * t, t, depth - 1, out, clip)
-
-
-def _gen_sierpinski_carpet(engine, target_w, target_h, base_s):
-    """Sierpinski carpet, depth 4 — a true partition into axis-aligned
-    squares. The carpet is a rep-tile, so tiling the frame with carpets of
-    side S is seamless (the scheme fits exactly one to its square frame; the
-    engine must handle any aspect, hence the lattice).
-
-    N(d) = 1 + 8*N(d-1), N(4) = 4681 cells of total area S^2 -> S = 68.4
-    base_s. Background cells are 1/81 of the carpet and holes run 1/27 to 1/3,
-    which is the intended photo-scale gradient. The 1.05 factor corrects the
-    VISIBLE mean: a frame rarely shows a whole carpet, and the parts it cuts
-    off are biased toward the big central holes.
-
-    Like the triangles, holes face subdivided neighbours -> T-junctions by
-    construction, coverage (min=1.000) is the instrument."""
-    S = base_s * math.sqrt(4681.0) * 1.05
-    for i in range(-1, int(target_w / S) + 2):
-        for j in range(-1, int(target_h / S) + 2):
-            out = []
-            _carpet_cells(i * S, j * S, S, 4, out, clip=(target_w, target_h))
-            for x, y, s in out:
-                yield [(x, y), (x + s, y), (x + s, y + s), (x, y + s)]
 
 
 def _gen_cairo(engine, target_w, target_h, base_s):
@@ -2342,53 +1995,6 @@ def _gen_pythagorean(engine, target_w, target_h, base_s):
             # c+t1+t2 is exactly [b-s, b] x [b, b+s] relative to c
             yield [(c.real + b - s, c.imag + b), (c.real + b, c.imag + b),
                    (c.real + b, c.imag + b + s), (c.real + b - s, c.imag + b + s)]
-
-
-def _sun_arc(r, a0, a1, cx, cy, seg_px):
-    """Polygonised arc from angle a0 to a1 at radius r (image-space points).
-    The segment pitch is fixed in px, so the sagitta of every chord stays
-    sub-pixel and abutting rings rasterise without visible slivers even
-    though their chord endpoints differ (T-junctions on ring arcs, the
-    accepted voderberg precedent)."""
-    n = max(2, int(abs(a1 - a0) * r / seg_px) + 1)
-    return [(cx + r * math.cos(a0 + (a1 - a0) * k / n),
-             cy + r * math.sin(a0 + (a1 - a0) * k / n)) for k in range(n + 1)]
-
-
-def _gen_sunburst(engine, target_w, target_h, base_s):
-    """Sunburst: log-polar grid about the frame centre — a constant sector
-    count with geometric ring radii gives ~square, self-similar cells whose
-    radial seams line up into rays; a constant extra twist per ring bends the
-    rays into gentle spirals (the scheme's look). The pole is closed by a
-    small wedge fan (same-shape cells meeting at the centre, per the approved
-    'good centre' pattern). tile_scale sets the cell size at mid-radius."""
-    cx, cy = target_w / 2.0, target_h / 2.0
-    r_max = math.hypot(cx, cy) * 1.01
-    nsec = max(12, round(2.0 * math.pi * (0.45 * r_max) / base_s))
-    g = 1.0 + 2.0 * math.pi / nsec              # square cells: dr = arc
-    seg = max(4.0, base_s / 3.0)
-    twist = -0.18 * (2.0 * math.pi / nsec)      # per-ring twist: rays stay
-    # readable as continuous spokes but bend into gentle log-spirals
-    # (negative = counter-clockwise lean, matching the approved scheme)
-    cap_r = 1.6 * base_s
-    radii = [r_max]
-    while radii[-1] / g > cap_r:
-        radii.append(radii[-1] / g)
-    for k in range(len(radii) - 1):
-        r_out, r_in = radii[k], radii[k + 1]
-        base_a = k * twist
-        for i in range(nsec):
-            a0 = base_a + 2.0 * math.pi * i / nsec
-            a1 = a0 + 2.0 * math.pi / nsec
-            yield (_sun_arc(r_in, a0, a1, cx, cy, seg)
-                   + _sun_arc(r_out, a1, a0, cx, cy, seg))
-    ncap = 7                                    # odd: no seam lock with ring 1
-    base_a = (len(radii) - 1) * twist
-    r_in = radii[-1]
-    for i in range(ncap):
-        a0 = base_a + 2.0 * math.pi * i / ncap
-        a1 = a0 + 2.0 * math.pi / ncap
-        yield [(cx, cy)] + _sun_arc(r_in, a0, a1, cx, cy, seg)
 
 
 # --- Voderberg / escher_lizard / weave (last three Fable shapes) -----------
@@ -3334,66 +2940,61 @@ class ShapeSpec:
 # Ordered registry — GUI dropdown, CLI --shape choices, make_showcase and the
 # benchmark all read the names from `shape_names()` so adding a shape is a
 # one-line edit here (the earlier kite->kites rename touched five files).
+# Order is ALPHABETICAL (user verdict 2026-07-26): with 50 shapes the old
+# "grouped by the sprint that added them" order was only legible to whoever
+# wrote it, so the dropdown is now scannable by name. Nothing depends on the
+# order — every consumer looks names up in the dict.
 SHAPE_MODES = {
-    "square":        ShapeSpec("grid"),
-    "rectangle_3x1": ShapeSpec("grid"),
-    "brick_wall":    ShapeSpec("grid"),
-    "hexagon":       ShapeSpec("grid"),
-    "hexagon_romb":  ShapeSpec("grid"),
-    "romb":          ShapeSpec("grid"),
-    "triangle":      ShapeSpec("grid"),
-    "stagger_tri":   ShapeSpec("polygon", _gen_stagger_tri, aa=4),
-    "braid":         ShapeSpec("polygon", _gen_braid, aa=4),
-    "moire":         ShapeSpec("polygon", _gen_moire, aa=4),
-    "puzzle_classic": ShapeSpec("polygon", _gen_puzzle_classic, aa=4),
-    "puzzle_ribbon":  ShapeSpec("polygon", _gen_puzzle_ribbon, aa=4),
-    "puzzle_hex":     ShapeSpec("polygon", _gen_puzzle_hex, aa=4),
-    "dragon":        ShapeSpec("polygon", _gen_dragon, aa=4),
-    "koch_island":   ShapeSpec("polygon", _gen_koch_island, aa=4),
-    "koch_snowflake": ShapeSpec("polygon", _gen_koch_snowflake, aa=4),
-    "gereh":         ShapeSpec("polygon", _gen_gereh, aa=4),
-    "rosette":       ShapeSpec("polygon", _gen_rosette, aa=4),
-    "scales":        ShapeSpec("polygon", _gen_scales, aa=4),
-    "nautilus":      ShapeSpec("polygon", _gen_nautilus, aa=4),
-    "rosette_fractal": ShapeSpec("polygon", _gen_rosette_fractal, aa=4),
-    "sierpinski":      ShapeSpec("polygon", _gen_sierpinski, aa=4),
-    "sierpinski_d":    ShapeSpec("polygon", _gen_sierpinski_d, aa=4),
-    "sierpinski_carpet": ShapeSpec("polygon", _gen_sierpinski_carpet, aa=4),
-    "kites":         ShapeSpec("polygon", _gen_kites, aa=1),
-    "spectre":       ShapeSpec("polygon", _gen_spectre, aa=4),
-    "sunflower_grande":         ShapeSpec("polygon", _gen_sunflower_grande, aa=4),
-    "sunflower_grande_xl":      ShapeSpec("polygon", _gen_sunflower_grande_xl, aa=4),
-    "sunflower_grande_soft":    ShapeSpec("polygon", _gen_sunflower_grande_soft, aa=4),
-    "sunflower_grande_inverse": ShapeSpec("polygon", _gen_sunflower_grande_inverse, aa=4),
-    "sunflower_soft":           ShapeSpec("polygon", _gen_sunflower_soft, aa=4),
-    "sunflower_rings":          ShapeSpec("polygon", _gen_sunflower_rings, aa=4),
-    "sunflower_disc":           ShapeSpec("polygon", _gen_sunflower_disc, aa=4),
-    "rhombs_nopole":            ShapeSpec("polygon", _gen_rhombs_nopole, aa=4),
-    "rhombs_funnel":            ShapeSpec("polygon", _gen_rhombs_funnel, aa=4),
-    "rhombs_star":              ShapeSpec("polygon", _gen_rhombs_star, aa=4),
-    "voronoi":                  ShapeSpec("polygon", _gen_voronoi, aa=4, seeded=True),
-    "pebbles":                  ShapeSpec("polygon", _gen_pebbles, aa=4, seeded=True),
-    "phyllotaxis":              ShapeSpec("polygon", _gen_phyllotaxis, aa=4),
+    "ammann_beenker":           ShapeSpec("polygon", _gen_ammann_beenker, aa=4),
     "bloom":                    ShapeSpec("polygon", _gen_bloom, aa=4),
-    "pinwheel":                 ShapeSpec("polygon", _gen_pinwheel, aa=4),
+    "braid":                    ShapeSpec("polygon", _gen_braid, aa=4),
+    "brick_wall":               ShapeSpec("grid"),
     "cairo":                    ShapeSpec("polygon", _gen_cairo, aa=4),
+    "dragon":                   ShapeSpec("polygon", _gen_dragon, aa=4),
+    "escher_lizard":            ShapeSpec("polygon", _gen_escher, aa=4),
     "floret":                   ShapeSpec("polygon", _gen_floret, aa=4),
+    "gereh":                    ShapeSpec("polygon", _gen_gereh, aa=4),
+    "girih":                    ShapeSpec("polygon", _gen_girih, aa=4),
     "gosper":                   ShapeSpec("polygon", _gen_gosper, aa=4),
-    "trunc_square":             ShapeSpec("polygon", _gen_trunc_square, aa=4),
-    "trunc_hex":                ShapeSpec("polygon", _gen_trunc_hex, aa=4),
-    "rhombitrihex":             ShapeSpec("polygon", _gen_rhombitrihex, aa=4),
-    "pythagorean":              ShapeSpec("polygon", _gen_pythagorean, aa=4),
-    "sunburst":                 ShapeSpec("polygon", _gen_sunburst, aa=4),
+    "hexagon":                  ShapeSpec("grid"),
+    "hexagon_romb":             ShapeSpec("grid"),
+    "kites":                    ShapeSpec("polygon", _gen_kites, aa=1),
+    "koch_island":              ShapeSpec("polygon", _gen_koch_island, aa=4),
+    "koch_snowflake":           ShapeSpec("polygon", _gen_koch_snowflake, aa=4),
+    "moire":                    ShapeSpec("polygon", _gen_moire, aa=4),
+    "nautilus":                 ShapeSpec("polygon", _gen_nautilus, aa=4),
+    "pebbles":                  ShapeSpec("polygon", _gen_pebbles, aa=4, seeded=True),
     "penrose":                  ShapeSpec("polygon", _gen_penrose, aa=4),
     "penrose_p2":               ShapeSpec("polygon", _gen_penrose_p2, aa=4),
-    "ammann_beenker":           ShapeSpec("polygon", _gen_ammann_beenker, aa=4),
-    "voderberg":                ShapeSpec("polygon", _gen_voderberg, aa=4),
-    "escher_lizard":            ShapeSpec("polygon", _gen_escher, aa=4),
-    "weave":                    ShapeSpec("polygon", _gen_weave, aa=4),
+    "phyllotaxis":              ShapeSpec("polygon", _gen_phyllotaxis, aa=4),
+    "pinwheel":                 ShapeSpec("polygon", _gen_pinwheel, aa=4),
+    "poincare":                 ShapeSpec("polygon", _gen_poincare, aa=4),
+    "puzzle_classic":           ShapeSpec("polygon", _gen_puzzle_classic, aa=4),
+    "puzzle_hex":               ShapeSpec("polygon", _gen_puzzle_hex, aa=4),
+    "puzzle_ribbon":            ShapeSpec("polygon", _gen_puzzle_ribbon, aa=4),
+    "pythagorean":              ShapeSpec("polygon", _gen_pythagorean, aa=4),
+    "rectangle_3x1":            ShapeSpec("grid"),
+    "rhombitrihex":             ShapeSpec("polygon", _gen_rhombitrihex, aa=4),
+    "romb":                     ShapeSpec("grid"),
+    "rosette":                  ShapeSpec("polygon", _gen_rosette, aa=4),
+    "rosette_fractal":          ShapeSpec("polygon", _gen_rosette_fractal, aa=4),
+    "scales":                   ShapeSpec("polygon", _gen_scales, aa=4),
+    "sierpinski":               ShapeSpec("polygon", _gen_sierpinski, aa=4),
+    "spectre":                  ShapeSpec("polygon", _gen_spectre, aa=4),
+    "square":                   ShapeSpec("grid"),
+    "stagger_tri":              ShapeSpec("polygon", _gen_stagger_tri, aa=4),
+    "sunflower_grande":         ShapeSpec("polygon", _gen_sunflower_grande, aa=4),
+    "sunflower_grande_inverse": ShapeSpec("polygon", _gen_sunflower_grande_inverse, aa=4),
+    "sunflower_rings":          ShapeSpec("polygon", _gen_sunflower_rings, aa=4),
+    "sunflower_soft":           ShapeSpec("polygon", _gen_sunflower_soft, aa=4),
+    "triangle":                 ShapeSpec("grid"),
     "truchet":                  ShapeSpec("polygon", _gen_truchet, aa=4),
     "truchet_hex":              ShapeSpec("polygon", _gen_truchet_hex, aa=4),
-    "girih":                    ShapeSpec("polygon", _gen_girih, aa=4),
-    "poincare":                 ShapeSpec("polygon", _gen_poincare, aa=4),
+    "trunc_hex":                ShapeSpec("polygon", _gen_trunc_hex, aa=4),
+    "trunc_square":             ShapeSpec("polygon", _gen_trunc_square, aa=4),
+    "voderberg":                ShapeSpec("polygon", _gen_voderberg, aa=4),
+    "voronoi":                  ShapeSpec("polygon", _gen_voronoi, aa=4, seeded=True),
+    "weave":                    ShapeSpec("polygon", _gen_weave, aa=4),
 }
 
 
