@@ -1686,9 +1686,11 @@ def test_sierpinski_brick_stagger_adds_no_t_junctions():
 
 
 def test_sierpinski_family_scales_to_16k_within_budget():
-    # Pruning matters here: an unpruned depth-4 carpet emits 4681 cells per
-    # lattice position regardless of how little shows (42k cells for the ~155
-    # that touch an 800x600 frame). With pruning all three stay ~40k at 16K.
+    # Pruning matters here: an unpruned gasket emits every cell of every
+    # lattice position regardless of how little of it shows. With pruning the
+    # count stays ~40k at 16K. (The variants this test used to cover,
+    # sierpinski_d and sierpinski_carpet, were dropped 2026-07-26; the loop
+    # stays a loop so a future variant only costs one _SIERP_GENS entry.)
     for name, gen in _SIERP_GENS.items():
         n = sum(1 for _ in gen(None, 16384, 12288, 75))
         assert n < 120000, f"{name}: {n} cells at 16K — RAM budget (A1) at risk"

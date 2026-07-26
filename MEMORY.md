@@ -12,7 +12,7 @@
 - Indeks buduje `src/indexer_smart.py` → `data/smart_index.pkl`; schema_version="5x5", feature_dim=75
 - Dopasowanie przez `cKDTree` + `cdist` (euclidean), chunk_size=500, top-50 kandydatów
 - Spatial anti-repetition: `cKDTree` po współrzędnych kafelka, search_radius = 1.5×base_s
-- Obsługuje geometrie: square, rectangle_3x1, brick_wall, hexagon, hexagon_romb, triangle, romb, kites, spectre
+- Obsługuje **50 geometrii** — jedyne źródło prawdy to `SHAPE_MODES` w `engine_smart.py` (kolejność ALFABETYCZNA od 2026-07-26); nie duplikuj listy w kodzie ani w dokumentach, czytaj przez `shape_names()`
 - Geometria `kites` = deltoidalna trójheksagonalna: każdy spłaszczony heksagon dzielony na 6 latawców, każdy latawiec = osobny sektor/zdjęcie (per-tile, deterministyczne, bez RNG). Zastąpiła stary tryb `kite` (8-kite "hat" z losową orientacją) — 2026-06-30
 - LIBRARY_DIRS: data/library_starter/tiles, library_public, library_extended, library_private
 - Blokada renderowania przy niezgodnym indeksie (hard block jeśli dim≠75 lub schema≠"5x5")
@@ -67,6 +67,12 @@
 ---
 
 ## Rozwiązane problemy
+
+[2026-07-26] **Ząbkowanie krawędzi `kites` — i pułapka TRZECH kopii tego samego przebiegu siatki**
+- **Wada:** kafle odrzucane po CENTROIDZIE w kadrze zamiast po PRZECIĘCIU bbox z kadrem → każdy latawiec na brzegu ze środkiem poza kadrem znikał w całości. Pomiar (1200×900, base_s=75, maska FLOAT ss=4): **2,349% kadru bez pokrycia** — pasmo dolne 12,57%, prawe 9,09%, górne 6,69%; lewa czysta TYLKO przez fazę siatki (`cx = 1.5·s·q` kładzie środek heksagonu dokładnie na x=0, stąd złudzenie, że wada dotyczy tylko prawej/dołu). Po fixie 0,000% na wszystkich pasmach.
+- **META-LEKCJA (najważniejsza):** pierwszy fix trafił tylko w `_gen_kites` i **nie zmienił ANI JEDNEGO piksela renderu** — golden `kites` został bit-w-bit ten sam. To NIE było potwierdzenie zgodności, tylko dowód, że dotknięty kod **nie jest ścieżką produkcyjną**. `kites` był jedynym kształtem poza generycznym dispatchem polygon i miał TRZY kopie przebiegu `(q,r,k)`: `_gen_kites`, dedykowana gałąź w `_do_render`, `_grout_cells_kites`. Produkcja renderowała przez kopię nr 2. Ta sama meta-lekcja co [2026-07-06] make_dzi (skrypt pomiarowy ≠ produkcja) i [2026-07-13] grout AA (tool propozycji rasteryzował SS=2, silnik 1:1).
+- **ODRUCH:** przy zmianie geometrii kształtu NAJPIERW `grep` nazwy kształtu po `engine_smart.py` — jeśli występuje poza `SHAPE_MODES`, istnieje osobna gałąź. Nie łataj kopii: wyciągnij jeden przebieg (tu `_kite_lattice()` + modułowy `_kite_poly()`) i podepnij wszystkich konsumentów. Bramka testowa porównuje wtedy LICZBY komórek `generator == lattice == grout`, zamiast powielać kod, który miała sprawdzać.
+- **Instrument:** formalny test partycji — suma pól przyciętych = **1 080 000,0 = DOKŁADNIE pole kadru**. Jedna liczba łapie i niedobór (dziury), i nadmiar (podwójne malowanie); mocniejszy niż test rastrowy. Sweep pokrycia po WSZYSTKICH 53 kształtach polygon: `kites` był JEDYNYM z wadą (reszta 0,000%, `girih` 0,011% — znana otoczka).
 
 [2026-07-21] **Trzy wady wykryte dopiero na realnym renderze 8K** (input airshow, edge-aware, grout thin)
 - **Czarny padding częściowego cropu krawędziowego zatruwa dopasowanie LAB** → ciemne slivery na offsetowych krawędziach. `brick_wall` przesuwa co drugi rząd o `base_s//2`, więc przy lewej krawędzi powstaje pół-cegła `c=-1` (x od −38); widoczne 37 px, reszta kanwy była wypełniana `(0,0,0)` PRZED liczeniem cechy → mediana leci w czerń → dopasowany ciemny kafel, odcina się od nieba. `square` nie ma wady (skrajne kafle w pełni poza kadrem → pomijane `safe[2]<=safe[0]`). FIX: mean-fill reszty kanwy kolorem średniej cropu + paste w PRAWDZIWEJ pozycji `(safe[0]-px, safe[1]-py)` (branch grid + hexagon_romb). `_polygon_sector`/kites/spectre już pastowały z poprawnym offsetem — nietknięte. Zmienia dopasowanie krawędzi → goldeny `square`+`hexagon_romb` zregenerowane (4 hashe, udokumentowane w test_golden_shapes.py)
@@ -137,6 +143,15 @@
 ---
 
 ## Aktywne TODO (długoterminowe)
+
+[2026-07-26] **Analiza krytyczna 50 mozaik 8K — zmierzone wady, rekomendacje NIEZATWIERDZONE przez usera**
+- **① Szum w płaskim niebie = NAJWIĘKSZA dźwignia.** Odchylenie L* w płacie nieba: oryginał **1,29**, mozaiki **6,3–9,9** (5–8×). Wspólne dla WSZYSTKICH kształtów ⇒ przyczyna leży w dopasowaniu/bibliotece, nie w geometrii. Najgorsze: `koch_snowflake` 9,87, `romb` 8,91, `dragon` 8,35. Najlepsze: `truchet` 6,31, `hexagon_romb` 6,44, `moire` 6,50. **Rekomendacja: nie zgadywać** — sweep `square` @2K po blend ∈ {0,10 · 0,20 · 0,30} × tint ∈ {0,10 · 0,25}, metryka gotowa, zero zmian w kodzie. Dopiero jeśli blend nie pomoże → podejrzany `freq_penalty` (wymusza różnorodność tam, gdzie chcemy jednorodności).
+- **② Kształt jest niewidoczny przy oglądaniu całości.** Rozpiętość wierności całego zestawu to dE 11,3–12,6 (mediana 12,0) — przy dopasowaniu do ekranu wszystkie 50 czytają się jak ta sama fotografia. Wybór kształtu to oś **czysto estetyczna, działająca tylko przy 100%**. Konsekwencja dla galerii: wizerunkiem pozycji ma być crop 1:1 albo wymuszony zoom (DZI), NIE miniatura całej mozaiki.
+- **③ Ziarno rozjeżdża się między kształtami przy tych samych ustawieniach.** Rozdziel dwa przypadki: (a) **jednorodne, ale źle wyskalowane** — `kites` 0,43, `truchet` 0,32, `koch_snowflake` 0,33, `poincare` 0,34 przy `p90/p10 ≈ 1,0`; naprawia to JEDNA liczba per kształt (pole `scale` w `ShapeSpec`); (b) **wewnętrznie bimodalne** — `trunc_hex` (p90/p10 = 25,9), `rhombitrihex`, `weave`, `pebbles`; tu żaden skalar nie pomoże, dwa rozmiary komórek TO JEST ten kształt (4.8.8 = ośmiokąt + trójkąt wypełniający). **UWAGA metodologiczna:** mediana pola to ZŁY statystyk (dla `trunc_hex` ląduje na mikroskopijnych trójkątach, choć oko widzi ośmiokąty — stąd alarmujące 0,04). Właściwy: **średnia ważona polem `Σa²/Σa`** = pole komórki pod losowym pikselem. Przemierzyć przed jakąkolwiek kalibracją.
+- **④ `sierpinski`: największa komórka = 16× mediany.** Zdjęcie rozciągnięte na trójkąt ~600 px w płaskim niebie czyta się jako pusty klin. Hierarchia rozmiarów to TOŻSAMOŚĆ tego kształtu, więc nie wycinać — ewentualnie ograniczyć („komórka > 6× mediany dostaje własną rekurencję"), ale **najpierw A/B @8K, nie commit w ciemno**. Kontekst: usunięty `sierpinski_d` istniał dokładnie po to (`_sierp4` ograniczał największą dziurę do połowy) i został odrzucony estetycznie — różnica w tym, że tam było to osobnym KSZTAŁTEM, tu byłoby ograniczeniem jakości istniejącego.
+- **⑤ `escher_lizard` nie wygląda jak jaszczurka** — przy 1:1 to postrzępiony plus/gwiazda. **Rekomendacja: zmienić NAZWĘ, nie geometrię** (`escher_hex` / `interlock`). Kafel działa jako splatający się nieregularny wzór; nie działa nazwa, która obiecuje coś, czego nie ma. Prawdziwa sylwetka = ręczne zaprojektowanie deformacji sześciokąta + dowód, że nadal teseluje (godziny, niepewny wynik); to, że pozycja leży w backlogu od dawna, samo jest informacją.
+- **⑥ Grout wg obwodu — WYCOFANA sugestia, nie robić.** Stała szerokość jest fizycznie uczciwa (prawdziwa fuga ma stałą szerokość niezależnie od kształtu płytki), a skalowanie obwodem zrobiłoby z granic Kocha linie włoskowate i zabiło efekt. Realny problem jest węższy: preset „thin" sugeruje porównywalny wygląd i nie dowozi. Tanie rozwiązanie: policzyć udział czarnego tuszu per kształt i te powyżej ~15% renderować w batchu z **grout=off** — decyzja przenosi się do drivera, zero zmian w silniku.
+- **⑦ `bloom` vs `phyllotaxis`** — różnią się WYŁĄCZNIE kątem dywergencji (Lucas vs złoty ⇒ inne ramiona parastych), co jest widoczne tylko na schemacie z kolorowanymi komórkami; w mozaice każda komórka to inne zdjęcie, więc struktura ramion znika. Liczby: dE 11,47 vs 11,44, szum 7,61 vs 7,11 — w granicach szumu pomiaru. **Rekomendacja: usunąć `bloom`.** Kryterium do przyjęcia na stałe: *kształt zasługuje na slot, jeśli różni się w MOZAICE, nie na diagramie.*
 
 [2026-04-18] **feature/semantic-clip — CLIP semantic tile matching**
 - Branch: `feature/semantic-clip`
@@ -336,6 +351,12 @@
 ---
 
 ## Odrzucone podejścia
+
+[2026-07-26] **Selekcja finalna kształtów — 9 USUNIĘTYCH CAŁKOWICIE, nie proponować ponownie**
+- Werdykt usera po przeglądzie 59 mozaik 8K. Wycięte z projektu (generatory, `SHAPE_MODES`, goldeny, testy, `assets/shape_schemes/`, wpisy w `src/tools/gen_*_schemes.py`): `rhombs_funnel`, `rhombs_nopole`, `rhombs_star`, `sierpinski_carpet`, `sierpinski_d`, `sunburst`, `sunflower_disc`, `sunflower_grande_xl`, `sunflower_grande_soft`. **REJESTR = 50.**
+- Wybór potwierdzony obiektywnie: 3 odrzucone `rhombs_*` miały NAJGORSZĄ wierność wobec oryginału (dE 15,1 / 15,2 / 15,7 przy medianie 12,0 w całym zestawie).
+- **PUŁAPKI usuwania kształtu** (promień rażenia większy niż nazwa sugeruje): `_sun_arc` mimo nazwy od `sunburst` jest współdzielony przez `scales`/`nautilus`/`voderberg`/`truchet` — usunięcie razem z sunburstem wywaliło **25 testów** w kształtach nietkniętych. Cała maszyneria log-spiralna (`_log_quads`/`_log_mesh`/`_bridge`/`_rosette`/`_emit_polys`/`_rh_*`) była wyłącznie pod `rhombs_*` → 234 linie martwego kodu do usunięcia. `_sierp4` osierocony po `sierpinski_d`. `src/tools/gen_e7_schemes.py` importuje generatory wprost → crash na imporcie, jeśli nie zaktualizowany.
+- Kolejność `SHAPE_MODES` zmieniona na **ALFABETYCZNĄ**; nic od niej nie zależy (każdy konsument szuka nazwy w słowniku). Dropdown kształtów w GUI otwiera się w **2 kolumnach** (`_spread_dropdown_columns` w `gui.py`: CTk dropdown to `tkinter.Menu`, wspiera per-wpis `columnbreak`) — 50 pozycji w jednej kolumnie nie mieści się na ekranie.
 
 [2026-07-11] **`_CurvedMask` (osobna maszyneria masek krzywoliniowych) — ODRZUCONY, nie wracać**
 - PLAN_SHAPES zakładał `_CurvedMask` jako warunek truchet ×2 („Tier B"). Zbędny: polygonizacja łuku z sub-pikselową strzałką + `aa=4` w `_LazyMask` daje ten sam wynik rastrowy, a sunburst udowodnił to w produkcji. Szczegóły w sekcji TODO, wpis [2026-07-11b].
