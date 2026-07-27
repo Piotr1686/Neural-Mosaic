@@ -1311,10 +1311,14 @@ def _sun_arc(r, a0, a1, cx, cy, seg_px):
     though their chord endpoints differ (T-junctions on ring arcs, the
     accepted voderberg precedent).
 
-    Named after the (removed) sunburst shape that introduced it; scales,
-    nautilus, voderberg and truchet all share it — neighbouring cells call it
-    with the SAME arguments so they emit the SAME polyline and cannot leave a
-    seam between them.
+    Named after the (removed) sunburst shape that introduced it. FIVE shapes
+    share it — nautilus, scales, truchet, truchet_hex, voderberg — so it must
+    survive any future shape cull; deleting it with sunburst broke 25 tests
+    once already. Neighbouring cells call it with the SAME arguments, so they
+    emit the SAME polyline and cannot leave a seam between them.
+
+    The list above is checked by `TestSunArcConsumers`; re-run it after adding
+    a shape that draws arcs.
     """
     n = max(2, int(abs(a1 - a0) * r / seg_px) + 1)
     return [(cx + r * math.cos(a0 + (a1 - a0) * k / n),

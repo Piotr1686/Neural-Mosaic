@@ -338,3 +338,59 @@ class TestEuclidF32:
         tk_ref = np.sort(np.argpartition(ref, top_k - 1, axis=1)[:, :top_k], axis=1)
         tk_got = np.sort(np.argpartition(got, top_k - 1, axis=1)[:, :top_k], axis=1)
         assert np.array_equal(tk_ref, tk_got)
+
+
+# ---------------------------------------------------------------------------
+# Shared-helper survival — the 59->50 shape cull (077fec3) deleted `_sun_arc`
+# because its name came from the removed `sunburst`, and 25 tests in untouched
+# shapes went red. The docstring naming its consumers is the guardrail against
+# a repeat, so it has to stay true as shapes come and go.
+# ---------------------------------------------------------------------------
+
+class TestSunArcConsumers:
+    @staticmethod
+    def _consumers():
+        """Shapes whose generator reaches `_sun_arc`, transitively, per the AST."""
+        import ast
+        import inspect
+
+        from src import engine_smart
+
+        tree = ast.parse(inspect.getsource(engine_smart))
+        funcs = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef)}
+        calls = {
+            name: {s.id for s in ast.walk(node)
+                   if isinstance(s, ast.Name) and s.id in funcs}
+            for name, node in funcs.items()
+        }
+
+        def reaches(start, target):
+            seen, stack = set(), [start]
+            while stack:
+                cur = stack.pop()
+                for nxt in calls.get(cur, ()):
+                    if nxt == target:
+                        return True
+                    if nxt not in seen:
+                        seen.add(nxt)
+                        stack.append(nxt)
+            return False
+
+        # The legacy grid shapes (square, hexagon, ...) carry no generator —
+        # they are rasterised by the grid branch of _do_render.
+        return {name for name, spec in engine_smart.SHAPE_MODES.items()
+                if spec.generator is not None
+                and reaches(spec.generator.__name__, "_sun_arc")}
+
+    def test_docstring_lists_every_consumer(self):
+        from src.engine_smart import _sun_arc
+
+        doc = _sun_arc.__doc__
+        missing = sorted(s for s in self._consumers() if s not in doc)
+        assert not missing, (
+            f"_sun_arc's docstring does not name {missing}; a future shape cull "
+            "could delete the helper believing those shapes do not need it")
+
+    def test_helper_is_shared_not_single_use(self):
+        # A single consumer would make inlining tempting; it has five.
+        assert len(self._consumers()) >= 5
