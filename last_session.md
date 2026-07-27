@@ -1,8 +1,8 @@
 # last_session.md
 
-**Sesja:** 2026-07-26 · 21:00-21:55
-**Punkt odniesienia (git):** 75cbf8b @ main
+**Sesja:** 2026-07-27 · ~21:20-21:48
 **Status:** ✓ Zakończona poprawnie
+**Punkt odniesienia (git):** e4c0153 @ main (zsynchronizowane z origin/main)
 
 ---
 
@@ -26,87 +26,84 @@ kodzie, metryka gotowa) i **gatuje galerię 16K**: nie ma sensu renderować 50
 obrazów @16K przed ustaleniem właściwych blend/tint. Jeśli sweep nie da kolana
 — następny podejrzany to `freq_penalty`.
 
-⚠ Rekomendacja moja, **niezatwierdzona przez usera** — user wywołał /end zaraz
-po jej przedstawieniu, bez wyboru punktu startowego.
+⚠ Rekomendacja moja z sesji 2026-07-26, **wciąż niezatwierdzona przez usera**
+— ta sesja była audytem (patrz niżej), nie dotknęła priorytetu. Przed
+rozpoczęciem sweepu upewnij się, że to nadal to, co user chce zrobić dalej.
 
 ---
 
 ## Co zrobiono w tej sesji
 
-- ✓ **Selekcja finalna: rejestr 59 → 50 kształtów** (`077fec3`). Usunięte
-  CAŁKOWICIE z projektu (generatory, `SHAPE_MODES`, goldeny, testy, schematy
-  `assets/shape_schemes/`, wpisy w `src/tools/gen_*_schemes.py`, stare mozaiki):
-  `rhombs_funnel`, `rhombs_nopole`, `rhombs_star`, `sierpinski_carpet`,
-  `sierpinski_d`, `sunburst`, `sunflower_disc`, `sunflower_grande_xl`,
-  `sunflower_grande_soft`.
-- ✓ **−234 linie martwego kodu** — cała maszyneria log-spiralna
-  (`_log_quads`/`_log_mesh`/`_bridge`/`_rosette`/`_emit_polys`/`_rh_*`) była
-  wyłącznie pod `rhombs_*`; `_sierp4` osierocony po `sierpinski_d`.
-- ✓ **`_sun_arc` PRZYWRÓCONY** — mimo nazwy od `sunburst` jest współdzielony
-  przez `scales`/`nautilus`/`voderberg`/`truchet`; usunięcie go wywaliło
-  25 testów w kształtach nietkniętych.
-- ✓ **Kolejność `SHAPE_MODES` → ALFABETYCZNA**; `shape_names()` = 50 nazw.
-- ✓ **Dropdown kształtów w GUI w 2 kolumnach** (25+25, bez przewijania) —
-  `_spread_dropdown_columns()` w `gui.py`; CTk dropdown to `tkinter.Menu`,
-  który wspiera per-wpis `columnbreak`. Zweryfikowane:
-  `ammann_beenker..puzzle_classic` | `puzzle_hex..weave`.
-- ✓ **`kites` — ząbkowanie krawędzi NAPRAWIONE** (`5f0e5cd`): filtr zmieniony
-  z „centroid w kadrze" na „bbox przecina kadr". Pomiar: **2,349% → 0,000%**
-  niepokrytego kadru (pasmo dolne 12,57% → 0). Formalny test partycji: suma
-  pól przyciętych = **1 080 000,0 = dokładnie pole kadru**.
-- ✓ **Zlikwidowane potrojenie przebiegu siatki kites** — jeden `_kite_lattice()`
-  + modułowy `_kite_poly()`; konsumują go generator, gałąź `_do_render` i
-  `_grout_cells_kites`. Goldeny `kites` zregenerowane, 4 nowe testy.
-- ✓ **Sweep pokrycia po wszystkich 53 kształtach polygon** — `kites` był
-  JEDYNYM z wadą (reszta 0,000%, `girih` 0,011% = znana otoczka).
-- ✓ **Analiza krytyczna 50 mozaik** — 7 punktów z pomiarami (szum w niebie,
-  niewidoczność kształtu przy oglądaniu całości, rozjazd ziarna, wielkie
-  komórki `sierpinski`, `escher_lizard`, grout, `bloom`) + rekomendacja dla
-  każdego. Wszystko w MEMORY.md → Aktywne TODO [2026-07-26].
-- ✓ **MEMORY.md zaktualizowane** (`75cbf8b`) + naprawiony drift komentarza w
-  `test_grout_engine.py`.
-- ✓ **565 testów przechodzi**; oba commity kodu zweryfikowane jako zielone
-  OSOBNO (nie tylko stan końcowy).
-- ✓ **Push na origin/main** — 8 commitów.
+- ✓ **Audyt collateral damage cullu 59→50** (`e4c0153`): sprawdzone, na jakie
+  PRZEŻYŁE kształty wpłynęło usunięcie 9 kształtów (`077fec3`, sesja
+  2026-07-26). Zbudowane domknięcie tranzytywne grafu wywołań (AST) na
+  wersji SPRZED usunięcia — 14 kształtów dzieliło helpery z usuniętymi:
+  `_sun_arc` → `nautilus`/`scales`/`truchet`/`truchet_hex`/`voderberg`;
+  rodzina Voronoi (`_emit_cells`/`_voronoi_cells`/`_lloyd_relax`/
+  `_vogel_points`/`_graded_sunflower`) → `bloom`/`pebbles`/`phyllotaxis`/
+  `voronoi`/`sunflower_grande`/`sunflower_grande_inverse`/`sunflower_rings`/
+  `sunflower_soft`; `_sierpinski_cells`/`_tri_outside` → `sierpinski`.
+- ✓ **Wynik: ZERO regresji.** Zbiór faktycznie usuniętych helperów (24)
+  pokrył się CO DO JEDNEGO ze zbiorem policzonym jako „wyłączne dla
+  usuniętych kształtów" — cięcie było chirurgicznie poprawne.
+- ✓ **A/B geometrii** (stary moduł załadowany obok nowego przez
+  `importlib.util.spec_from_file_location`, prefiks `src.` obowiązkowy):
+  14 zagrożonych kształtów × 3 kadry = **42/42 strumienie wielokątów
+  bit-w-bit identyczne**.
+- ✓ **Pokrycie kadru** (maska FLOAT ss=4 + shoelace): pole/kadr = 1,0000
+  dla wszystkich 14, dziury 0,000% (`nautilus` 0,008% / `voderberg` 0,012%
+  = subpikselowa kwantyzacja łuków, znany zaakceptowany precedens).
+- ✓ **20 narzędzi `src/tools/gen_*.py`** importują się bez błędu.
+- ✓ **Jedna realna wada znaleziona i naprawiona**: docstring `_sun_arc`
+  wymieniał 4 konsumentów zamiast 5 (brakował `truchet_hex`). Poprawiony +
+  dopięty test `TestSunArcConsumers` (liczy konsumentów z AST, porównuje z
+  docstringiem). Bramka **zweryfikowana mutacyjnie** — po celowym usunięciu
+  `truchet_hex` z docstringa test czerwienieje.
+- ✓ **567 testów przechodzi** (565 + 2 nowe).
+- ✓ **Zapisano instrument audytu do pamięci** —
+  `project_removal_collateral_audit.md` (domknięcie AST + A/B geometrii jako
+  powtarzalna procedura na przyszłe usuwanie kształtów).
+- ✓ **Commit + push na origin/main** (`e4c0153`).
 
 ## Co zostało (backlog sesji)
 
 - ⚠ **`output/shapes/…_kites_….jpg` NIEAKTUALNY** — plik z 22.07 22:00,
   geometria zmieniona 26.07. Wymaga ponownego renderu @8K (świadomie odłożone).
 - ⟳ **README EN+PL: tabela kształtów wymienia 9 pozycji, rejestr ma 50.**
-  Było w backlogu, teraz na ścieżce krytycznej przed publikacją galerii.
+  Na ścieżce krytycznej przed publikacją galerii.
 - ⟳ **E8 krok 3: galeria 16K** — zablokowana do czasu rozstrzygnięcia blend/tint
   (patrz NASTĘPNY KROK).
 - ⟳ **Driver renderu wciąż efemeryczny** — `render_all_shapes.py` odtwarzany już
   3× ze scratchpada. Rozważyć utrwalenie jako `src/tools/render_shapes_batch.py`.
-- ⟳ Rekomendacje z analizy (kolejność wg mojej oceny): sweep blend/tint →
-  usunąć `bloom` → rename `escher_lizard` → kalibracja `scale` dla 4 kształtów
-  jednorodnych → A/B `sierpinski` → grout=off dla kształtów o dużym udziale tuszu.
+- ⟳ Rekomendacje z analizy 2026-07-26 (kolejność wg mojej oceny): sweep
+  blend/tint → usunąć `bloom` → rename `escher_lizard` → kalibracja `scale`
+  dla 4 kształtów jednorodnych → A/B `sierpinski` → grout=off dla kształtów
+  o dużym udziale tuszu.
 - ⟳ medium=3px / thick=5px wciąż NIEzweryfikowane na realnym renderze.
 - ⟳ Hero panorama: lokalna, NIE opublikowana (Wariant C odłożony).
 - ⟳ (przeniesione) PLAN_FRACTAL F1a.
 
 ## Aktywne pliki
 
-- `src/engine_smart.py` — rejestr 50 alfabetycznie, `_kite_lattice`/`_kite_poly`,
-  usunięte generatory + log-spirale, `_sun_arc` przywrócony.
-- `src/gui.py` — `_spread_dropdown_columns()`, `import tkinter`.
-- `tests/test_grout_engine.py` — sekcja „kites: the frame edge", helpery
-  `_shoelace`/`_clip_to_frame`, `_SIERP_GENS` = 1 wpis.
-- `tests/test_golden_shapes.py` — goldeny `kites` zregenerowane, 18 wpisów usuniętych.
-- `src/tools/gen_e7_schemes.py`, `gen_sunflower_schemes.py`,
-  `gen_extra_shape_schemes.py` — listy SPEC przycięte.
-- `MEMORY.md` — 3 nowe wpisy [2026-07-26].
-- `output/shapes/` — 50 mozaik 8K (gitignored); **kites nieaktualny**.
-- EFEMERYCZNE (scratchpad): `coverage_sweep.py`, `quality.py`, `grain.py`,
-  `kites_cover.py`, `contact.py`, `crops2.py`, `make_thumbs.py`.
+- `src/engine_smart.py` — docstring `_sun_arc` poprawiony (5 konsumentów:
+  nautilus/scales/truchet/truchet_hex/voderberg).
+- `tests/test_smart_engine.py` — nowa klasa `TestSunArcConsumers` (2 testy):
+  domknięcie AST konsumentów `_sun_arc` vs docstring; strażnik przed cichym
+  ponownym usunięciem współdzielonego helpera.
+- `MEMORY.md` — 1 nowy wpis [2026-07-27].
+- EFEMERYCZNE (scratchpad, narzędzia audytu do odtworzenia w razie potrzeby):
+  `astdiff.py` (diff funkcji po AST, nie po regexie — regex myli komentarze
+  między funkcjami z ciałem), `shared_deps.py` (domknięcie grafu wywołań +
+  przecięcie z usuniętymi), `geom_ab.py` (A/B strumienia wielokątów stary/nowy
+  moduł), `cover_ab.py` (pokrycie FLOAT ss=4 + shoelace).
 
 ## Otwarte pytania
 
-- **Od czego zacząć następną sesję** — przedstawiłem 6 rekomendacji z priorytetem,
-  user wywołał /end bez wyboru. NASTĘPNY KROK to moja rekomendacja, nie decyzja.
-- **`bloom`** — rekomenduję usunięcie (nierozróżnialny od `phyllotaxis` w mozaice:
-  dE 11,47 vs 11,44); user go NIE wskazał do usunięcia, więc został.
+- **Od czego zacząć następną sesję** — wciąż nierozstrzygnięte z 2026-07-26:
+  przedstawiłem 6 rekomendacji z priorytetem, user nie wybrał. Ta sesja była
+  audytem na wyraźne życzenie usera, nie decyzją o priorytecie.
+- **`bloom`** — rekomenduję usunięcie (nierozróżnialny od `phyllotaxis` w
+  mozaice: dE 11,47 vs 11,44); user go NIE wskazał do usunięcia, więc został.
 - **`escher_lizard`** — rename czy prawdziwa sylwetka? Rekomenduję rename.
 - **Kalibracja `base_s`** — przed jakąkolwiek zmianą przemierzyć średnią ważoną
   polem `Σa²/Σa`, nie medianą (mediana kłamie dla kształtów bimodalnych).
@@ -114,14 +111,12 @@ po jej przedstawieniu, bez wyboru punktu startowego.
 
 ## Do MEMORY.md (przeniesiono)
 
-- **Rozwiązane problemy** [2026-07-26]: ząbkowanie `kites` + META-LEKCJA
-  „golden nie drgnął po celowej zmianie pikseli = dowód, że dotknięty kod NIE
-  jest ścieżką produkcyjną" + odruch „grep nazwy kształtu przed zmianą
-  geometrii" + formalny test partycji jako instrument.
-- **Odrzucone podejścia** [2026-07-26]: lista 9 usuniętych kształtów (nie
-  proponować ponownie) + pułapki usuwania (`_sun_arc`, log-spirale, `_sierp4`,
-  `gen_e7_schemes`) + kolejność alfabetyczna + dropdown 2 kolumny.
-- **Aktywne TODO** [2026-07-26]: analiza krytyczna 50 mozaik — 7 punktów z
-  liczbami i rekomendacjami, w tym uwaga metodologiczna o `Σa²/Σa` vs mediana.
-- **Architektura**: lista geometrii zastąpiona wskazaniem na `SHAPE_MODES`
-  jako jedyne źródło prawdy (poprzednia 9-pozycyjna była nieaktualna).
+- **`project_removal_collateral_audit.md`** (NOWY, [2026-07-27]): instrument
+  audytu „co jeszcze ucierpiało" po usunięciu kształtów — domknięcie
+  tranzytywne grafu wywołań AST (przecięcie z usuniętymi = lista zagrożonych)
+  + A/B geometrii przez `importlib.util.spec_from_file_location`. Wynik
+  audytu cullu 59→50: zero regresji, 14/14 kształtów bit-w-bit identyczne.
+  Pułapka narzędziowa: split pliku po `^def` przypisuje komentarze między
+  funkcjami do funkcji powyżej — używać `ast.get_source_segment`, nie regexa.
+  `ShapeSpec.generator` bywa `None` (legacy grid) — każdy przebieg po
+  `SHAPE_MODES` musi to przeskoczyć.
