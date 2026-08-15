@@ -1,2 +1,11 @@
+# NOTE: this file lives at /Neural-Mosaic/robots.txt, i.e. inside a GitHub
+# Pages *project* site. Crawlers only ever read robots.txt from the domain
+# root (https://piotr1686.github.io/robots.txt), which belongs to the user
+# site repo. So this file documents intent but is NOT enforced. Nothing here
+# is load-bearing: the default for an unlisted path is "allowed" anyway, and
+# the sitemap is submitted directly in Google Search Console.
+
 User-agent: *
 Allow: /
+
+Sitemap: https://piotr1686.github.io/Neural-Mosaic/sitemap.xml

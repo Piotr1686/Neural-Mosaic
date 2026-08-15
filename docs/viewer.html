@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Interactive 16K Mosaic Viewer — Neural-Mosaic</title>
+  <meta name="description" content="Zoom into real 16K photomosaics in your browser — photo, symbol and spectre aperiodic-monotile renders, from full portrait down to a single tile." />
+  <link rel="canonical" href="https://piotr1686.github.io/Neural-Mosaic/viewer.html" />
+  <meta name="robots" content="index, follow" />
+  <meta name="author" content="Piotr Lazowski" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Neural-Mosaic" />
+  <meta property="og:title" content="Interactive 16K Mosaic Viewer — Neural-Mosaic" />
+  <meta property="og:description" content="Zoom from a whole 16K photomosaic down to one photograph in a single tile. Photo, symbol and spectre aperiodic-monotile renders." />
+  <meta property="og:url" content="https://piotr1686.github.io/Neural-Mosaic/viewer.html" />
+  <meta property="og:image" content="https://piotr1686.github.io/Neural-Mosaic/img/og-cover.jpg" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Interactive 16K Mosaic Viewer — Neural-Mosaic" />
+  <meta name="twitter:description" content="Zoom from a whole 16K photomosaic down to one photograph in a single tile." />
+  <meta name="twitter:image" content="https://piotr1686.github.io/Neural-Mosaic/img/og-cover.jpg" />
+
+  <script src="https://cdn.jsdelivr.net/npm/openseadragon@4.1.0/build/openseadragon/openseadragon.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0d0d0d;
+      color: #e0e0e0;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    header {
+      padding: 10px 20px;
+      background: #161616;
+      border-bottom: 1px solid #2a2a2a;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-shrink: 0;
+    }
+
+    header h1 {
+      font-size: 1rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      color: #ffffff;
+      white-space: nowrap;
+    }
+
+    header .home {
+      font-size: 0.8rem;
+      color: #888;
+      text-decoration: none;
+      border: 1px solid #3a3a3a;
+      border-radius: 4px;
+      padding: 4px 10px;
+    }
+
+    header .home:hover { background: #2a2a2a; color: #ddd; }
+
+    .switcher {
+      display: flex;
+      gap: 8px;
+    }
+
+    .switcher button {
+      padding: 5px 14px;
+      border: 1px solid #3a3a3a;
+      background: #1e1e1e;
+      color: #aaa;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+
+    .switcher button.active {
+      background: #2a5298;
+      color: #fff;
+      border-color: #3a6fd8;
+    }
+
+    .switcher button:hover:not(.active) {
+      background: #2a2a2a;
+      color: #ddd;
+    }
+
+    .shortcuts {
+      margin-left: auto;
+      font-size: 0.72rem;
+      color: #555;
+      line-height: 1.6;
+    }
+
+    .shortcuts kbd {
+      background: #222;
+      border: 1px solid #444;
+      border-radius: 3px;
+      padding: 1px 5px;
+      font-family: monospace;
+      font-size: 0.72rem;
+      color: #999;
+    }
+
+    #viewer {
+      flex: 1;
+      background: #0d0d0d;
+    }
+
+    #label {
+      position: fixed;
+      bottom: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.65);
+      color: #aaa;
+      font-size: 0.72rem;
+      padding: 4px 12px;
+      border-radius: 20px;
+      pointer-events: none;
+      letter-spacing: 0.03em;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <a class="home" href="./">&larr; Home</a>
+  <h1>Neural-Mosaic</h1>
+  <div class="switcher">
+    <button id="btn1" class="active" onclick="switchTo(0)">1 — Photo 16K</button>
+    <button id="btn2" onclick="switchTo(1)">2 — Symbol 16K</button>
+    <button id="btn3" onclick="switchTo(2)">3 — Spectre 16K</button>
+    <button id="btn4" onclick="switchTo(3)">4 — Triangle</button>
+    <button id="btn5" onclick="switchTo(4)">5 — Hexagon</button>
+  </div>
+  <div class="shortcuts">
+    <kbd>1</kbd>–<kbd>5</kbd> Switch &nbsp;
+    <kbd>H</kbd> Reset &nbsp;
+    <kbd>F</kbd> Fullscreen &nbsp;
+    <kbd>scroll</kbd> Zoom
+  </div>
+</header>
+
+<div id="viewer"></div>
+<div id="label">Photo Mosaic — 16K · 15360×8647 (133 MP) · scroll to zoom</div>
+
+<script>
+  const mosaics = [
+    {
+      tileSources: "tiles/photo_mosaic.dzi",
+      label: "Photo Mosaic — 16K · 15360×8647 (133 MP) · scroll to zoom"
+    },
+    {
+      tileSources: "tiles/symbol_mosaic.dzi",
+      label: "Symbol Mosaic — 16K · 16000×9008 (144 MP) · white glyphs on black · scroll to zoom"
+    },
+    {
+      tileSources: "tiles/spectre_mosaic.dzi",
+      label: "Spectre Mosaic — 16K · chiral aperiodic monotile (arXiv:2305.17743) · 15360×8647 · scroll to zoom"
+    },
+    {
+      tileSources: "tiles/showcase_triangle_20260502_101900.dzi",
+      label: "Triangle Mosaic — 8K (8192 × 4612) · scroll to zoom"
+    },
+    {
+      tileSources: "tiles/hexagon_jump_16K.dzi",
+      label: "Hexagon Mosaic — 8K (8192 × 6144) · scroll to zoom"
+    }
+  ];
+
+  let current = 0;
+
+  const viewer = OpenSeadragon({
+    id: "viewer",
+    prefixUrl: "https://cdn.jsdelivr.net/npm/openseadragon@4.1.0/build/openseadragon/images/",
+    tileSources: mosaics[0].tileSources,
+    showNavigationControl: false,
+    animationTime: 0.4,
+    blendTime: 0.1,
+    constrainDuringPan: false,
+    maxZoomPixelRatio: 2,
+    minZoomImageRatio: 0.8,
+    visibilityRatio: 0.5,
+    gestureSettingsMouse: { scrollToZoom: true }
+  });
+
+  function switchTo(idx) {
+    if (idx === current) return;
+    current = idx;
+    viewer.open(mosaics[idx].tileSources);
+    document.getElementById("label").textContent = mosaics[idx].label;
+    [1,2,3,4,5].forEach(n =>
+      document.getElementById("btn" + n).classList.toggle("active", idx === n - 1)
+    );
+  }
+
+  document.addEventListener("keydown", e => {
+    const tag = e.target.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA") return;
+    switch (e.key) {
+      case "1": switchTo(0); break;
+      case "2": switchTo(1); break;
+      case "3": switchTo(2); break;
+      case "4": switchTo(3); break;
+      case "5": switchTo(4); break;
+      case "h": case "H": viewer.viewport.goHome(); break;
+      case "f": case "F":
+        if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+        else document.exitFullscreen();
+        break;
+    }
+  });
+</script>
+
+</body>
+</html>

@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fotomozaiki na aperiodycznym monokafelku — Neural-Mosaic</title>
+  <meta name="description" content="Niemal każda fotomozaika leży na kwadratowej siatce. Ta leży na spectre — chiralnym monokafelku, który pokrywa płaszczyznę i nigdy się nie powtarza." />
+  <link rel="canonical" href="https://piotr1686.github.io/Neural-Mosaic/posts/aperiodic-monotile-mosaic.pl.html" />
+  <link rel="alternate" hreflang="en" href="https://piotr1686.github.io/Neural-Mosaic/posts/aperiodic-monotile-mosaic.html" />
+  <link rel="alternate" hreflang="pl" href="https://piotr1686.github.io/Neural-Mosaic/posts/aperiodic-monotile-mosaic.pl.html" />
+  <link rel="alternate" hreflang="x-default" href="https://piotr1686.github.io/Neural-Mosaic/posts/aperiodic-monotile-mosaic.html" />
+  <meta name="robots" content="index, follow" />
+  <meta name="author" content="Piotr Lazowski" />
+
+  <meta property="og:type" content="article" />
+  <meta property="og:site_name" content="Neural-Mosaic" />
+  <meta property="og:locale" content="pl_PL" />
+  <meta property="og:title" content="Fotomozaiki na aperiodycznym monokafelku" />
+  <meta property="og:description" content="Spectre to pojedynczy 14-bok, który pokrywa płaszczyznę i nigdy się nie powtarza. Oto dlaczego robi lepszą fotomozaikę niż kwadratowa siatka." />
+  <meta property="og:url" content="https://piotr1686.github.io/Neural-Mosaic/posts/aperiodic-monotile-mosaic.pl.html" />
+  <meta property="og:image" content="https://piotr1686.github.io/Neural-Mosaic/posts/img/aperiodic_grid.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Fotomozaiki na aperiodycznym monokafelku" />
+  <meta name="twitter:description" content="Spectre to pojedynczy 14-bok, który pokrywa płaszczyznę i nigdy się nie powtarza." />
+  <meta name="twitter:image" content="https://piotr1686.github.io/Neural-Mosaic/posts/img/aperiodic_grid.png" />
+
+  <link rel="stylesheet" href="../style.css" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    "headline": "Fotomozaiki na aperiodycznym monokafelku",
+    "description": "Dlaczego chiralny aperiodyczny monokafelek spectre daje lepszą siatkę fotomozaiki niż krata kwadratowa i jak Neural-Mosaic go kafelkuje.",
+    "image": "https://piotr1686.github.io/Neural-Mosaic/posts/img/aperiodic_grid.png",
+    "datePublished": "2026-06-28",
+    "author": { "@type": "Person", "name": "Piotr Lazowski" },
+    "mainEntityOfPage": "https://piotr1686.github.io/Neural-Mosaic/posts/aperiodic-monotile-mosaic.pl.html",
+    "inLanguage": "pl"
+  }
+  </script>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="brand"><a href="../" style="color:#fff">NEURAL-MOSAIC</a></span>
+  <nav>
+    <a href="../">Strona główna</a>
+    <a href="../viewer.html">Przeglądarka</a>
+    <a href="aperiodic-monotile-mosaic.html">English</a>
+    <a href="https://github.com/Piotr1686/Neural-Mosaic">GitHub</a>
+  </nav>
+</div>
+
+<article>
+
+<header class="post-head prose">
+  <h1>Fotomozaiki na aperiodycznym monokafelku</h1>
+  <p class="post-meta">
+    <a href="aperiodic-monotile-mosaic.html">English</a> · <strong>Polski</strong>
+  </p>
+</header>
+
+<div class="post-body prose">
+
+  <blockquote>
+    Niemal każda fotomozaika w historii leży na kwadratowej siatce.
+    <a href="https://github.com/Piotr1686/Neural-Mosaic">Neural-Mosaic</a> potrafi ułożyć ją na
+    <strong>spectre</strong> — chiralnym aperiodycznym monokafelku odkrytym w 2023 — pojedynczym
+    kształcie, który pokrywa płaszczyznę i <em>nigdy się nie powtarza</em>.
+  </blockquote>
+
+  <figure>
+    <img src="img/aperiodic_grid.png" loading="lazy"
+         alt="Kafelkowanie spectre z kaflami pokolorowanymi według orientacji, bez powtarzalnego wzoru" />
+    <figcaption>Jeden kształt kafelka, każda orientacja, brak powtarzalnej siatki. Kolor koduje tu obrót każdego kafla.</figcaption>
+  </figure>
+
+  <h2>Kształt</h2>
+  <p>
+    W 2023 czteroosobowy zespół — David Smith, Joseph Myers, Craig Kaplan i Chaim Goodman-Strauss
+    — rozwiązał problem otwarty od lat 60.: czy istnieje <em>pojedynczy</em> kafelek pokrywający
+    płaszczyznę wyłącznie <strong>aperiodycznie</strong>, bez powtarzalnej jednostki? Pierwsza
+    odpowiedź, <strong>„hat"</strong> (<a href="https://arxiv.org/abs/2303.10798">arXiv:2303.10798</a>),
+    była „einsteinem" (niem. <em>ein Stein</em>, „jeden kamień"), ale wymagała kopii odbitych
+    lustrzanie. Kilka tygodni później ten sam zespół opublikował <strong>„spectre"</strong>
+    (<a href="https://arxiv.org/abs/2305.17743">arXiv:2305.17743</a>): 14-bok, który jest
+    <em>ściśle chiralny</em> — kafelkuje aperiodycznie używając tylko obrotów i przesunięć jednej
+    skrętności, bez odbić lustrzanych. Prawdziwy jednokafelkowy einstein.
+  </p>
+
+  <figure>
+    <img src="img/spectre_tile.png" loading="lazy"
+         alt="Pojedynczy kafelek spectre w konturze, z 14 krawędziami równej długości" />
+    <figcaption>Spectre: 14 krawędzi równej długości. Neural-Mosaic używa wyłącznie spectre (hat, wymagający odbić, został usunięty).</figcaption>
+  </figure>
+
+  <h2>Po co kłaść na nim mozaikę</h2>
+  <p>
+    Kwadratowa siatka narzuca okresowy rytm. Oko zaczepia się o wiersze i kolumny, a z dystansu
+    sama krata staje się teksturą konkurującą z obrazem. Kafelkowanie aperiodyczne ma mnóstwo
+    struktury <em>lokalnej</em>, ale <strong>żadnego globalnego powtórzenia</strong>, więc siatka
+    nigdy nie układa się we własny wzór — czyta się organicznie. Dodaj czarną fugę, a geometria
+    staje się czytelna: podejdź bliżej, a każda nieregularna komórka okazuje się osobną fotografią.
+  </p>
+  <p>
+    To także po prostu prawdziwy obiekt matematyczny z przełomowego wyniku — nie filtr. Na tym
+    polega różnica między „ładną appką" a „czymś, co robi to, czego nie robi nikt inny".
+  </p>
+
+  <figure>
+    <img src="img/aperiodic_grid.gif" loading="lazy"
+         alt="Animacja kafelkowania spectre rosnącego od środka na zewnątrz" />
+    <figcaption>Kafelkowanie rośnie od środka na zewnątrz. Zauważ brak symetrii translacyjnej — żadne przesunięcie nie nakłada wzoru na samego siebie.</figcaption>
+  </figure>
+
+  <h2>Jak się renderuje</h2>
+  <p>
+    Geometria żyje w
+    <a href="https://github.com/Piotr1686/Neural-Mosaic/blob/main/src/spectre_tiling.py"><code>src/spectre_tiling.py</code></a>.
+    <code>generate_spectre_tiling(width, height, tile_size)</code> produkuje <strong>dokładne</strong>
+    chiralne kafelkowanie spectre przez opublikowany system podstawień:
+  </p>
+  <ul>
+    <li><strong>Deterministyczne</strong> — identyczne argumenty dają identyczne kafelkowanie.</li>
+    <li><strong>Niezależne od rozdzielczości</strong> — pokrywa dowolny prostokąt; pole każdego spectre ≈ <code>tile_size²</code>, więc render spectre ma z grubsza tyle samo kafli co render kwadratowy przy tym samym ustawieniu (uczciwe porównanie).</li>
+    <li><strong>Ściśle chiralne</strong> — każde umieszczenie ma jedną skrętność; kafle brzegowe wystają i są przycinane przez wywołującego.</li>
+  </ul>
+  <p>
+    Każdy 14-bok staje się następnie <em>gniazdem</em> kafla, wypełnianym tą samą maszynerią co
+    silnik kwadratowy: dopasowanie koloru 5×5 LAB do biblioteki plus kara antypowtórzeniowa, by
+    żadne zdjęcie nie dominowało. Wydajne renderowanie każdej nieprostokątnej komórki to osobny
+    problem — maski przechowywane są jako wielokąty i rasteryzowane leniwie przy kompozycie
+    (<code>_LazyMask</code>), z 4× supersamplingiem i LANCZOS dla czystych krawędzi, przypięte
+    złotymi testami bit-w-bit. Ta robota jest opisana w sekcji
+    <a href="https://github.com/Piotr1686/Neural-Mosaic#performance">Performance Engineering</a>.
+  </p>
+
+  <h2>Zobacz / wypróbuj</h2>
+  <ul>
+    <li><strong>Na żywo, z zoomem:</strong> <a href="../viewer.html">interaktywna galeria</a> hostuje pełną mozaikę spectre <strong>16K</strong> — przybliż od całego portretu aż do jednego zdjęcia w pojedynczej nieregularnej komórce.</li>
+    <li>
+      <strong>Wyrenderuj własną:</strong>
+      <pre><code>python -m src.cli render input/portrait.jpg --engine smart --shape spectre --res 16K</code></pre>
+    </li>
+  </ul>
+
+  <hr />
+
+  <p><em>
+    Odkrycie kafelkowania: Smith, Myers, Kaplan i Goodman-Strauss, „A chiral aperiodic monotile"
+    (2023), <a href="https://arxiv.org/abs/2305.17743">arXiv:2305.17743</a>. Implementacja i
+    obrazy: <a href="https://github.com/Piotr1686/Neural-Mosaic">Neural-Mosaic</a>.
+  </em></p>
+
+</div>
+</article>
+
+<footer>
+  <p>
+    Neural-Mosaic — licencja MIT ·
+    <a href="https://github.com/Piotr1686/Neural-Mosaic">github.com/Piotr1686/Neural-Mosaic</a>
+  </p>
+</footer>
+
+</body>
+</html>

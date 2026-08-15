@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Photomosaics on an Aperiodic Monotile — Neural-Mosaic</title>
+  <meta name="description" content="Almost every photomosaic sits on a square grid. This one sits on the spectre — the chiral aperiodic monotile that tiles the plane and never repeats." />
+  <link rel="canonical" href="https://piotr1686.github.io/Neural-Mosaic/posts/aperiodic-monotile-mosaic.html" />
+  <link rel="alternate" hreflang="en" href="https://piotr1686.github.io/Neural-Mosaic/posts/aperiodic-monotile-mosaic.html" />
+  <link rel="alternate" hreflang="pl" href="https://piotr1686.github.io/Neural-Mosaic/posts/aperiodic-monotile-mosaic.pl.html" />
+  <link rel="alternate" hreflang="x-default" href="https://piotr1686.github.io/Neural-Mosaic/posts/aperiodic-monotile-mosaic.html" />
+  <meta name="robots" content="index, follow" />
+  <meta name="author" content="Piotr Lazowski" />
+
+  <meta property="og:type" content="article" />
+  <meta property="og:site_name" content="Neural-Mosaic" />
+  <meta property="og:title" content="Photomosaics on an Aperiodic Monotile" />
+  <meta property="og:description" content="The spectre is a single 14-sided tile that covers the plane and never repeats. Here is why that makes a better photomosaic than a square grid." />
+  <meta property="og:url" content="https://piotr1686.github.io/Neural-Mosaic/posts/aperiodic-monotile-mosaic.html" />
+  <meta property="og:image" content="https://piotr1686.github.io/Neural-Mosaic/posts/img/aperiodic_grid.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Photomosaics on an Aperiodic Monotile" />
+  <meta name="twitter:description" content="The spectre is a single 14-sided tile that covers the plane and never repeats. Here is why that makes a better photomosaic than a square grid." />
+  <meta name="twitter:image" content="https://piotr1686.github.io/Neural-Mosaic/posts/img/aperiodic_grid.png" />
+
+  <link rel="stylesheet" href="../style.css" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    "headline": "Photomosaics on an aperiodic monotile",
+    "description": "Why the spectre chiral aperiodic monotile makes a better photomosaic grid than a square lattice, and how Neural-Mosaic tiles it.",
+    "image": "https://piotr1686.github.io/Neural-Mosaic/posts/img/aperiodic_grid.png",
+    "datePublished": "2026-06-28",
+    "author": { "@type": "Person", "name": "Piotr Lazowski" },
+    "mainEntityOfPage": "https://piotr1686.github.io/Neural-Mosaic/posts/aperiodic-monotile-mosaic.html",
+    "inLanguage": "en"
+  }
+  </script>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="brand"><a href="../" style="color:#fff">NEURAL-MOSAIC</a></span>
+  <nav>
+    <a href="../">Home</a>
+    <a href="../viewer.html">Viewer</a>
+    <a href="aperiodic-monotile-mosaic.pl.html">Polski</a>
+    <a href="https://github.com/Piotr1686/Neural-Mosaic">GitHub</a>
+  </nav>
+</div>
+
+<article>
+
+<header class="post-head prose">
+  <h1>Photomosaics on an aperiodic monotile</h1>
+  <p class="post-meta">
+    <strong>English</strong> · <a href="aperiodic-monotile-mosaic.pl.html">Polski</a>
+  </p>
+</header>
+
+<div class="post-body prose">
+
+  <blockquote>
+    Almost every photomosaic ever made sits on a square grid.
+    <a href="https://github.com/Piotr1686/Neural-Mosaic">Neural-Mosaic</a> can lay one out on the
+    <strong>spectre</strong> — the chiral aperiodic monotile discovered in 2023 — a single shape
+    that tiles the plane and <em>never repeats</em>.
+  </blockquote>
+
+  <figure>
+    <img src="img/aperiodic_grid.png" loading="lazy"
+         alt="A spectre tiling with tiles coloured by orientation, showing no repeating pattern" />
+    <figcaption>One tile shape, every orientation, no repeating grid. Colour here encodes each tile's rotation.</figcaption>
+  </figure>
+
+  <h2>The shape</h2>
+  <p>
+    In 2023 a four-person team — David Smith, Joseph Myers, Craig Kaplan and Chaim
+    Goodman-Strauss — settled a problem open since the 1960s: is there a <em>single</em> tile that
+    covers the plane only <strong>aperiodically</strong>, with no repeating unit? Their first
+    answer, the <strong>"hat"</strong> (<a href="https://arxiv.org/abs/2303.10798">arXiv:2303.10798</a>),
+    was an "einstein" (German <em>ein Stein</em>, "one stone"), but it needed reflected copies.
+    Weeks later the same team published the <strong>"spectre"</strong>
+    (<a href="https://arxiv.org/abs/2305.17743">arXiv:2305.17743</a>): a 14-sided tile that is
+    <em>strictly chiral</em> — it tiles aperiodically using only rotations and translations of one
+    handedness, no mirror images required. The true single-tile einstein.
+  </p>
+
+  <figure>
+    <img src="img/spectre_tile.png" loading="lazy"
+         alt="A single spectre tile drawn in outline, with its 14 equal-length edges" />
+    <figcaption>The spectre: 14 edges of equal length. Neural-Mosaic uses the spectre only (the hat, which needs reflections, was dropped).</figcaption>
+  </figure>
+
+  <h2>Why put a mosaic on it</h2>
+  <p>
+    A square grid imposes a periodic rhythm. The eye locks onto the rows and columns, and at a
+    distance the lattice itself becomes a texture competing with the picture. An aperiodic tiling
+    has plenty of <em>local</em> structure but <strong>no global repeat</strong>, so the grid never
+    resolves into a pattern of its own — it reads as organic. Add black grout and the geometry
+    becomes legible: step in and every irregular cell turns out to be a separate photograph.
+  </p>
+  <p>
+    It is also, simply, a real mathematical object from a landmark result — not a filter. That is
+    the difference between "a nice app" and "something that does what nothing else does."
+  </p>
+
+  <figure>
+    <img src="img/aperiodic_grid.gif" loading="lazy"
+         alt="Animation of a spectre tiling growing outward from the centre" />
+    <figcaption>The tiling grows outward from the centre. Notice there is no translational symmetry — no shift maps the pattern onto itself.</figcaption>
+  </figure>
+
+  <h2>How it renders</h2>
+  <p>
+    The geometry lives in
+    <a href="https://github.com/Piotr1686/Neural-Mosaic/blob/main/src/spectre_tiling.py"><code>src/spectre_tiling.py</code></a>.
+    <code>generate_spectre_tiling(width, height, tile_size)</code> produces an <strong>exact</strong>
+    chiral spectre tiling via the published substitution system:
+  </p>
+  <ul>
+    <li><strong>Deterministic</strong> — identical arguments give an identical tiling.</li>
+    <li><strong>Resolution-independent</strong> — it covers any rectangle; each spectre's area ≈ <code>tile_size²</code>, so a spectre render has roughly the same tile count as a square render at the same setting (a fair comparison).</li>
+    <li><strong>Strictly chiral</strong> — every placement shares one handedness; boundary tiles overhang and are clipped by the caller.</li>
+  </ul>
+  <p>
+    Each 14-gon then becomes a tile <em>slot</em>, filled by the same machinery as the square
+    engine: 5×5 LAB colour matching against the library, plus the anti-repetition penalty so no
+    single photo dominates. Rendering each non-rectangular cell efficiently is its own problem —
+    the masks are stored as polygons and rasterised lazily at composite time
+    (<code>_LazyMask</code>), supersampled 4× with LANCZOS for clean edges and pinned by bit-exact
+    golden tests. That work is written up in the
+    <a href="https://github.com/Piotr1686/Neural-Mosaic#performance">Performance Engineering</a>
+    section.
+  </p>
+
+  <h2>See it / try it</h2>
+  <ul>
+    <li><strong>Live, zoomable:</strong> the <a href="../viewer.html">interactive gallery</a> hosts a full <strong>16K</strong> spectre mosaic — zoom from the whole portrait down to one photo in a single irregular cell.</li>
+    <li>
+      <strong>Render your own:</strong>
+      <pre><code>python -m src.cli render input/portrait.jpg --engine smart --shape spectre --res 16K</code></pre>
+    </li>
+  </ul>
+
+  <hr />
+
+  <p><em>
+    Tiling discovery: Smith, Myers, Kaplan &amp; Goodman-Strauss, "A chiral aperiodic monotile"
+    (2023), <a href="https://arxiv.org/abs/2305.17743">arXiv:2305.17743</a>. Implementation and
+    images: <a href="https://github.com/Piotr1686/Neural-Mosaic">Neural-Mosaic</a>.
+  </em></p>
+
+</div>
+</article>
+
+<footer>
+  <p>
+    Neural-Mosaic — MIT licence ·
+    <a href="https://github.com/Piotr1686/Neural-Mosaic">github.com/Piotr1686/Neural-Mosaic</a>
+  </p>
+</footer>
+
+</body>
+</html>

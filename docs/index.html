@@ -3,191 +3,270 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Neural-Mosaic Gallery</title>
-  <script src="https://cdn.jsdelivr.net/npm/openseadragon@4.1.0/build/openseadragon/openseadragon.min.js"></script>
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  <title>Neural-Mosaic — 16K Photomosaic Generator with 50 Tilings</title>
+  <meta name="description" content="Open-source desktop app that rebuilds any photograph as a 16K photomosaic from thousands of images or glyphs — 50 tilings, CIELAB matching, deep zoom." />
+  <link rel="canonical" href="https://piotr1686.github.io/Neural-Mosaic/" />
+  <meta name="robots" content="index, follow" />
+  <meta name="author" content="Piotr Lazowski" />
+  <meta name="keywords" content="photomosaic generator, photo mosaic software, 16K mosaic, aperiodic monotile, spectre tiling, CIELAB colour matching, typographic mosaic, Python desktop app, generative art" />
 
-    body {
-      background: #0d0d0d;
-      color: #e0e0e0;
-      font-family: 'Segoe UI', system-ui, sans-serif;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Neural-Mosaic" />
+  <meta property="og:title" content="Neural-Mosaic — 16K Photomosaic Generator with 50 Tilings" />
+  <meta property="og:description" content="Rebuild any photograph as a 16K mosaic from thousands of images or typographic glyphs — on a square grid, a hexagonal lattice, or the spectre aperiodic monotile." />
+  <meta property="og:url" content="https://piotr1686.github.io/Neural-Mosaic/" />
+  <meta property="og:image" content="https://piotr1686.github.io/Neural-Mosaic/img/og-cover.jpg" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="A spectre-tiled photomosaic of a parrot with a zoom inset revealing that every tile is a separate photograph" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Neural-Mosaic — 16K Photomosaic Generator with 50 Tilings" />
+  <meta name="twitter:description" content="Rebuild any photograph as a 16K mosaic from thousands of images or typographic glyphs — including the spectre aperiodic monotile." />
+  <meta name="twitter:image" content="https://piotr1686.github.io/Neural-Mosaic/img/og-cover.jpg" />
 
-    header {
-      padding: 10px 20px;
-      background: #161616;
-      border-bottom: 1px solid #2a2a2a;
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      flex-shrink: 0;
-    }
+  <link rel="stylesheet" href="style.css" />
 
-    header h1 {
-      font-size: 1rem;
-      font-weight: 600;
-      letter-spacing: 0.05em;
-      color: #ffffff;
-    }
-
-    .switcher {
-      display: flex;
-      gap: 8px;
-    }
-
-    .switcher button {
-      padding: 5px 14px;
-      border: 1px solid #3a3a3a;
-      background: #1e1e1e;
-      color: #aaa;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 0.8rem;
-      transition: background 0.15s, color 0.15s, border-color 0.15s;
-    }
-
-    .switcher button.active {
-      background: #2a5298;
-      color: #fff;
-      border-color: #3a6fd8;
-    }
-
-    .switcher button:hover:not(.active) {
-      background: #2a2a2a;
-      color: #ddd;
-    }
-
-    .shortcuts {
-      margin-left: auto;
-      font-size: 0.72rem;
-      color: #555;
-      line-height: 1.6;
-    }
-
-    .shortcuts kbd {
-      background: #222;
-      border: 1px solid #444;
-      border-radius: 3px;
-      padding: 1px 5px;
-      font-family: monospace;
-      font-size: 0.72rem;
-      color: #999;
-    }
-
-    #viewer {
-      flex: 1;
-      background: #0d0d0d;
-    }
-
-    #label {
-      position: fixed;
-      bottom: 14px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0,0,0,0.65);
-      color: #aaa;
-      font-size: 0.72rem;
-      padding: 4px 12px;
-      border-radius: 20px;
-      pointer-events: none;
-      letter-spacing: 0.03em;
-    }
-  </style>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Neural-Mosaic",
+    "applicationCategory": "MultimediaApplication",
+    "operatingSystem": "Windows 10, Windows 11",
+    "description": "Desktop application that rebuilds a photograph as a photomosaic up to 16K resolution from thousands of images or typographic glyphs, using 5x5 CIELAB colour matching and 50 selectable tilings.",
+    "url": "https://piotr1686.github.io/Neural-Mosaic/",
+    "codeRepository": "https://github.com/Piotr1686/Neural-Mosaic",
+    "programmingLanguage": "Python",
+    "license": "https://opensource.org/licenses/MIT",
+    "image": "https://piotr1686.github.io/Neural-Mosaic/img/og-cover.jpg",
+    "author": { "@type": "Person", "name": "Piotr Lazowski" },
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+  }
+  </script>
 </head>
 <body>
 
-<header>
-  <h1>Neural-Mosaic</h1>
-  <div class="switcher">
-    <button id="btn1" class="active" onclick="switchTo(0)">1 — Photo 16K</button>
-    <button id="btn2" onclick="switchTo(1)">2 — Symbol 16K</button>
-    <button id="btn3" onclick="switchTo(2)">3 — Spectre 16K</button>
-    <button id="btn4" onclick="switchTo(3)">4 — Triangle</button>
-    <button id="btn5" onclick="switchTo(4)">5 — Hexagon</button>
+<div class="topbar">
+  <span class="brand">NEURAL-MOSAIC</span>
+  <nav>
+    <a href="#gallery">Gallery</a>
+    <a href="#how">How it works</a>
+    <a href="#tilings">Tilings</a>
+    <a href="#writeups">Write-ups</a>
+    <a href="https://github.com/Piotr1686/Neural-Mosaic">GitHub</a>
+  </nav>
+</div>
+
+<header class="hero wrap">
+  <h1>A photograph, rebuilt from thousands of photographs</h1>
+  <p class="lede">
+    Neural-Mosaic is an open-source desktop application that turns any image into a
+    photomosaic at up to <strong>16K</strong> resolution — assembled from a library of
+    photographs or from typographic glyphs, and laid out on any of <strong>50 tilings</strong>,
+    from a plain square grid to the spectre aperiodic monotile.
+  </p>
+  <div class="cta-row">
+    <a class="cta" href="viewer.html">Open the interactive 16K viewer</a>
+    <a class="cta ghost" href="https://github.com/Piotr1686/Neural-Mosaic">Source on GitHub</a>
   </div>
-  <div class="shortcuts">
-    <kbd>1</kbd>–<kbd>5</kbd> Switch &nbsp;
-    <kbd>H</kbd> Reset &nbsp;
-    <kbd>F</kbd> Fullscreen &nbsp;
-    <kbd>scroll</kbd> Zoom
-  </div>
+  <figure>
+    <img src="img/hero.jpg" width="1400" height="788"
+         alt="A photomosaic of a parrot laid out on the spectre aperiodic monotile, with a magnifier inset showing that each irregular tile is a distinct photograph" />
+    <figcaption>A spectre-tiled mosaic. The inset is a 4×4-tile crop at full resolution — every cell is a separate photograph.</figcaption>
+  </figure>
 </header>
 
-<div id="viewer"></div>
-<div id="label">Photo Mosaic — 16K · 15360×8647 (133 MP) · scroll to zoom</div>
+<main>
 
-<script>
-  const mosaics = [
-    {
-      tileSources: "tiles/photo_mosaic.dzi",
-      label: "Photo Mosaic — 16K · 15360×8647 (133 MP) · scroll to zoom"
-    },
-    {
-      tileSources: "tiles/symbol_mosaic.dzi",
-      label: "Symbol Mosaic — 16K · 16000×9008 (144 MP) · white glyphs on black · scroll to zoom"
-    },
-    {
-      tileSources: "tiles/spectre_mosaic.dzi",
-      label: "Spectre Mosaic — 16K · chiral aperiodic monotile (arXiv:2305.17743) · 15360×8647 · scroll to zoom"
-    },
-    {
-      tileSources: "tiles/showcase_triangle_20260502_101900.dzi",
-      label: "Triangle Mosaic — 8K (8192 × 4612) · scroll to zoom"
-    },
-    {
-      tileSources: "tiles/hexagon_jump_16K.dzi",
-      label: "Hexagon Mosaic — 8K (8192 × 6144) · scroll to zoom"
-    }
-  ];
+<section id="what" class="prose">
+  <h2>What it does</h2>
+  <p>
+    A photomosaic works by dividing a target picture into cells and filling each one with the
+    library image whose colour best matches that part of the target. Step back and you see the
+    original photograph; step in and it dissolves into hundreds of thousands of individual
+    pictures. Neural-Mosaic does this at print resolution and gives you control over the two
+    things most mosaic tools fix for you: the <em>geometry of the cells</em> and the
+    <em>material they are made of</em>.
+  </p>
+  <ul class="specs">
+    <li><span class="k">Max output</span><span class="v">16K · 133 MP</span></li>
+    <li><span class="k">Tilings</span><span class="v">50 geometries</span></li>
+    <li><span class="k">Matching</span><span class="v">5×5 CIELAB</span></li>
+    <li><span class="k">Licence</span><span class="v">MIT · free</span></li>
+  </ul>
+</section>
 
-  let current = 0;
+<section id="gallery" class="wrap">
+  <h2>Gallery</h2>
+  <p class="prose" style="padding:0">
+    Three 16K showcases and two 8K renders are hosted as deep-zoom pyramids you can explore in the
+    browser — zoom continuously from the whole picture down to one tile.
+  </p>
+  <div class="grid-3">
+    <figure>
+      <img src="img/ex-source.jpg" width="700" height="394" loading="lazy"
+           alt="The source portrait photograph before mosaic processing" />
+      <figcaption>The source image</figcaption>
+    </figure>
+    <figure>
+      <img src="img/ex-square.jpg" width="900" height="506" loading="lazy"
+           alt="The same portrait rebuilt as a photomosaic on a square grid" />
+      <figcaption>Square grid — the classic layout</figcaption>
+    </figure>
+    <figure>
+      <img src="img/ex-spectre.jpg" width="900" height="506" loading="lazy"
+           alt="The same portrait rebuilt on the spectre aperiodic monotile, an irregular non-repeating tiling" />
+      <figcaption>Spectre monotile — no repeating grid</figcaption>
+    </figure>
+  </div>
+  <div class="grid-2" style="margin-top:18px">
+    <figure>
+      <img src="img/ex-detail.jpg" width="700" height="700" loading="lazy"
+           alt="Close-up of a mosaic showing that each irregular cell contains a different photograph" />
+      <figcaption>At 1:1 every cell is a separate photograph</figcaption>
+    </figure>
+    <figure>
+      <img src="img/ex-symbol.jpg" width="900" height="506" loading="lazy"
+           alt="A portrait rendered entirely out of white typographic glyphs on a black background" />
+      <figcaption>The typographic engine: glyphs instead of photographs</figcaption>
+    </figure>
+  </div>
+  <p style="text-align:center; margin-top:32px">
+    <a class="cta" href="viewer.html">Explore the 16K renders &rarr;</a>
+  </p>
+</section>
 
-  const viewer = OpenSeadragon({
-    id: "viewer",
-    prefixUrl: "https://cdn.jsdelivr.net/npm/openseadragon@4.1.0/build/openseadragon/images/",
-    tileSources: mosaics[0].tileSources,
-    showNavigationControl: false,
-    animationTime: 0.4,
-    blendTime: 0.1,
-    constrainDuringPan: false,
-    maxZoomPixelRatio: 2,
-    minZoomImageRatio: 0.8,
-    visibilityRatio: 0.5,
-    gestureSettingsMouse: { scrollToZoom: true }
-  });
+<section id="how" class="prose">
+  <h2>How the matching works</h2>
+  <p>
+    Every library image is reduced to a <strong>5×5 grid of CIELAB colour means</strong> — a
+    75-dimensional fingerprint. CIELAB is used rather than RGB because distance in that space
+    tracks how different two colours <em>look</em> to a human eye, not how far apart their
+    numbers happen to be. Matching a cell is then a nearest-neighbour query in 75 dimensions,
+    answered with a k-d tree over the whole library.
+  </p>
+  <p>
+    Using a 5×5 grid rather than one average colour matters: a tile is chosen because its
+    internal layout of light and dark agrees with that part of the target, so edges and gradients
+    running through a cell survive instead of being flattened into a single block of colour. An
+    optional <strong>edge-aware</strong> mode extends the fingerprint to 79 dimensions with
+    gradient information for targets with strong linework.
+  </p>
+  <p>
+    Picking the single closest tile everywhere would produce visible clumps of the same
+    photograph, so the engine scores the top candidates against a repetition penalty and forbids
+    any tile already used by a spatial neighbour. For non-rectangular cells the score is
+    additionally weighted by how much of each 5×5 patch actually falls inside the tile's mask —
+    a triangle should not be matched on the pixels outside it.
+  </p>
 
-  function switchTo(idx) {
-    if (idx === current) return;
-    current = idx;
-    viewer.open(mosaics[idx].tileSources);
-    document.getElementById("label").textContent = mosaics[idx].label;
-    [1,2,3,4,5].forEach(n =>
-      document.getElementById("btn" + n).classList.toggle("active", idx === n - 1)
-    );
-  }
+  <h3>Rendering at 16K</h3>
+  <p>
+    A 16K render is roughly 133 megapixels and hundreds of thousands of tile placements. Cell
+    masks are stored as polygons and rasterised lazily at composite time rather than being held
+    in memory, and the distance computation runs as a single float32 matrix product, which keeps
+    peak memory under 4 GB — comfortably inside a laptop's RAM. Finished mosaics can be exported
+    as <strong>Deep Zoom (DZI)</strong> pyramids, which is exactly what the viewer on this site
+    serves.
+  </p>
+</section>
 
-  document.addEventListener("keydown", e => {
-    const tag = e.target.tagName;
-    if (tag === "INPUT" || tag === "TEXTAREA") return;
-    switch (e.key) {
-      case "1": switchTo(0); break;
-      case "2": switchTo(1); break;
-      case "3": switchTo(2); break;
-      case "4": switchTo(3); break;
-      case "5": switchTo(4); break;
-      case "h": case "H": viewer.viewport.goHome(); break;
-      case "f": case "F":
-        if (!document.fullscreenElement) document.documentElement.requestFullscreen();
-        else document.exitFullscreen();
-        break;
-    }
-  });
-</script>
+<section id="tilings" class="prose">
+  <h2>50 tilings</h2>
+  <p>
+    The cell geometry is a first-class setting, not a filter applied afterwards. Every tiling
+    below partitions the frame exactly — no gaps, no overlaps — and each is covered by
+    pixel-exact regression tests so a render is reproducible.
+  </p>
+  <p>
+    They range from ordinary lattices (square, hexagon, brick wall) through classical
+    tessellations (Cairo pentagonal, pinwheel, truncated hexagonal, rhombitrihexagonal) and
+    aperiodic tilings (Penrose P2 and P3, Ammann–Beenker, girih, the spectre monotile) to fractal
+    and organic layouts (Koch snowflake, Sierpiński, Gosper, dragon curve, Voronoi cells,
+    phyllotaxis spirals, hyperbolic Poincaré discs).
+  </p>
+  <ul class="chips">
+    <li>ammann_beenker</li><li>bloom</li><li>braid</li><li>brick_wall</li><li>cairo</li>
+    <li>dragon</li><li>escher_lizard</li><li>floret</li><li>gereh</li><li>girih</li>
+    <li>gosper</li><li>hexagon</li><li>hexagon_romb</li><li>kites</li><li>koch_island</li>
+    <li>koch_snowflake</li><li>moire</li><li>nautilus</li><li>pebbles</li><li>penrose</li>
+    <li>penrose_p2</li><li>phyllotaxis</li><li>pinwheel</li><li>poincare</li>
+    <li>puzzle_classic</li><li>puzzle_hex</li><li>puzzle_ribbon</li><li>pythagorean</li>
+    <li>rectangle_3x1</li><li>rhombitrihex</li><li>romb</li><li>rosette</li>
+    <li>rosette_fractal</li><li>scales</li><li>sierpinski</li><li>spectre</li><li>square</li>
+    <li>stagger_tri</li><li>sunflower_grande</li><li>sunflower_grande_inverse</li>
+    <li>sunflower_rings</li><li>sunflower_soft</li><li>triangle</li><li>truchet</li>
+    <li>truchet_hex</li><li>trunc_hex</li><li>trunc_square</li><li>voderberg</li>
+    <li>voronoi</li><li>weave</li>
+  </ul>
+  <h3>Grout</h3>
+  <p>
+    Any tiling can be drawn with grout — the dark lines between tiles that make the geometry
+    legible. Width, colour and stroke style are selectable, including hierarchical grout that
+    outlines the tile, the cluster, and the super-cluster with different weights.
+  </p>
+</section>
+
+<section id="typo" class="prose">
+  <h2>Mosaics made of type</h2>
+  <p>
+    The second engine replaces photographs with <strong>typographic glyphs</strong>. Each glyph
+    is rendered, measured for ink density, and placed where the target's local brightness calls
+    for that much ink — so the portrait emerges from letterforms rather than pictures. Seven
+    script groups are supported, including CJK, Egyptian hieroglyphs, cuneiform, Arabic and
+    decorative Latin faces.
+  </p>
+</section>
+
+<section id="get" class="prose">
+  <h2>Run it yourself</h2>
+  <p>
+    Neural-Mosaic is a Python 3.10 application with a CustomTkinter desktop interface and a full
+    command-line interface. It is free and MIT-licensed.
+  </p>
+  <pre><code>git clone https://github.com/Piotr1686/Neural-Mosaic.git
+cd Neural-Mosaic
+pip install -r requirements.txt
+
+# desktop interface
+python -m src.gui
+
+# or straight from the command line
+python -m src.cli render input/portrait.jpg --engine smart --shape spectre --res 16K</code></pre>
+  <p>
+    You will need a library of tile images; the repository ships an asynchronous downloader that
+    builds one, and an indexer that computes the CIELAB fingerprints once so renders stay fast.
+    Full instructions, hardware notes and the architecture write-up are in the
+    <a href="https://github.com/Piotr1686/Neural-Mosaic#readme">README</a>.
+  </p>
+</section>
+
+<section id="writeups" class="prose">
+  <h2>Write-ups</h2>
+  <ul class="post-list">
+    <li>
+      <h3><a href="posts/aperiodic-monotile-mosaic.html">Photomosaics on an aperiodic monotile</a></h3>
+      <p>
+        What the spectre tile is, why a non-repeating grid suits a mosaic better than a square
+        one, and how the engine tiles the plane with it.
+        <a href="posts/aperiodic-monotile-mosaic.pl.html">Wersja polska</a>
+      </p>
+    </li>
+    <li>
+      <h3><a href="ARCHITECTURE.md">Architecture</a></h3>
+      <p>Module dependency graph and the structure of the two rendering engines.</p>
+    </li>
+  </ul>
+</section>
+
+</main>
+
+<footer>
+  <p>
+    Neural-Mosaic — MIT licence ·
+    <a href="https://github.com/Piotr1686/Neural-Mosaic">github.com/Piotr1686/Neural-Mosaic</a>
+  </p>
+</footer>
 
 </body>
 </html>
