@@ -21,7 +21,7 @@
 </p>
 
 <p align="center">
-  <a href="https://piotr1686.github.io/Neural-Mosaic/"><strong>🔍 Open the live zoomable gallery →</strong></a><br/>
+  <a href="https://piotr1686.github.io/Neural-Mosaic/viewer.html"><strong>🔍 Open the live zoomable gallery →</strong></a><br/>
   <sub>zoom from the whole portrait down to a single tile · real 16K mosaics · right in your browser</sub>
 </p>
 
@@ -58,7 +58,7 @@
 
 ## Live Demo
 
-**[Open the Interactive Viewer](https://piotr1686.github.io/Neural-Mosaic/)** — zoom into real 16K mosaics right in your browser (OpenSeadragon · keyboard: `1`–`5` switch · `H` reset · `F` fullscreen). Three 16K showcases (photo · symbol · spectre) plus two 8K shapes.
+**[Open the Interactive Viewer](https://piotr1686.github.io/Neural-Mosaic/viewer.html)** — zoom into real 16K mosaics right in your browser (OpenSeadragon · keyboard: `1`–`5` switch · `H` reset · `F` fullscreen). Three 16K showcases (photo · symbol · spectre) plus two 8K shapes.
 
 ---
 
@@ -191,13 +191,25 @@ Reconstructs the target image by tiling it with photographs from your library. M
 |---|---|
 | Output resolution | 2K · 4K · 8K · **16K** |
 | Tile size multiplier | 0.5 · 0.75 · 1.0 · 1.75 · 2.0 |
-| Tile shape | `square` · `rectangle_3x1` · `brick_wall` · `hexagon` · `hexagon_romb` · `romb` · `triangle` · `kites` · `spectre` |
+| Tile shape | **50 tilings** — see [the full list](#tile-shapes) below |
 | Allow Mirroring | Horizontally flips tiles on the fly, doubling the effective library without using extra disk |
 | Black Borders (Grout) | Adds a dark gap between tiles — simulates real mosaic grout lines |
 | Color Blend | 0%–30% — blends the original photo over the mosaic for softer transitions |
 | Tile Tint | 0%–40% — shifts each tile toward the target sector mean for tighter colour accuracy |
 
 The **`kites`** shape splits each flat-topped hexagon into 6 kites and renders every kite as its own photo (deltoidal trihexagonal grid). The **`spectre`** shape tiles the image with the strictly chiral aperiodic monotile — see [Tech Highlights](#tech-highlights).
+
+#### Tile shapes
+
+All **50 tilings** partition the frame exactly — no gaps, no overlaps — and each is pinned by pixel-exact golden tests. The single source of truth is `SHAPE_MODES` in `src/engine_smart.py`; list them at runtime with `python -c "from src.engine_smart import shape_names; print(shape_names())"`.
+
+| Family | Shapes |
+|---|---|
+| **Lattices** (12) | `square` · `rectangle_3x1` · `brick_wall` · `hexagon` · `hexagon_romb` · `romb` · `triangle` · `stagger_tri` · `scales` · `braid` · `weave` · `moire` |
+| **Classical tessellations** (15) | `cairo` · `floret` · `pinwheel` · `trunc_hex` · `trunc_square` · `rhombitrihex` · `pythagorean` · `kites` · `truchet` · `truchet_hex` · `voderberg` · `escher_lizard` · `puzzle_classic` · `puzzle_hex` · `puzzle_ribbon` |
+| **Aperiodic / quasicrystal** (6) | `spectre` · `penrose` · `penrose_p2` · `ammann_beenker` · `girih` · `gereh` |
+| **Fractal** (6) | `sierpinski` · `koch_island` · `koch_snowflake` · `dragon` · `gosper` · `rosette_fractal` |
+| **Radial & organic** (11) | `voronoi` · `pebbles` · `bloom` · `phyllotaxis` · `nautilus` · `rosette` · `poincare` · `sunflower_grande` · `sunflower_grande_inverse` · `sunflower_rings` · `sunflower_soft` |
 
 **Anti-repetition system.** A neighbour constraint discourages any tile from the same source image touching itself, combined with a frequency penalty that grows as a tile is reused. Together they stop any single photograph from dominating the composition (details in [How It Works](#how-it-works)).
 
@@ -440,7 +452,7 @@ Batch output names are **timestamp-free** — `{stem}_{engine}_{res}_{shape|mode
 | `--engine {smart,typo}` | both | required | Which renderer to use |
 | `--res {2K,4K,8K,16K}` | both | `8K` | Output resolution |
 | `--index PATH` | both | `data/<engine>_index.pkl` | Override index location |
-| `--shape SHAPE` | smart | `square` | `square` · `rectangle_3x1` · `brick_wall` · `hexagon` · `hexagon_romb` · `romb` · `triangle` · `kites` · `spectre` |
+| `--shape SHAPE` | smart | `square` | Any of the [50 tilings](#tile-shapes) |
 | `--scale FLOAT` | both | `1.0` | Tile/glyph size multiplier (0.5–2.0) |
 | `--blend FLOAT` | smart | `0.0` | Original-over-mosaic blend, 0.0–0.3 |
 | `--tint FLOAT` | smart | `0.0` | Tile tint toward sector colour, 0.0–0.4 |
@@ -575,7 +587,7 @@ Each iteration kept the anti-repetition logic and the multi-shape tile geometry 
 - [x] Tile library browser — thumbnail grid, LAB coverage map, tile selection & exclusion export
 - [x] CLI mode for batch processing — see [CLI Usage](#cli-usage)
 - [x] Real (non-ASCII) script support across all seven font groups — hieroglyphs, cuneiform, math, emoji, Arabic/Bengali/Sinhala
-- [x] Export to deep-zoom (DZI) — `dzi` CLI subcommand + GUI "Export Deep Zoom" button, powering the [live gallery](https://piotr1686.github.io/Neural-Mosaic/)
+- [x] Export to deep-zoom (DZI) — `dzi` CLI subcommand + GUI "Export Deep Zoom" button, powering the [live gallery](https://piotr1686.github.io/Neural-Mosaic/viewer.html)
 - [ ] Plugin system for custom tile shapes
 
 ---

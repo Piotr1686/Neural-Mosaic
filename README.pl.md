@@ -21,7 +21,7 @@
 </p>
 
 <p align="center">
-  <a href="https://piotr1686.github.io/Neural-Mosaic/"><strong>🔍 Otwórz galerię z zoomem na żywo →</strong></a><br/>
+  <a href="https://piotr1686.github.io/Neural-Mosaic/viewer.html"><strong>🔍 Otwórz galerię z zoomem na żywo →</strong></a><br/>
   <sub>przybliżaj od całego portretu aż do pojedynczego kafelka · prawdziwe mozaiki 16K · prosto w przeglądarce</sub>
 </p>
 
@@ -58,7 +58,7 @@
 
 ## Demo na żywo
 
-**[Otwórz interaktywną przeglądarkę](https://piotr1686.github.io/Neural-Mosaic/)** — przybliżaj prawdziwe mozaiki 16K bezpośrednio w przeglądarce (OpenSeadragon · klawiatura: `1`–`5` przełączanie · `H` reset · `F` pełny ekran). Trzy mozaiki 16K (foto · symbol · spectre) plus dwa kształty 8K.
+**[Otwórz interaktywną przeglądarkę](https://piotr1686.github.io/Neural-Mosaic/viewer.html)** — przybliżaj prawdziwe mozaiki 16K bezpośrednio w przeglądarce (OpenSeadragon · klawiatura: `1`–`5` przełączanie · `H` reset · `F` pełny ekran). Trzy mozaiki 16K (foto · symbol · spectre) plus dwa kształty 8K.
 
 ---
 
@@ -191,13 +191,25 @@ Odtwarza obraz docelowy, kafelkując go zdjęciami z Twojej biblioteki. Dopasowa
 |---|---|
 | Rozdzielczość wyjściowa | 2K · 4K · 8K · **16K** |
 | Mnożnik rozmiaru kafelka | 0.5 · 0.75 · 1.0 · 1.75 · 2.0 |
-| Kształt kafelka | `square` · `rectangle_3x1` · `brick_wall` · `hexagon` · `hexagon_romb` · `romb` · `triangle` · `kites` · `spectre` |
+| Kształt kafelka | **50 kafelkowań** — zobacz [pełną listę](#kształty-kafelków) poniżej |
 | Zezwól na odbicia (Mirroring) | W locie odbija kafelki w poziomie, podwajając efektywną bibliotekę bez dodatkowego miejsca na dysku |
 | Czarne obwódki (fuga) | Dodaje ciemną przerwę między kafelkami — symuluje prawdziwe linie fugi w mozaice |
 | Color Blend | 0%–30% — miesza oryginalne zdjęcie na mozaikę, łagodząc przejścia |
 | Tile Tint | 0%–40% — przesuwa każdy kafelek ku średniej barwie docelowego sektora dla większej wierności koloru |
 
 Kształt **`kites`** dzieli każdy spłaszczony heksagon na 6 latawców i renderuje każdy latawiec jako osobne zdjęcie (siatka deltoidalna trójheksagonalna). Kształt **`spectre`** kafelkuje obraz ściśle chiralnym, aperiodycznym monokafelkiem — zobacz [Najciekawsze rozwiązania techniczne](#najciekawsze-rozwiązania-techniczne).
+
+#### Kształty kafelków
+
+Wszystkie **50 kafelkowań** dzieli kadr dokładnie — bez dziur i bez nakładek — a każde jest przypięte złotymi testami co do piksela. Jedynym źródłem prawdy jest `SHAPE_MODES` w `src/engine_smart.py`; listę wypiszesz w locie: `python -c "from src.engine_smart import shape_names; print(shape_names())"`.
+
+| Rodzina | Kształty |
+|---|---|
+| **Kraty** (12) | `square` · `rectangle_3x1` · `brick_wall` · `hexagon` · `hexagon_romb` · `romb` · `triangle` · `stagger_tri` · `scales` · `braid` · `weave` · `moire` |
+| **Klasyczne teselacje** (15) | `cairo` · `floret` · `pinwheel` · `trunc_hex` · `trunc_square` · `rhombitrihex` · `pythagorean` · `kites` · `truchet` · `truchet_hex` · `voderberg` · `escher_lizard` · `puzzle_classic` · `puzzle_hex` · `puzzle_ribbon` |
+| **Aperiodyczne / kwazikryształy** (6) | `spectre` · `penrose` · `penrose_p2` · `ammann_beenker` · `girih` · `gereh` |
+| **Fraktalne** (6) | `sierpinski` · `koch_island` · `koch_snowflake` · `dragon` · `gosper` · `rosette_fractal` |
+| **Promieniste i organiczne** (11) | `voronoi` · `pebbles` · `bloom` · `phyllotaxis` · `nautilus` · `rosette` · `poincare` · `sunflower_grande` · `sunflower_grande_inverse` · `sunflower_rings` · `sunflower_soft` |
 
 **System antypowtórzeniowy.** Ograniczenie sąsiedztwa zniechęca do tego, by jakikolwiek kafelek z tego samego źródłowego obrazu stykał się sam ze sobą, w połączeniu z karą częstotliwościową rosnącą wraz z ponownym użyciem kafelka. Razem powstrzymują pojedyncze zdjęcie przed zdominowaniem kompozycji (szczegóły w [Jak to działa](#jak-to-działa)).
 
@@ -438,7 +450,7 @@ Nazwy wyjścia batcha są **bez znacznika czasu** — `{stem}_{engine}_{res}_{sh
 | `--engine {smart,typo}` | oba | wymagane | Którego renderera użyć |
 | `--res {2K,4K,8K,16K}` | oba | `8K` | Rozdzielczość wyjściowa |
 | `--index PATH` | oba | `data/<engine>_index.pkl` | Nadpisanie lokalizacji indeksu |
-| `--shape SHAPE` | smart | `square` | `square` · `rectangle_3x1` · `brick_wall` · `hexagon` · `hexagon_romb` · `romb` · `triangle` · `kites` · `spectre` |
+| `--shape SHAPE` | smart | `square` | Dowolne z [50 kafelkowań](#kształty-kafelków) |
 | `--scale FLOAT` | oba | `1.0` | Mnożnik rozmiaru kafelka/glifu (0.5–2.0) |
 | `--blend FLOAT` | smart | `0.0` | Blend oryginału na mozaikę, 0.0–0.3 |
 | `--tint FLOAT` | smart | `0.0` | Barwienie kafelka ku kolorowi sektora, 0.0–0.4 |
@@ -573,7 +585,7 @@ Każda iteracja zachowała logikę antypowtórzeniową i wielokształtną geomet
 - [x] Przeglądarka biblioteki kafelków — siatka miniatur, mapa pokrycia LAB, wybór i eksport wykluczeń kafelków
 - [x] Tryb CLI do przetwarzania wsadowego — zobacz [Użycie CLI](#użycie-cli)
 - [x] Wsparcie prawdziwych (nie-ASCII) pism we wszystkich siedmiu grupach fontów — hieroglify, klinopis, matematyka, emoji, arabski/bengalski/syngaleski
-- [x] Eksport do deep-zoom (DZI) — podkomenda CLI `dzi` + przycisk GUI „Export Deep Zoom", napędza [galerię na żywo](https://piotr1686.github.io/Neural-Mosaic/)
+- [x] Eksport do deep-zoom (DZI) — podkomenda CLI `dzi` + przycisk GUI „Export Deep Zoom", napędza [galerię na żywo](https://piotr1686.github.io/Neural-Mosaic/viewer.html)
 - [ ] System wtyczek dla własnych kształtów kafelków
 
 ---
