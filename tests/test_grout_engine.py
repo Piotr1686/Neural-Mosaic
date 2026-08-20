@@ -19,7 +19,7 @@ from PIL import Image, ImageDraw
 
 from src.engine_smart import (SHAPE_MODES, SmartEngine, _poincare_cells,
                               _kite_lattice,
-                              _gen_penrose_p2, _gen_pebbles, _gen_bloom,
+                              _gen_penrose_p2, _gen_pebbles,
                               _gen_phyllotaxis, _gen_stagger_tri, _gen_braid,
                               _gen_moire, _gen_puzzle_classic,
                               _gen_puzzle_ribbon, _gen_puzzle_hex,
@@ -28,8 +28,7 @@ from src.engine_smart import (SHAPE_MODES, SmartEngine, _poincare_cells,
                               _gen_gereh, _gen_rosette, _gen_scales,
                               _gen_nautilus,
                               _gen_rosette_fractal, _gen_sierpinski,
-                              _sierpinski_cells, _tri_outside,
-                              _GOLDEN_ANGLE, _LUCAS_ANGLE)
+                              _sierpinski_cells, _tri_outside)
 from src.grout import classify_edges
 from tests.test_golden_shapes import _build_library, _make_target
 
@@ -241,7 +240,7 @@ def test_pebbles_covers_the_frame(w, h, base_s):
     assert holes <= 64, f"{holes} uncovered px at {w}x{h} base_s={base_s}"
 
 
-_VORONOI_FAMILY = ["voronoi", "pebbles", "phyllotaxis", "bloom",
+_VORONOI_FAMILY = ["voronoi", "pebbles", "phyllotaxis",
                    "sunflower_grande", "sunflower_grande_inverse",
                    "sunflower_soft", "sunflower_rings"]
 
@@ -272,7 +271,7 @@ def test_voronoi_family_covers_coarse_frames(name, w, h, base_s):
 def test_pebbles_cell_sizes_vary_more_than_uniform_voronoi():
     # The whole point of pebbles: density varies, so cell SIZE varies — that is
     # what survives photo substitution. If a refactor ever flattened the blobs,
-    # pebbles would silently become `voronoi` (the kepler_ty/bloom failure).
+    # pebbles would silently become `voronoi` (the kepler_ty failure).
     from src.engine_smart import _gen_voronoi
 
     def _spread(gen):
@@ -291,27 +290,13 @@ def test_pebbles_cell_sizes_vary_more_than_uniform_voronoi():
     assert _spread(_gen_pebbles) > _spread(_gen_voronoi) * 1.3
 
 
-def test_bloom_geometry_differs_from_phyllotaxis():
-    # bloom exists only because its divergence angle differs: the scheme drew
-    # the same lattice as phyllotaxis and carried the motif in COLOUR, which is
-    # nothing once photos replace it (the kepler_ty failure). Radii are shared
-    # (r = c*sqrt(n)), so cell-area stats CANNOT tell them apart — the seed
-    # angles must be compared instead.
-    assert _LUCAS_ANGLE != _GOLDEN_ANGLE
-    a = [tuple(round(v, 6) for v in p)
-         for poly in _gen_bloom(None, 400, 400, 40) for p in poly]
-    b = [tuple(round(v, 6) for v in p)
-         for poly in _gen_phyllotaxis(None, 400, 400, 40) for p in poly]
-    assert a != b, "bloom reproduced phyllotaxis — the Lucas angle is not applied"
-
-
 # --- stagger_tri vs the triangle lattice ------------------------------------
 # stagger_tri is the triangle cell stacked at a CONSTANT row phase. The only
 # thing separating it from the `triangle` grid mode is that phase, so the gate
 # has to be translation-invariant: shifting the phase by s/2 instead rebuilds
-# `triangle` exactly but displaced by s/2, and a raw coordinate diff (the
-# bloom/phyllotaxis pattern above) would call that "different" — every single
-# coordinate does differ. Hence _max_overlap over candidate translations.
+# `triangle` exactly but displaced by s/2, and a raw coordinate diff would
+# call that "different" — every single coordinate does differ. Hence
+# _max_overlap over candidate translations.
 
 def _tri_strips(target_w, target_h, s, phase):
     """Triangle rows of side `s`; `phase(r)` is row r's x-offset."""

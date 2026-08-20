@@ -424,7 +424,7 @@ def gen_poincare():
 # ==========================================
 def gen_voderberg():
     """Rev 2026-07-04b (user): the fixed 30-wedge count made the inner slivers
-    collapse toward the cap - impractical centre. Solved like sunburst/bloom:
+    collapse toward the cap - impractical centre. Solved like sunburst:
     every ring now gets its OWN wedge count ~ 2*pi*r_mid/target, so the bent
     slivers keep a near-constant tangential size at every radius. Rev
     2026-07-04b #2 (user): the plain cap disk is gone too - the innermost
@@ -753,7 +753,7 @@ SHAPES = [
     ("cairo", gen_cairo, "15. CAIRO (bruk kairski)", "pieciokaty koszykowe, 4 orientacje"),
     ("floret", gen_floret, "16. FLORET (dual snub hex)", "kwiaty: 6 pieciokatnych platkow, chiralny"),
     ("poincare", gen_poincare, "17. POINCARE {7,3} PAS", "model pasmowy - bez okregu, heptagony 3-w-wierzcholku"),
-    ("escher_lizard", gen_escher, "18. ESCHER-STYLE (p1)", "deformacja heksagonu, organiczne stworki"),
+    ("escher_hex", gen_escher, "18. ESCHER-STYLE (p1)", "deformacja heksagonu, organiczne stworki"),
     ("gosper", gen_gosper, "19. GOSPER ISLAND", "fraktalne wyspy (hexflake), granica Gospera"),
     ("weave", gen_weave, "20. WEAVE (tkanina)", "wstegi zdjec przeplatane nad/pod"),
 ]

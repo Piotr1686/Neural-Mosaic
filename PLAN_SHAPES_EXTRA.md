@@ -14,7 +14,14 @@ nautilus  rosette_fractal  scales
 sierpinski  sierpinski_carpet  sierpinski_d
 ```
 
-Wdrożone: `penrose_p2` (E1, `b3e725c`) · `bloom`, `pebbles` (E2, `3990cfa`) · `stagger_tri`, `braid`, `moire` (E3). Cel końcowy puli: **rejestr 56**.
+Wdrożone: `penrose_p2` (E1, `b3e725c`) · ~~`bloom`~~, `pebbles` (E2, `3990cfa`) · `stagger_tri`, `braid`, `moire` (E3). Cel końcowy puli: **rejestr 56**.
+
+> **`bloom` USUNIĘTY 2026-08-20.** Zróżnicowanie kątem Lucasa (niżej) było poprawne
+> geometrycznie i przeszło bramkę odrębności, ale **pod zdjęciami liczba ramion
+> parastych przestała być czytelna** — dE 11,47 vs 11,44 dla `phyllotaxis`, szum
+> 7,61 vs 7,11, oba w granicach szumu pomiaru. To domyka lekcję audytu o jeden
+> stopień dalej: **bramka odrębności na GEOMETRII nie wystarcza — kształt zasługuje
+> na slot, jeśli różni się w MOZAICE, nie na diagramie.**
 
 **POZA PULĄ — rodzina puzzle (sprint P, 2026-07-19, decyzja usera):** `puzzle_classic`, `puzzle_ribbon`, `puzzle_hex` — trzy siatki (kratka / kratka falowana / hex) z tabami die-cut jako WSPÓLNYMI poliliniami per krawędź (crc32, bez RNG; profil wg zdjęć referencyjnych usera). Bramki wg precedensu kształtów krzywoliniowych: **formalny test partycji** (classify_edges, 0 niesparowanych wewnętrznych — binarny raster 1:1 to ZŁY instrument dla krzywych: parzystość scanline'a Pillow gubi całe wiersze, zmierzone 784 fałszywe „dziury" przy dowodliwie dokładnej partycji) + pokrycie FLOAT na ścieżce masek silnika ss=4+BOX (kalibracja: wdrożony `voderberg` = 0,502 min / 210 px <0,9; puzzle ≤ tego) + goldeny ×2 cross-process. PUŁAPKA opłacona: zduplikowane KOLEJNE wierzchołki (złączenia ramię/łuk) łamią parzystość scanline'a Pillow także w maskach aa=4 → pasy 1-2 px; dedup `[1:]` jest nośny. Odrębność: `ribbon` vs `classic` bramką CV odległości narożników (0 vs 0,046, niewrażliwa na translacje); od `square`/`hexagon`/`moire` — krzywe tabów (>150 wierzchołków/komórkę). **Rejestr po sprincie P = 48; cel końcowy całości = 59.**
 
@@ -24,7 +31,7 @@ Pula powstała jako **schematy**, gdzie różnicę niósł KOLOR. Pod zdjęciami
 
 **Duplikaty (różnica tylko w palecie):**
 - `kepler_ty` — identyczne `(N, zeta, gamma)` co `penrose` → **USUNIĘTY** (`1e53982`).
-- `bloom` — identyczna krata co `phyllotaxis` (kąt złoty, `r=c√i`, stała `(√2+0.45)`); motyw „21 ramion" był kolorem `i mod 21` → **ZRÓŻNICOWANY kątem Lucasa** (decyzja usera; `3990cfa`).
+- `bloom` — identyczna krata co `phyllotaxis` (kąt złoty, `r=c√i`, stała `(√2+0.45)`); motyw „21 ramion" był kolorem `i mod 21` → ZRÓŻNICOWANY kątem Lucasa (`3990cfa`) → **ostatecznie USUNIĘTY 2026-08-20** (różnica nieczytelna pod zdjęciami).
 - ~~`stagger_tri`~~ — **WERDYKT AUDYTU OBALONY 2026-07-17 pomiarem (E3, `_gen_stagger_tri`).** Flaga `on = (ci & rj) == 0` faktycznie wybierała tylko paletę (to trafne), ale wniosek „geometria = tryb `triangle`" był **fałszywy i odwrócony**: to `triangle` przesuwa fazę o pół podstawy co rząd (jego reguła flipu `(c+r)%2` JEST tym przesunięciem — patrz `_grout_cells_triangle`, parzystość wierzchołka zmienia się z linią), a schemat trzymał fazę STAŁĄ. Pokrycie z `triangle` przy dowolnej translacji: **50%, nie 100%** ⇒ geometria była odrębna od początku i została przeniesiona 1:1. **Zalecone „przesunięcie o pół trójkąta" odtworzyłoby `triangle` w 100%** (przesunięty o `s/2`) — czyli zbudowałoby duplikat, który miało usunąć.
 
 **Sprawdzone i ODRĘBNE** (dzielą maszynerię, ale różnią się KOMÓRKĄ — planować bez obaw; zweryfikować wizualnie po wdrożeniu):

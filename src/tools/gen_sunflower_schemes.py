@@ -9,7 +9,7 @@ verified numerically (raster gap/overlap report).
 Verdict rev 4 (user, 2026-07-06): 10 schemes ACCEPTED - rendered straight
 into assets/shape_schemes/ like every other shape scheme:
 
-  classic-family (uniform seeds, structurally distinct from bloom):
+  classic-family (uniform seeds, structurally distinct from `phyllotaxis`):
   1. sunflower_soft   - Vogel Voronoi after 2 Lloyd relaxations: rounder,
                         more even "pebble" seeds, spiral arms preserved
   2. sunflower_disc   - two-zone head like a real flower: fine disc florets

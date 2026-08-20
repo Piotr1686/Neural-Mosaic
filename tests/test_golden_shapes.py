@@ -78,7 +78,7 @@ GOLDEN = {
     # rim holes (6 recovered cells, 61 -> 67; ~5% of pixels changed, ALL at the
     # frame rim — interior verified untouched via a pixel-diff mask against the
     # old render, which still matched the old hash bit-for-bit). The other 20
-    # family goldens (pebbles/sunflowers/phyllotaxis/bloom) did NOT change —
+    # family goldens (pebbles/sunflowers/phyllotaxis) did NOT change —
     # the two-pass fix keeps bounded cells bit-identical by design.
     ("voronoi", False): "12a3f00ddc7280b9462d1746e00db514031089555092ee88a7963e28e4a25474",
     ("voronoi", True): "22de9d2e18cab871bd3ca18c5d89087659f57dbfbed6df9783b8910c81bd7c3a",
@@ -115,14 +115,14 @@ GOLDEN = {
     ("ammann_beenker", False): "5a1859b5c87f09cc106b533bceb9fc1538459922e6abe32a7ea8ead23800bafd",
     ("ammann_beenker", True): "71286be809853a404dc1164e8db4eabc6de634a98f79716c65b73eb3c506f15f",
     # Last three Fable shapes (2026-07-13): voderberg (rings of bent slivers,
-    # bow made radius-relative), escher_lizard (p1 hexagon deformation) and
+    # bow made radius-relative), escher_hex (p1 hexagon deformation) and
     # weave (basketweave rebuilt as a true partition: visible ribbon pieces +
     # knot cells). Pure constructions (no RNG); hashes lock the first render,
     # verified identical across two separate processes.
     ("voderberg", False): "db1226e2116ba98f905f8e1ac631b70933754511a40402f810a1241fcfb64b5c",
     ("voderberg", True): "384ce624b66c88815e6fdc8901b0172e6abe5cf1eecbb04f05a0d4b436006d41",
-    ("escher_lizard", False): "d8426259cbadb63eafdcbdce4ff4b08a70a477abec17b5e6fe410094a56bb601",
-    ("escher_lizard", True): "ede3696258362b30d436823cd1ae420e3b1d0820267b06fe9a41679c2583b964",
+    ("escher_hex", False): "d8426259cbadb63eafdcbdce4ff4b08a70a477abec17b5e6fe410094a56bb601",
+    ("escher_hex", True): "ede3696258362b30d436823cd1ae420e3b1d0820267b06fe9a41679c2583b964",
     ("weave", False): "c28717fe7c28af0abd2cd801dd4b184e6a78579027332b2cfe1d6579fefd0650",
     ("weave", True): "43f629ce2c1c6b2d6e5e7e8e500f66e108c3297c4722e1185baaa0930d2bdea0",
     # Truchet (2026-07-13): arcs polygonised by _sun_arc with a sagitta-driven
@@ -152,13 +152,10 @@ GOLDEN = {
     # identical across two interpreters, one with PYTHONHASHSEED=1.
     ("penrose_p2", False): "3efcdc4b6b652183510df835ac693e5fe4c3e9166a0c61a1505698f1c29105b5",
     ("penrose_p2", True): "80c4cf45a9d29066eaba664c9396073be0eb41aa2a551eb8654287bce6e9bc5a",
-    # E2 (2026-07-17). bloom: Lucas-angle Vogel lattice — the `angle` parameter
-    # defaults to the golden angle, so all eight sunflower goldens above stay
-    # bit-identical (verified). pebbles: variable-density Voronoi, seeded from
-    # dimensions via _shape_seed. Both verified across two interpreters, one
-    # with PYTHONHASHSEED=1.
-    ("bloom", False): "5686d653537d768f212a8045c8cb13f20d708666a31ed9388008b28cb369c1bb",
-    ("bloom", True): "1f54d2b5f497bec7278656c278583839673cb59fac25b25d70bdc3bccfd35bf0",
+    # E2 (2026-07-17). pebbles: variable-density Voronoi, seeded from dimensions
+    # via _shape_seed; verified across two interpreters, one with
+    # PYTHONHASHSEED=1. (E2's other shape, `bloom`, was cut on 2026-08-20 as a
+    # near-duplicate of `phyllotaxis`.)
     ("pebbles", False): "febe1ea64d0fdc3f295c442c446eae2d96af9a66ea23217b9756152c858ad5f7",
     ("pebbles", True): "c103f226a616d4064f48784ff4c67febbd777e789755ca68531711b6b1cba8be",
     # E3 (2026-07-17). stagger_tri: triangle rows at a constant x-phase, so the

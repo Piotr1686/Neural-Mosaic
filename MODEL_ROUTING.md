@@ -112,7 +112,7 @@ a nie o jedną poprawną, precyzyjną odpowiedź.
 
 - Brainstorm nowych kształtów / wariantów teselacji przed wdrożeniem
   (rola dotychczasowego `gen_fable_shape_schemes.py` — stąd propozycje girih,
-  escher_lizard, poincare).
+  escher_hex, poincare).
 - „Daj mi N pomysłów / propozycji / wariantów X" — gdzie N > 1 i nie ma jednej
   poprawnej odpowiedzi.
 - Copy do galerii / portfolio, nazwy, opisy narracyjne, tagline'y.

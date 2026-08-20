@@ -5,7 +5,7 @@
 
 ## Kontekst dla wykonawcy (Opus)
 
-- Zrobione: Sprint 1a (schematy 19 PNG, commit `2ec504c`), Sprint 1b (GUI: schemat w podglądzie po wyborze kształtu, commit `3a186b7`), schematy 10 kształtów Fable (`assets/shape_schemes/{girih,ammann_beenker,pinwheel,voderberg,cairo,floret,poincare,escher_lizard,gosper,weave}.png` + generator `src/tools/gen_fable_shape_schemes.py`).
+- Zrobione: Sprint 1a (schematy 19 PNG, commit `2ec504c`), Sprint 1b (GUI: schemat w podglądzie po wyborze kształtu, commit `3a186b7`), schematy 10 kształtów Fable (`assets/shape_schemes/{girih,ammann_beenker,pinwheel,voderberg,cairo,floret,poincare,escher_hex,gosper,weave}.png` + generator `src/tools/gen_fable_shape_schemes.py`).
 - **`src/tools/gen_fable_shape_schemes.py` zawiera działającą, zweryfikowaną wizualnie geometrię wszystkich 10 kształtów Fable — przenoś ją do silnika, nie wymyślaj od nowa.** Dla kształtów Opusa (penrose, voronoi, …) generatorów kodu nie ma (scratchpad z `shapes10.py` przepadł) — geometrię trzeba napisać, wskazówki niżej.
 - User zatwierdza PO KAŻDYM sprincie. Po każdym sprincie: testy zielone + commit.
 
@@ -29,7 +29,7 @@ Pogrupowane po wspólnej maszynerii (nie po autorze propozycji):
 | S4 | pinwheel, gosper, cairo, floret, pythagorean | czyste konstrukcje deterministyczne (substytucja/lattice) |
 | S5 | voronoi, phyllotaxis, poincare | zmienna wielkość komórek: seeded RNG + próg min-area |
 | S6 | sunburst, voderberg, trunc_square, trunc_hex, rhombitrihex | polar (polygonizacja łuków) + archimedesowe — **ZROBIONE** |
-| S7 | girih, escher_lizard | geometria „projektowana" (patrz wyzwania) — **ZROBIONE 2026-07-14** (girih = rozety na quasi-sieci Penrose'a, bez RNG) |
+| S7 | girih, escher_hex | geometria „projektowana" (patrz wyzwania) — **ZROBIONE 2026-07-14** (girih = rozety na quasi-sieci Penrose'a, bez RNG) |
 | S8 | truchet, truchet_hex, weave | ~~Tier B~~ — **ZROBIONE 2026-07-13**: `_CurvedMask` odrzucony (2026-07-11), weave = partycja, truchet ×2 = zwykłe `polygon` |
 | S9 | docs (README EN+PL), montaż zbiorczy 20, mozaiki testowe dla usera | zamknięcie |
 
@@ -63,7 +63,7 @@ Pogrupowane po wspólnej maszynerii (nie po autorze propozycji):
 
 ### S7: geometria projektowana
 - **girih — NAJRYZYKOWNIEJSZY Tier A.** Greedy edge-gluing (jak w `_girih_attempt`) osiąga ~97% pokrycia, ale zostawia dziury — w schemacie OK, w mozaice NIE. Opcje (decyzja z userem na starcie S7): (a) zaprojektowany okresowy patch dekagon+heksagony (najlepszy seed greedy jako wzorzec jednostki), (b) greedy + wypełnianie dziur kafelkami tła w kolorze średnim, (c) najpierw prototyp, potem decyzja. Kafelki-szablony (turtle, kąty ×36°) w `_girih_attempt`.
-- **escher_lizard:** system p1 na heksagonie pointy-top: krawędzie e0,e1,e2 deformowane polilinią, e3,e4,e5 = translacje odwrotności (`t01=h0+h1` itd. — dokładnie w `gen_escher`); kafelkowanie CZYSTĄ translacją `(√3,0),(√3/2,1.5)` — silnikowo trywialne. ⚠ Wyzwanie artystyczne: obecny profil to „abstrakcyjny stworek"; docelowa sylwetka jaszczurki wymaga ręcznego dostrojenia polilinii (iteracje wizualne z userem) — geometria się nie zmienia, tylko offsety.
+- **escher_hex** (do 2026-08-20 `escher_lizard`)**:** system p1 na heksagonie pointy-top: krawędzie e0,e1,e2 deformowane polilinią, e3,e4,e5 = translacje odwrotności (`t01=h0+h1` itd. — dokładnie w `gen_escher`); kafelkowanie CZYSTĄ translacją `(√3,0),(√3/2,1.5)` — silnikowo trywialne. ⚠ Wyzwanie artystyczne ZAMKNIĘTE 2026-08-20 przez **zmianę nazwy na `escher_hex`**, nie geometrii: profil to abstrakcyjny stworek i taki zostaje; nazwa obiecywała sylwetkę, której kafel nie ma. Dostrojenie polilinii do jaszczurki pozostaje możliwe, ale nie jest już długiem.
 
 ### S8: Tier B
 - **truchet/truchet_hex — WDROŻONE 2026-07-13** (`_CurvedMask` nigdy nie powstał — odrzucony 2026-07-11). Komórki = REGIONY wycięte przez łuki, nie same łuki: kwadrat → 2 ćwierćdyski (łuki r=s/2 na przeciwległych rogach) + wstęga „S"; heksagon → 3 wycinki 120° na NAPRZEMIENNYCH wierzchołkach (łuk r=a/2 łączy środki dwóch krawędzi tego wierzchołka) + zakrzywiony środek. Ciągłość krzywych: łuk dochodzi do krawędzi w jej środku pod kątem prostym (promień biegnie wzdłuż krawędzi), a każda krawędź ma dokładnie jeden koniec w wybranej trójce ⇒ krzywe łączą się przez krawędzie NIEZALEŻNIE od orientacji sąsiada.

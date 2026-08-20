@@ -1,20 +1,19 @@
-"""Regenerate the GUI scheme previews for bloom and pebbles (sprint E2).
+"""Regenerate the GUI scheme preview for pebbles (sprint E2).
 
-Both original PNGs (from `gen_extra_shape_schemes`) advertise geometry the
+The original PNG (from `gen_extra_shape_schemes`) advertises geometry the
 engine does not draw -- the trap that already caught girih, poincare, truchet
 and penrose_p2 (proposal tool != engine):
 
-  * bloom drew the GOLDEN-angle Vogel lattice and carried its motif (the 21
-    Fibonacci parastichy arms) in COLOUR. That lattice is `phyllotaxis`, so the
-    scheme advertised a shape the mosaic already had; colour is nothing once
-    photos replace it. The engine's bloom uses the LUCAS angle instead, whose
-    arm count genuinely differs -- so the scheme must show that lattice.
   * pebbles drew a fixed 720-seed sample in a unit square. The engine derives
     the seed count from base_s, stops on the in-frame count and pads the margin
     with a scaffold ring, so its patch is a different density and crop.
 
 Colouring is deliberately neutral (a per-cell hue ramp, no motif encoded), so
-neither picture can carry a distinction the geometry does not have.
+the picture cannot carry a distinction the geometry does not have.
+
+(E2's other shape, `bloom`, was cut from the registry on 2026-08-20 as a
+near-duplicate of `phyllotaxis`; only its Lucas divergence angle set it
+apart and that was not legible under photographs.)
 
 Run:
   C:/Users/plazo/miniconda3/envs/mosaic/python.exe -m src.tools.gen_e2_schemes
@@ -25,7 +24,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-from src.engine_smart import _gen_bloom, _gen_pebbles
+from src.engine_smart import _gen_pebbles
 
 log = logging.getLogger(__name__)
 
@@ -34,7 +33,6 @@ BG = (20, 20, 24)
 OUTLINE = (16, 16, 20)
 
 SHAPES = [
-    ("bloom", _gen_bloom, 30, (0.06, 0.10)),      # warm sunflower hues
     ("pebbles", _gen_pebbles, 30, (0.07, 0.13)),  # sandy pebble hues
 ]
 

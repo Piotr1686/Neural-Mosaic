@@ -8,7 +8,6 @@ HARD REQUIREMENT (user, 2026-07-03): every shape must be a TRUE tessellation -
 edge-to-edge, no overlaps, no gaps, fills the whole rectangle, self-repeating.
 Rev 2026-07-04 (user corrections): the background-grid crutch is gone from all
 kept shapes; every cell is part of the tessellation itself:
-  - bloom          -> Voronoi diagram of a sunflower phyllotaxis (golden angle)
   - dragon         -> twindragon rep-tile partition (base 1+i digit squares)
   - gereh          -> 4.8.8 partition into quads only (star split into 8 kites)
   - koch_snowflake -> two-size Koch snowflake tessellation (ratio 1/sqrt(3))
@@ -27,6 +26,11 @@ kept shapes; every cell is part of the tessellation itself:
                       rhombs from the pentagrid). kepler_ty REMOVED 2026-07-16:
                       same (N, zeta, gamma) as `penrose` => same tiling; only
                       its palette differed, and colour vanishes under photos.
+  - bloom          -> REMOVED 2026-08-20 for the same reason one step later:
+                      re-cut to the Lucas divergence angle it survived the
+                      kepler_ty test on paper (a genuinely different lattice),
+                      but under photos its parastichy count read as
+                      `phyllotaxis` (dE 11.47 vs 11.44).
 
 ETAP A fully resolved - no shape uses a background grid any more.
 
@@ -804,46 +808,6 @@ def gen_braid():
 # ==========================================
 # 35. BLOOM (Voronoi phyllotaxis)  [natywne wypelnienie]
 # ==========================================
-def gen_bloom():
-    """Sunflower bloom as a TRUE tessellation (rev 2026-07-04: no background,
-    no overlapping rosettes): Voronoi diagram of golden-angle phyllotaxis seeds.
-    r = c*sqrt(i) keeps seed density uniform, so the Voronoi cells are
-    near-equal-area everywhere while spiralling like a sunflower head. Seeds
-    extend past the corners; every bounded cell is clipped to the rectangle -
-    the cells join exactly (Voronoi partition) and fill the whole frame.
-    Colour follows i mod 21 (Fibonacci parastichy), so the 21 spiral arms of
-    the real sunflower show up in the mosaic."""
-    rng = np.random.default_rng(35)
-    R = 1.0
-    diag = math.sqrt(2.0)
-    golden = math.pi * (3 - math.sqrt(5))
-    N = 520
-    c = (diag + 0.45) / math.sqrt(N)
-    pts = []
-    for i in range(1, N + 1):
-        rr = c * math.sqrt(i)
-        aa = i * golden
-        pts.append((rr * math.cos(aa), rr * math.sin(aa)))
-    vor = Voronoi(np.array(pts))
-    pal = [(214, 138, 64), (180, 90, 84), (110, 138, 170), (150, 166, 96),
-           (150, 110, 162), (96, 160, 140), (206, 168, 88)]
-    polys = []
-    for i in range(N):
-        reg = vor.regions[vor.point_region[i]]
-        if not reg or -1 in reg:
-            continue                       # unbounded outer cells: outside frame
-        poly = [tuple(vor.vertices[v]) for v in reg]
-        cl = _clip_rect(poly, R)
-        if len(cl) < 3:
-            continue
-        arm = (i + 1) % 21                 # parastichy arm id
-        polys.append((cl, vary(rng, pal[arm % len(pal)], 10)))
-    return polys, (-R, -R, R, R)
-
-
-# ==========================================
-# 37. SCALES (fish scales)  [natywne wypelnienie]
-# ==========================================
 def gen_scales():
     """Fish-scale (imbricated scallop) tiling per the user's reference: circles
     of radius r on the checkerboard lattice (dx=2r, dy=r, half-period row
@@ -939,7 +903,7 @@ def gen_rosette_fractal():
     phase shift lines the shared edges into logarithmic spiral arms.
 
     Rev 2026-07-04b (user): the constant sector count made leaves shrink to
-    NOTHING at the pole - impractical centre. Solved like sunburst/bloom
+    NOTHING at the pole - impractical centre. Solved like sunburst
     (cells ~constant size at every radius): the sector count DOUBLES every m
     rings and the ring ratio is g = 2^(1/m), so tangential cell size resets
     each doubling instead of vanishing inward. Rev 2026-07-04b #2 (user): the
@@ -1043,7 +1007,6 @@ SHAPES = [
     ("nautilus", gen_nautilus, "30. NAUTILUS", "[B] log-spirala, biegun poza kadrem (bez srodka)"),
     ("moire", gen_moire, "32. MOIRE (wlasny)", "[B] geom. siatka zwichrowana"),
     ("braid", gen_braid, "33. BRAID (wlasny)", "[B] basketweave, plaski przeplot"),
-    ("bloom", gen_bloom, "35. BLOOM (slonecznik)", "[B] Voronoi phyllotaxis, 21 ramion"),
     ("stagger_tri", gen_stagger_tri, "36. TROJKATY PRZESUNIETE", "[B] przesuniete warstwy (b. sierpinski)"),
     ("scales", gen_scales, "37. LUSKI (scales)", "[B] rybie luski: kopula + 2 luki, partycja"),
     ("pebbles", gen_pebbles, "38. PEBBLES (kamyki)", "[B] Voronoi o zmiennej gestosci ziaren"),

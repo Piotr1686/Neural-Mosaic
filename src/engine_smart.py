@@ -218,21 +218,18 @@ def _gen_spectre(engine, target_w, target_h, base_s):
 # is ported -- the scheme's per-cell colour (vary/palette) is a scheme-only
 # concern, so preview and render stay a pure function of (w, h, base_s), no RNG.
 _GOLDEN_ANGLE = math.pi * (3.0 - math.sqrt(5.0))   # 137.508 deg
-# Lucas divergence: the continued fraction [0;3,1,1,1,...] instead of the
-# golden angle's [0;2,1,1,1,...]. Both are noble, but this one grows Lucas
-# parastichies (1,3,4,7,11,18) rather than Fibonacci (1,2,3,5,8,13,21) -- a
-# visibly different spiral-arm count, which is geometry, not colour.
-_LUCAS_ANGLE = 2.0 * math.pi / (3.0 + 2.0 / (1.0 + math.sqrt(5.0)))  # 99.502 deg
 
 
 def _vogel_points(n_pts, c, power, angle=_GOLDEN_ANGLE):
     """Vogel phyllotaxis lattice r = c*n**power, theta = n*`angle`.
     Returns a list of (x, y) tuples in world space (y up).
 
-    `angle` defaults to the golden angle, so every existing caller is
-    bit-identical; `bloom` passes the Lucas angle instead, which is the one
-    phyllotaxis axis no other sunflower variant occupies (they all differ by
-    `power` or Lloyd passes).
+    `angle` is kept as a parameter although every current caller takes the
+    default: it names the constant that DEFINES this lattice, and the sunflower
+    family separates purely by `power` and Lloyd passes, so a future variant
+    that wants a different divergence has the axis available. (`bloom` used it
+    for the Lucas angle until it was cut on 2026-08-20 as a near-duplicate of
+    `phyllotaxis`.)
     """
     idx = np.arange(1, n_pts + 1, dtype=np.float64)
     rr = c * idx ** power
@@ -566,23 +563,6 @@ def _gen_phyllotaxis(engine, target_w, target_h, base_s):
     (area-uniform cells) with no relaxation, so the raw spiral courses stay
     crisp -- distinct from sunflower_soft (Lloyd-rounded) and _rings (snapped)."""
     yield from _graded_sunflower(target_w, target_h, base_s, power=0.5)
-
-
-def _gen_bloom(engine, target_w, target_h, base_s):
-    """Lucas-angle phyllotaxis: same area-uniform r = c*sqrt(n) Vogel lattice
-    as `phyllotaxis`, but seeds diverge by the Lucas angle (99.502 deg), so the
-    head grows Lucas parastichies (…4, 7, 11, 18 arms) instead of Fibonacci
-    ones (…5, 8, 13, 21) -- a different visible spiral-arm count.
-
-    The scheme drew this motif in COLOUR (i mod 21 arms) over a lattice
-    identical to `phyllotaxis` — same golden angle, same c = (sqrt(2)+0.45)/
-    sqrt(N) — which under photos is no shape at all (the `kepler_ty` failure).
-    `power` was not an option either: 0.40/0.50/0.66/0.75 are all taken by the
-    sunflower family, so any value between them just clones a neighbour. The
-    divergence angle is the one axis none of them use.
-    """
-    yield from _graded_sunflower(target_w, target_h, base_s, power=0.5,
-                                 angle=_LUCAS_ANGLE)
 
 
 # --- Deterministic Fable tessellations (pinwheel/cairo/floret/gosper) -------
@@ -2054,8 +2034,8 @@ def _gen_pythagorean(engine, target_w, target_h, base_s):
                    (c.real + b, c.imag + b + s), (c.real + b - s, c.imag + b + s)]
 
 
-# --- Voderberg / escher_lizard / weave (last three Fable shapes) -----------
-# voderberg + escher_lizard are ported straight from gen_fable_shape_schemes.py
+# --- Voderberg / escher_hex / weave (last three Fable shapes) --------------
+# voderberg + escher_hex are ported straight from gen_fable_shape_schemes.py
 # (image space, y-down, so the on-screen chirality matches the scheme PNGs);
 # only the hard-coded scheme scale is replaced by a base_s-driven one.
 def _gen_voderberg(engine, target_w, target_h, base_s):
@@ -3003,12 +2983,11 @@ class ShapeSpec:
 # order — every consumer looks names up in the dict.
 SHAPE_MODES = {
     "ammann_beenker":           ShapeSpec("polygon", _gen_ammann_beenker, aa=4),
-    "bloom":                    ShapeSpec("polygon", _gen_bloom, aa=4),
     "braid":                    ShapeSpec("polygon", _gen_braid, aa=4),
     "brick_wall":               ShapeSpec("grid"),
     "cairo":                    ShapeSpec("polygon", _gen_cairo, aa=4),
     "dragon":                   ShapeSpec("polygon", _gen_dragon, aa=4),
-    "escher_lizard":            ShapeSpec("polygon", _gen_escher, aa=4),
+    "escher_hex":               ShapeSpec("polygon", _gen_escher, aa=4),
     "floret":                   ShapeSpec("polygon", _gen_floret, aa=4),
     "gereh":                    ShapeSpec("polygon", _gen_gereh, aa=4),
     "girih":                    ShapeSpec("polygon", _gen_girih, aa=4),
