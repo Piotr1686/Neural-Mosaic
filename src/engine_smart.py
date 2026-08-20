@@ -57,6 +57,11 @@ GROUT_HIERARCHICAL = ("square", "hexagon", "triangle", "kites", "poincare")
 # Must match EDGE_WEIGHT in indexer_smart.py.
 EDGE_WEIGHT = 2.0
 
+# Colour budget the anti-repetition penalty may spend, in CIELAB dE per feature
+# cell. Defined once: it is both the engine default and the fallback for the
+# hand-built settings dicts that predate the key, and the two must not drift.
+DEFAULT_FREQ_TOLERANCE_DE = 2.0
+
 
 def _euclid_f32(chunk, feats, feat_sq):
     """Euclidean distances (float32) via the GEMM identity
@@ -3081,6 +3086,7 @@ class SmartEngine:
                 "allow_mirror": True,
                 "edge_aware": False,
                 "freq_penalty": 30.0,
+                "freq_tolerance_de": DEFAULT_FREQ_TOLERANCE_DE,
             }
             self._neighbors_cache: dict = {}
             self._neighbors_lock = threading.Lock()
@@ -4195,6 +4201,23 @@ class SmartEngine:
 
         top_k = min(len(self.paths), 200)
 
+        # Anti-repetition knobs, read once per render.
+        #
+        # `freq_tolerance_de` is the colour budget the penalty may spend, in
+        # CIELAB dE units per feature cell. Converting it to a distance in this
+        # feature space is a derivation, not a magic number: a feature is a 5x5
+        # grid of LAB means with L scaled by 1/100, so a uniform dE of lightness
+        # across all 25 cells moves the vector by sqrt(25) * dE/100 = dE * 0.05.
+        # Chroma-only differences are normalised by 1/255 and so land inside the
+        # same budget — the band is a conservative bound, as intended.
+        #
+        # Read with a default because callers (tests, tools) hand-build settings
+        # dicts that predate the key; 0.0 gives a strict "best colour always
+        # wins" matcher rather than the old unbounded behaviour.
+        pen_scale = self.settings["freq_penalty"] * 0.001
+        band_lin = float(self.settings.get(
+            "freq_tolerance_de", DEFAULT_FREQ_TOLERANCE_DE)) * 0.05
+
         for i in tqdm(range(0, len(sectors_data), chunk_size)):
             _check_cancel()
             end = min(i + chunk_size, len(sectors_data))
@@ -4241,17 +4264,69 @@ class SmartEngine:
                         assigned = sector_assignments[n_idx]
                         if assigned != -1: forbidden_indices.add(assigned)
 
+                # Colour-fidelity band. The penalty used to be unbounded, so
+                # used_counts**2 eventually outweighed any distance gap: in flat
+                # regions (sky) it pushed the choice past every tile that
+                # actually matched and the engine reached for dark, badly
+                # matching ones. It may now only reorder candidates *inside* a
+                # band of `band_lin` around the sector's best distance.
+                #
+                # The band is ABSOLUTE (a fixed colour budget), not a fraction
+                # of d_best, because a relative band fails at both ends: it
+                # collapses to nothing where the library holds a near-exact
+                # match (d_best -> 0 switches the penalty off and one tile
+                # repeats forever), and it widens exactly where the match is
+                # poor — handing the penalty the most room in the badly-matched
+                # regions this bound exists to protect.
+                #
+                # The best distance is taken in numpy over the same top-K values
+                # the loop below reads, not by pre-materialising the candidate
+                # list in Python: at 16K this loop runs ~35k times over up to
+                # 400 candidates, so a second pass would be paid in full.
+                if wmask is not None:
+                    d_best = float(dists_w_norm.min())
+                    if allow_mirror:
+                        d_best = min(d_best, float(dists_w_flip.min()))
+                else:
+                    d_best = float(dists_norm[j, top_k_norm[j]].min())
+                    if allow_mirror:
+                        d_best = min(d_best, float(dists_flip[j, top_k_flip[j]].min()))
+                # dists_w_* are SQUARED weighted distances, while the GEMM path
+                # returns true euclidean ones. Adding the band in linear space
+                # and re-squaring keeps `band_lin` the same colour budget for
+                # shaped and full-canvas tiles alike.
+                thr = ((math.sqrt(d_best) + band_lin) ** 2 if wmask is not None
+                       else d_best + band_lin)
+
+                # Saturating penalty (inlined in both loops below, as the plain
+                # penalty was): `w` is the room left to the band edge, so the
+                # effective penalty approaches `w` but never reaches it. A
+                # candidate already outside the band has w <= 0 and is never
+                # penalised — it ranks on colour alone and cannot be jumped over
+                # by penalty inflation elsewhere.
+                #
+                # The saturation is soft (w*p/(p+w)) rather than a hard
+                # min(p, w) on purpose: a hard clamp parks every over-used
+                # in-band candidate on the exact same score, and the tie-break
+                # by index then feeds one single tile forever — re-creating the
+                # repetition the penalty exists to prevent.
                 candidates = []
                 for t, idx in enumerate(top_k_norm[j]):
                     base_d = dists_w_norm[t] if wmask is not None else dists_norm[j, idx]
-                    score = base_d + (used_counts[idx]**2 * self.settings["freq_penalty"] * 0.001)
+                    p_pen = used_counts[idx]**2 * pen_scale
+                    w = thr - base_d
+                    score = base_d + (w * p_pen / (p_pen + w)
+                                      if p_pen > 0.0 and w > 0.0 else 0.0)
                     if idx in forbidden_indices: score += 1000000.0
                     candidates.append((score, idx, False))
 
                 if allow_mirror:
                     for t, idx in enumerate(top_k_flip[j]):
                         base_d = dists_w_flip[t] if wmask is not None else dists_flip[j, idx]
-                        score = base_d + (used_counts[idx]**2 * self.settings["freq_penalty"] * 0.001)
+                        p_pen = used_counts[idx]**2 * pen_scale
+                        w = thr - base_d
+                        score = base_d + (w * p_pen / (p_pen + w)
+                                          if p_pen > 0.0 and w > 0.0 else 0.0)
                         if idx in forbidden_indices: score += 1000000.0
                         candidates.append((score, idx, True))
 

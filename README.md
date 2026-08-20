@@ -309,7 +309,8 @@ Each glyph is pre-rendered and its **normalised ink density** (fraction of dark 
 ### Anti-repetition (Smart Engine)
 
 - **Neighbour constraint:** for every tile, the engine collects the tiles already placed within a radius of ~1.5× the tile spacing and adds a very large penalty (effectively forbidding) to reusing the same *source file* among them.
-- **Frequency penalty:** each use of a source file increments a counter; the score becomes `distance + used_count² × freq_penalty × 0.001` (`freq_penalty = 30.0` by default), so popular tiles grow progressively more expensive — a quadratic, self-balancing pressure toward variety.
+- **Frequency penalty:** each use of a source file increments a counter, and the score becomes `distance + penalty`, where `penalty` grows with `used_count² × freq_penalty × 0.001` (`freq_penalty = 30.0` by default) — a quadratic, self-balancing pressure toward variety.
+- **Colour-fidelity band:** the penalty is bounded. Left unbounded it eventually outgrows any colour difference, and in a flat region such as sky it pushes the choice past every tile that actually matches, down to dark, badly-matching ones. Each sector therefore gets a budget of `freq_tolerance_de` CIELAB ΔE (2.0 by default) around its best available match: the penalty may reorder candidates inside that band, but can never promote one from outside it. Measured on an 8K render, this cuts dark pixels in a flat sky from 6.5% to 1.3% and halves the sky's standard deviation.
 - Both rules treat all mirrored variants of an image as a single source identity.
 
 ---

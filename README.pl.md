@@ -309,7 +309,8 @@ Każdy glif jest wstępnie zrenderowany, a jego **znormalizowana gęstość tusz
 ### Antypowtórzenia (silnik Smart)
 
 - **Ograniczenie sąsiedztwa:** dla każdego kafelka silnik zbiera kafelki już umieszczone w promieniu ~1,5× odstępu kafelków i dodaje bardzo dużą karę (faktycznie zakazując) ponownemu użyciu tego samego *pliku źródłowego* wśród nich.
-- **Kara częstotliwościowa:** każde użycie pliku źródłowego zwiększa licznik; wynik staje się `distance + used_count² × freq_penalty × 0.001` (`freq_penalty = 30.0` domyślnie), więc popularne kafelki stają się stopniowo coraz droższe — kwadratowa, samobalansująca się presja ku różnorodności.
+- **Kara częstotliwościowa:** każde użycie pliku źródłowego zwiększa licznik, a wynik staje się `distance + kara`, gdzie `kara` rośnie wraz z `used_count² × freq_penalty × 0.001` (`freq_penalty = 30.0` domyślnie) — kwadratowa, samobalansująca się presja ku różnorodności.
+- **Pasmo wierności koloru:** kara jest ograniczona. Nieograniczona przerasta w końcu dowolną różnicę koloru i w płaskim obszarze, takim jak niebo, spycha wybór poza wszystkie kafelki, które naprawdę pasują, aż do ciemnych i źle dopasowanych. Każdy sektor dostaje więc budżet `freq_tolerance_de` w jednostkach CIELAB ΔE (2,0 domyślnie) wokół swojego najlepszego dostępnego dopasowania: kara może przestawiać kandydatów wewnątrz pasma, ale nigdy nie wypromuje kandydata spoza niego. Zmierzone na renderze 8K: ciemne piksele w płaskim niebie spadają z 6,5% do 1,3%, a odchylenie standardowe nieba maleje o połowę.
 - Obie reguły traktują wszystkie odbite warianty obrazu jako jedną tożsamość źródłową.
 
 ---

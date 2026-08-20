@@ -29,6 +29,13 @@ from src.engine_smart import SmartEngine
 # match). square/False stays bit-identical through BOTH changes: its
 # full-canvas mask makes mean-fill a numeric no-op and yields wmask=None,
 # which skips the weighted re-scoring — the plain GEMM path is untouched.
+# 2026-08-20: ALL 90 regenerated after the anti-repetition penalty gained a
+# colour-fidelity band (freq_tolerance_de). The penalty used to be unbounded, so
+# used_counts**2 eventually outgrew any distance gap and flat regions filled
+# with dark, badly-matching tiles; it is now confined to a dE budget around each
+# sector's best match. The band re-ranks candidates in every sector that has
+# seen a repeat, so nothing stayed bit-identical this time -- including
+# square/False, which had survived both 2026-07-08 changes.
 GOLDEN = {
     # 2026-07-21: square + hexagon_romb regenerated after the standard-grid /
     # hexagon_romb branches stopped BLACK-padding partial edge crops (they now
@@ -37,31 +44,31 @@ GOLDEN = {
     # tiles' LAB features dark and matching dark tiles (brick_wall's left
     # half-bricks). Only these grid goldens moved; kites/spectre/polygon use
     # branches that already pasted at the true offset and are unchanged.
-    ("square", False): "d69fdf1cae64499be5679b495ee165fc559c83af57745b74628ce4926cae8968",
-    ("square", True): "41b4218a579b160081a13ec14beb6b9d40f7190f325577272446f19c6651a4ee",
-    ("hexagon_romb", False): "6e549f03d91bc27f2ec2950ac14ad2746e97c05232f3ac4ae9ae5ffe5c6259a8",
-    ("hexagon_romb", True): "d12fae64c86ef0352504ddcd23b3c3d13d2dbeaed5ed49d585527f23f8d4755f",
+    ("square", False): "868586c964f3a7f1cbd664d2f52bedbe780ba8939fcb8c3e9d798ec3111c724d",
+    ("square", True): "177c3d78c936ed354377e77a16d8cd960c72b19acea9ee20e9cdfbedee8829f3",
+    ("hexagon_romb", False): "08bb1d76af0776deb6e5980be4fabb1a0413984d26bf961eab704e0ecb948379",
+    ("hexagon_romb", True): "9f2ddb02187ed8b41af41e5fb00f5180c6bd3c27138ed9f3368e936073640bb1",
     # 2026-07-26: kites regenerated after the border cull changed from
     # "centroid inside the frame" to "bbox overlaps the frame". The old test
     # dropped every border kite whose centre fell outside, leaving a saw-tooth
     # of bare canvas along the right/bottom/top edges (2.35% of the frame, up
     # to 12.6% inside the bottom band). Deliberate coverage fix — see
     # test_kites_covers_the_whole_frame in tests/test_grout_engine.py.
-    ("kites", False): "475e55cee9db9121041dc081b3f58658f3e434b6b1d9184374d948c5da3c39aa",
-    ("kites", True): "f282c01b9e2ceec9748386542d341ca446c5cba2a438c38c25f41cbabf30b038",
-    ("spectre", False): "ed5ad4f4c582341daba6cb2cf61ec021bac48d9bfa7f0fac9fd41cc4ca5bc5dc",
-    ("spectre", True): "998a645f47ef0d222add0f32fce9276002fdd8505f10944e1b3860ac19a500a8",
+    ("kites", False): "97342d572b0a1b1ca8ba0ecaaa682ed6df1ddf07bec2bc2b1187c79efc1e0411",
+    ("kites", True): "97925a937ced8cb2fe4e3ba171889f46f70a073c7f1436093f926e9b537835e1",
+    ("spectre", False): "f94d8d5855307d91baf38d4882488eceaa9c7f69c18e4bcc745c4f5d3b822a2b",
+    ("spectre", True): "fd3160717e51029d0726cb96ef7a3769f7a4e55ded56e81b41886975adc1621e",
     # New polygon shape wired via the generic dispatch + _polygon_sector
     # (2026-07-10). Geometry is deterministic (Vogel seeds + Voronoi, no RNG),
     # so these hashes lock the first render — no "before" to match against.
-    ("sunflower_grande", False): "58b658768dfd4d0d26c5af12f761b06375f69ade9fb7c69e414e051383a2bb99",
-    ("sunflower_grande", True): "b658d937874bd1d54204d0c64bd897a2cb130cb05edc28babee3f5d8ab74e7b9",
-    ("sunflower_grande_inverse", False): "75c3f0fdb9a4c9bc2ef6e95b297bcad83799c70f9818987908cd3c164049ba5d",
-    ("sunflower_grande_inverse", True): "e05e89c5e4d84b6fc81f1569eb3b071c7a0a8cb7abb60ee90e4e968e1342463c",
-    ("sunflower_soft", False): "f2e18a0654a7d11e0ea8d3d52d84b88783e62b8a420f8eb010d5b48646938249",
-    ("sunflower_soft", True): "85afad72de8104116dbef0d1190a36fb8c5ede4499f0cc028b72d2cf8cdb6b9b",
-    ("sunflower_rings", False): "52dce57a15ad2fd4f5350a423a654f6f9b581344c30ef495ab925add65f28a29",
-    ("sunflower_rings", True): "179a3173d1a2220c70f02b9d7142d489e5e67530296ba39ab4f241f191b52696",
+    ("sunflower_grande", False): "96e4536af00f06e48336d6d01daf1330d9245a7df3a8bd5266a29f5da31fa891",
+    ("sunflower_grande", True): "05372f251353314e785675c085f8da9198de9856888754dc72e854df351601e8",
+    ("sunflower_grande_inverse", False): "6142c5baf768869a7c909f9ab77b659351ccaa9e09993d466252a1ff1f1a31e8",
+    ("sunflower_grande_inverse", True): "54d5b0a2e49ba1587142b512d51eb4f8c8f367fac69b7815c82cb53b2425781f",
+    ("sunflower_soft", False): "3aedad57de60b3b39d91f20c045aae4c880ee2cc2f30820d4d90eb89617f9f77",
+    ("sunflower_soft", True): "3173518a2a4f7ae502ba4a5b0dfeef3bef764beebadfa484ffea8c37ee8c1354",
+    ("sunflower_rings", False): "77b98fdccc4d8635e85934a53a61c76461942478dbf6ff2abe506e0e119f5a8b",
+    ("sunflower_rings", True): "8bfb06e0170a6c2719f8f0365e6ca9cf85d54ff6e368cc679bdd3ee942b56ba6",
     # rhombs family: log-spiral quad mesh, k solved from base_s (density scales
     # with tile_scale). Deterministic (no RNG), so these lock the first render.
     # S5 variable-cell shapes: uniform Voronoi (seeded RNG from dims -> stable
@@ -73,129 +80,129 @@ GOLDEN = {
     # old render, which still matched the old hash bit-for-bit). The other 20
     # family goldens (pebbles/sunflowers/phyllotaxis/bloom) did NOT change —
     # the two-pass fix keeps bounded cells bit-identical by design.
-    ("voronoi", False): "7bb07e64b6dfd2b48313d9204df9c65eb462ef02b537e61a4e9165e640d51ff2",
-    ("voronoi", True): "d84c8a55ec3bc44d365ac905df7aeb76bd0ca6b740fb5e958ac6070c2cb89876",
-    ("phyllotaxis", False): "2d6f0e07782ed19945bfbd135faa42aa0bb3bdfa5545dffecb8ecde83ae42245",
-    ("phyllotaxis", True): "70161b6c52e4b54077e4bf6ada6b832eb92a6858e09c9bb7e27ff2eb553e15a8",
+    ("voronoi", False): "12a3f00ddc7280b9462d1746e00db514031089555092ee88a7963e28e4a25474",
+    ("voronoi", True): "22de9d2e18cab871bd3ca18c5d89087659f57dbfbed6df9783b8910c81bd7c3a",
+    ("phyllotaxis", False): "42bf7e9ef4717fc84943479e2905f84b2369dbd157622e5a23648dc1d83933b9",
+    ("phyllotaxis", True): "31a84c2f0da0d96f5784f776386068933549428f917ed6fcdc2d56ddaf9a55e3",
     # Deterministic Fable tessellations (2026-07-11): geometry ported from
     # gen_fable_shape_schemes.py, pure constructions (no RNG). Hashes lock the
     # first render, verified identical across two separate processes.
-    ("pinwheel", False): "849334cb7fb68dfbea20db7b241343fa19ff45b2fc98fdf0ab472ff490f5b631",
-    ("pinwheel", True): "6ddc04111b5666c51ae243a3a67805fc5b48af28b72b6ebee9cc75a55f0b6360",
-    ("cairo", False): "ee0a3e2805ab523ca9937d36d2424c450ac9cceb5bae4fbc1e4f8e58a24882b6",
-    ("cairo", True): "bdbf84f6026859d22c91d2fc5ac494eb699c769b52674164e45facf74dc1dd2c",
-    ("floret", False): "6dbdb8df7b6ce1f04ad46132e7264e0eacc5e8f1c2591a1747c391c65a2f234e",
-    ("floret", True): "ecb63302aa87873000f21265c55b4c1506ce6ebb4fa273c94410ce7b13542bfd",
-    ("gosper", False): "538de3f57939ff27cbd028a80cf6c6641bd58117baa1fcf940fe3376e6787b4a",
-    ("gosper", True): "fcbab1c1ee1255eb96ce6ca559925c14e5844770621f2a0d830e3e6a00e7e45e",
+    ("pinwheel", False): "5d44a338fd960f7870784d9f2902cab06086a88eca4fc18b33cc7f153ba8fec5",
+    ("pinwheel", True): "ef34219a8992316b9734c7b58f9a16de4bdf8fedaa5928b09e7a634d916ca731",
+    ("cairo", False): "92a8318b6ad0e3a08a2927675599572b6f5a05cd9cda38580eb909e3136b0a51",
+    ("cairo", True): "36cd2b3fa74586bcde5fc8ffecc92e34a3af4d7998d966210838f4647064c80d",
+    ("floret", False): "48fb92c262ea0169e5069930281a6ae84ed9c0d45f5af48fef5e1651c303fdc2",
+    ("floret", True): "6f3fb9b708a4f7b0fe5bc755aba2d20524c8f78ce6e8b05ace7153516f5e91b4",
+    ("gosper", False): "dab852a9e46434bb9c77c2307e6d64816511a0b87cdeff980027a737485bc6f7",
+    ("gosper", True): "791dab9692fe907f721a9a89a222e4c88c33f6c0f1a20a35361e089021670dac",
     # Archimedean tessellations + sunburst (2026-07-11): rebuilt from the
     # scheme PNGs (original generator code was lost with the Opus scratchpad).
     # Pure constructions (no RNG); hashes lock the first render, verified
     # identical across two separate processes.
-    ("trunc_square", False): "9d29997b93a6d429676e3e00d1fb34795ebd9c92e1efc98a24be40e6ec04c88d",
-    ("trunc_square", True): "9c4630fe5e7bdf93107999fbed26d5a8243664c9d193b1fa8df19f8d4260bc6a",
-    ("trunc_hex", False): "dfcc610fb2cb4bf5977faa785ba5480fbe797675fb67437a55f68201899ac29e",
-    ("trunc_hex", True): "f7374628b0e61420253e5a15990ab83e305327e744042f79449c22979ac8acc6",
-    ("rhombitrihex", False): "250c47b38741c2c8b4598f4beb0464d5125339974d4b87e323ced60bda5170fa",
-    ("rhombitrihex", True): "9a655d0a8b08c0ffc3ad353f8296afe818ad1db7eecdc77540cf661d2773a0a7",
-    ("pythagorean", False): "ed656e63f7eecebb19d1eb3185b742c4316ec0fd1c5f787e4400b5cc97c5d78f",
-    ("pythagorean", True): "112af310279de9d5eb3354d10c0e635cb82fef8de699fb9c302cee05535ec024",
+    ("trunc_square", False): "2a49e68f84df479a5614abcae2b5a1ade051d181e3670a726ce7feba9b04373f",
+    ("trunc_square", True): "5ad385d38a17b0b9d722ad5bef8e0f4d71c9cbac8f5cc6a090d4d64c24361e85",
+    ("trunc_hex", False): "fd17ee77f1519b85d84407ab9766dc027a02c8a2081c32e596d49939d02b2a13",
+    ("trunc_hex", True): "e9c516d3218bb9d5fe5fb5fc5eb9eabfbe7657d63b4da80dab164d9d6e6b506b",
+    ("rhombitrihex", False): "44aa33ea326c3a27677920d71a86b1c662069750f91fa36b3915cb49252bac1e",
+    ("rhombitrihex", True): "b31c6fc8a0d20fe0b5520f7e27df9fe6d62000c774159d86db17db8f983d12a0",
+    ("pythagorean", False): "e26f49a52ec4d1d45e6ace3e1c3f7724a77b3c0b37dc43314e8fa4665dbca9fc",
+    ("pythagorean", True): "9d7220f96fbde2cdcbc1729ceac2b36637b194cb4365faca54696aa9ae40502f",
     # De Bruijn multigrid duals (2026-07-11): penrose P3 (pentagrid N=5,
     # gamma sum=1) + ammann_beenker (N=4). Deterministic (fixed generic
     # offsets, no RNG); hashes lock the first render, cross-process verified.
-    ("penrose", False): "107789f68531f74f9c2147a8d44b1a6bff536d149622bf8bb406d31aa95c41dc",
-    ("penrose", True): "bdcda867688ea52ece9911555455e10f7da2876523fa3e32acb7715cb643293e",
-    ("ammann_beenker", False): "ccf9124eeb90c012eaa5aca4824a8f6fbea447b0dd083f92681686104077fba2",
-    ("ammann_beenker", True): "20b42e242ca75161aaabc7d47caa21cbc14c0a2e915186c21cce66f8669a6b0f",
+    ("penrose", False): "f11dd9ef55b75f11bef13cf327d66aaf8bf87e0c0a42c60d1271734ccf79724e",
+    ("penrose", True): "96b2dcc9bf267a545fbc7fbf4d0aebf1714f34647bcd1d9e575a35b5a5788fb8",
+    ("ammann_beenker", False): "5a1859b5c87f09cc106b533bceb9fc1538459922e6abe32a7ea8ead23800bafd",
+    ("ammann_beenker", True): "71286be809853a404dc1164e8db4eabc6de634a98f79716c65b73eb3c506f15f",
     # Last three Fable shapes (2026-07-13): voderberg (rings of bent slivers,
     # bow made radius-relative), escher_lizard (p1 hexagon deformation) and
     # weave (basketweave rebuilt as a true partition: visible ribbon pieces +
     # knot cells). Pure constructions (no RNG); hashes lock the first render,
     # verified identical across two separate processes.
-    ("voderberg", False): "7b191e564c955628214a8fa899360ddb59d29105d8c520daf04dd42dbb53a7f7",
-    ("voderberg", True): "06c1039433643f6d01872b20f6e4da29b3459cd9e01759d5b21b500825d59004",
-    ("escher_lizard", False): "1ed4b6eba6fd871cd91cd591e7209fb5f4ed114b2912e68ee773d7f580614bc1",
-    ("escher_lizard", True): "c8f3ba54034e80033d7bc62dcb1d00fb7627d4705fb73083d7e8299103a6cf7e",
-    ("weave", False): "454a1cf18000cf2325cbd3efda358ed9f0d54d8c92171a7a5e0feec9afa6c701",
-    ("weave", True): "a02877e16975c8c1df7d23b2b73426a0dc9215fb4dcd4e0c9839a7adcaf607bd",
+    ("voderberg", False): "db1226e2116ba98f905f8e1ac631b70933754511a40402f810a1241fcfb64b5c",
+    ("voderberg", True): "384ce624b66c88815e6fdc8901b0172e6abe5cf1eecbb04f05a0d4b436006d41",
+    ("escher_lizard", False): "d8426259cbadb63eafdcbdce4ff4b08a70a477abec17b5e6fe410094a56bb601",
+    ("escher_lizard", True): "ede3696258362b30d436823cd1ae420e3b1d0820267b06fe9a41679c2583b964",
+    ("weave", False): "c28717fe7c28af0abd2cd801dd4b184e6a78579027332b2cfe1d6579fefd0650",
+    ("weave", True): "43f629ce2c1c6b2d6e5e7e8e500f66e108c3297c4722e1185baaa0930d2bdea0",
     # Truchet (2026-07-13): arcs polygonised by _sun_arc with a sagitta-driven
     # pitch (_arc_pitch), tile orientation from an integer hash of the lattice
     # index -> no RNG, same pattern at every resolution. Cross-process verified.
-    ("truchet", False): "60a2c76342a46440daf07bd0528a85e7faf49c944d969c775e24f48f3c84ed17",
-    ("truchet", True): "40e5f0463098e046b349f16a1c2cb7b9f9986ab5376cae6211858f893e128556",
-    ("truchet_hex", False): "5637078ccaafc47f70a62902eff96e3b8aed89231082f20a7c42e70c949e1d36",
-    ("truchet_hex", True): "4ee3a40ab8a4dbe8fbf43983113d52522f0fb0fe196cb215270d326add23b0f1",
+    ("truchet", False): "5ea7cdb0093c50881ab39b7d74941624016dfbbb16ed92ec57498e38744311ed",
+    ("truchet", True): "5e7ff9814fc7fadf5df1a7c0720ceb398fde5688ebe022b11f5b6ef9a9dc8bed",
+    ("truchet_hex", False): "3633abfb3866de4f68203f0b433e17154e9b8c21172aa354909cee77211f4e17",
+    ("truchet_hex", True): "62838f7bd218827c9749d86a5afdd64edff394abd2e0f553b0b0b666874e998f",
     # girih (2026-07-14): decagon rosettes seeded on a Penrose-vertex
     # quasi-lattice, greedy fill between them, leftovers traced. Carries NO RNG
     # and no frozen seed (the plan expected one), so these hashes are stable
     # across processes — verified in two separate interpreters.
-    ("girih", False): "99dc1692e6ae6ba29fa785091d49b380b7aba825d1f3620a7b5c2f81aa0abc4a",
-    ("girih", True): "d0fd5e9f6906fbd8b9271155fccc3d96f9d86d9c2702af856249cd7addcd0ab2",
+    ("girih", False): "9ac4cc5be2d3ccdec8cff4b83c1366a78efd849ff63e518bf3f11fb05cc0a932",
+    ("girih", True): "0fdb9014b9d5f5d86cd7235afedcbbeca758dc79549f201cc2e71d320ca82f55",
     # poincare (2026-07-15, krok 4 b++): {7,3} band tiling, heptagons split into
     # 7 khatam kites, each subdivided by a hyperbolic transfinite quad mesh. BFS
     # over disc reflections + pure geometry, NO RNG and no frozen seed — hashes
     # verified byte-identical across two separate interpreters (like girih). The
     # tmp golden library (tile_NNN.png) shares no basename with data/tiles_hires
     # (coco_*.jpg), so the hi-res overlay is a no-op here and the hash is portable.
-    ("poincare", False): "d8dad4aa080306dbe56068578232fc327e1730334c8fa239666d11a1681cb68d",
-    ("poincare", True): "c51950e0aee13e7e40feddf1a08ed0eb2d0af72d7d1e7f068a39f3bee48044f8",
+    ("poincare", False): "16a008851c69a7678745114fe2c3b10016b9ad9377b7111eede6e42544be699e",
+    ("poincare", True): "efaef9d4d82d099220fbb2d890908e605e49ac8b59e00f8392ceb36f8e8a55fb",
     # penrose_p2 (2026-07-16, sprint E1): P2 kites & darts via P3 deflation +
     # Robinson B->A conversion + mirror-twin merge. No RNG; the merge iterates
     # dicts/int-sets only, so order is process-independent — hashes verified
     # identical across two interpreters, one with PYTHONHASHSEED=1.
-    ("penrose_p2", False): "e6d9874805f1bd79ff9777387ac88b7655018022a4a9c2943924bbb9e0a8df07",
-    ("penrose_p2", True): "ae1a8d87c18fee77a959b12393fc798a9d459d9d1c6b594eaa72755c8fdaff76",
+    ("penrose_p2", False): "3efcdc4b6b652183510df835ac693e5fe4c3e9166a0c61a1505698f1c29105b5",
+    ("penrose_p2", True): "80c4cf45a9d29066eaba664c9396073be0eb41aa2a551eb8654287bce6e9bc5a",
     # E2 (2026-07-17). bloom: Lucas-angle Vogel lattice — the `angle` parameter
     # defaults to the golden angle, so all eight sunflower goldens above stay
     # bit-identical (verified). pebbles: variable-density Voronoi, seeded from
     # dimensions via _shape_seed. Both verified across two interpreters, one
     # with PYTHONHASHSEED=1.
-    ("bloom", False): "c65bcb4a6ff6df9b6722c7bad4fc6f67b6da99531943cd713c01d2c525d1c0d7",
-    ("bloom", True): "3b16cef41605f943bf7e9cacfcaf485d843e027a7a1a7c83f1c57cc7b41f1db8",
-    ("pebbles", False): "ed4f1f3ea203a442d19ea5008a6d9caf5e725ed36b50b7829afc898653ac7279",
-    ("pebbles", True): "28868e8dc325fa6cb9fcb2770ac9a6702c6a7a2e0050e9571e3c67e6549fedf9",
+    ("bloom", False): "5686d653537d768f212a8045c8cb13f20d708666a31ed9388008b28cb369c1bb",
+    ("bloom", True): "1f54d2b5f497bec7278656c278583839673cb59fac25b25d70bdc3bccfd35bf0",
+    ("pebbles", False): "febe1ea64d0fdc3f295c442c446eae2d96af9a66ea23217b9756152c858ad5f7",
+    ("pebbles", True): "c103f226a616d4064f48784ff4c67febbd777e789755ca68531711b6b1cba8be",
     # E3 (2026-07-17). stagger_tri: triangle rows at a constant x-phase, so the
     # rows slip and every row line is a T-junction seam. NOT `triangle`, which
     # shifts the phase by half a base each row via its (c+r)%2 flip rule — see
     # the translation-invariant gate in test_grout_engine. Pure arithmetic, no
     # RNG; verified across two interpreters, one with PYTHONHASHSEED=1.
-    ("stagger_tri", False): "cee4b15ccb044f46d3e5c7ab4935a56773ccff7e4bc414dfb699a447b56aec72",
-    ("stagger_tri", True): "97524a19731c816d29c497f97530ddabf7d488ca9c5725bb942b29369104970b",
+    ("stagger_tri", False): "52713cc11967221a5978ecf59928e54ed143e077ae0e6680a718624afdbbca64",
+    ("stagger_tri", True): "ff9b06374cd8bb57d52f948c8e790e615edbd0754b9cc2aca765594f95be7286",
     # braid (2026-07-18): basketweave rebuilt as a true partition — 2x1 bricks
     # in alternating horizontal/vertical pairs on a 2x2 checkerboard. NOT
     # `brick_wall` (single running bond, one orientation); the extra vertical
     # bricks are an orientation set no rigid motion adds, proven by the
     # translation-invariant gate in test_grout_engine. Pure arithmetic, no RNG;
     # verified across two interpreters, one with PYTHONHASHSEED=1.
-    ("braid", False): "e76a5d546a82f1d3f9af17c72471f266f032aefbe9e7196e06a279cea8faba6f",
-    ("braid", True): "db6356dd1d1f377d7dfde8bf1f133e26c989b006bbca970f6761e08c29fd9c7c",
+    ("braid", False): "4395ed08c5770991a74cd3f996fad974888e8a0bfcf97de7c92f77c1c19dff3a",
+    ("braid", True): "73b77d6da5199039973303254381ff2b33c66d6ede66a1bacd713bf13a432c9e",
     # moire (2026-07-18): a quad grid displaced by a two-grating interference
     # field. Cells stay gap-free (shared displaced vertices) but warp in
     # shape/size with the beat — verified on a real render NOT to collapse to
     # `square` (CV of cell area ~0.27, only ~28% of edges axis-aligned; a square
     # lattice would be 0 and 100%). Pure arithmetic, no RNG; verified across two
     # interpreters, one with PYTHONHASHSEED=1.
-    ("moire", False): "e45f0fae165786bf9f56815a580212c8769ef260f6be61424f0a710c6d7d3dc7",
-    ("moire", True): "7ad9dedb3421380057c92b805c9391d623e89a36ab724a88f3bf982ae934b9cb",
+    ("moire", False): "3f94f15cffa3f77773fce0035f07305769c5f5a01271ad6a9ea087eef2a5acf5",
+    ("moire", True): "1d42784ec3b1da9f04b16e961b9b896068d2f036613dc178af3f5cbad4fa2431",
     # puzzle family (2026-07-19, sprint P): die-cut jigsaw tabs as per-edge
     # shared polylines (crc32-keyed, no RNG) on three lattices — classic
     # ribbon-cut grid, sine-warped ribbon grid, flat-top hex. Verified across
     # two interpreters, one with PYTHONHASHSEED=1. The dedup of the profile's
     # junction vertices is load-bearing: doubled consecutive points broke
     # Pillow's scanline parity inside the aa=4 masks (1-2 px strips).
-    ("puzzle_classic", False): "8783330ea9c21030435c347cd8b27ffb5232cea3c49a39b864de1d5ef480dae4",
-    ("puzzle_classic", True): "c8fe3cbc096dd835e54b88948a90fa333608b92b66a5804f4bce7f7f0d8de06a",
-    ("puzzle_ribbon", False): "2c264a757630e7218cbf369a4e6a09a5da94e305397cae29ab31dff9da394a53",
-    ("puzzle_ribbon", True): "8886b6ad048bd342dbb4cc3dcc5a52bf3e2c8826624211d839a8c60ec6831097",
-    ("puzzle_hex", False): "6e034c3376f2e98ccb80b1e07e166d91ea8e83287797a247cf36af14e0d52351",
-    ("puzzle_hex", True): "d2c5dff49f91161218023e48d2d815fa962cb41c65c4b32253319fa9e7d9b97b",
+    ("puzzle_classic", False): "d0e7e634bd486cc847c3b8b38c86db3c59bb189dfcc921b310c6696e7a239013",
+    ("puzzle_classic", True): "880da15e26bb3e985f52212f5e83346692410f22942075599c9b4be22bc1d8aa",
+    ("puzzle_ribbon", False): "102be32d1555c4403b4aac4c3322a5f756629bbe207e8132c5b8b2469534ab59",
+    ("puzzle_ribbon", True): "29e5c3d8925bbf6f24e1352cac13f34f0240346380d0afa2b717738a0400125e",
+    ("puzzle_hex", False): "ea96ce5aa111fdd83b43752e35c15d5d902ad501f1d06fdbb4952ca6ca6e034f",
+    ("puzzle_hex", True): "b08807fc6b2af89ec7be565abe7c139f8e227311a7956ef2b759a0c7278ac68a",
     # E4 (2026-07-19). dragon: order-8 twindragon rep-tile, boundary chained
     # from edge-cancelled unit squares (sharpest-left at pinches); (1+i)^8=16
     # so the tile lattice is the square lattice, u=base_s/16 -> area exactly
     # base_s^2. Only int/int-tuple hashing (unsalted), verified across two
     # interpreters, one with PYTHONHASHSEED=1.
-    ("dragon", False): "993c8e6089f946ca03f086d85b3bcb0bff938da7dc7d7c9d50a11c054b8b14d9",
-    ("dragon", True): "b122cf51161b96bd0c4f03de5772f1039e0fc2d506f42984389ea34762233336",
+    ("dragon", False): "21c94df025e2cf39447019c327f1c318446051815e66ef79faa1b1d64438f513",
+    ("dragon", True): "63fed11629e161222bea9f2a69e95e8b8c0583edce7000e62d15b012dd1c2d87",
     # koch_island: depth-2 Minkowski teragon walked on an INTEGER turtle
     # (exact coords), period 4^2 = 16 units (NOT the bbox — the 2026-07-03
     # trap), area-preserving generator -> tile area base_s^2 exactly.
@@ -203,10 +210,10 @@ GOLDEN = {
     # rotated 30 deg in the lattice holes), depth FIXED at 4 — finite-depth
     # seams are sub-pixel (min coverage 0.686 vs voderberg's shipped 0.502).
     # Both verified across two interpreters, one with PYTHONHASHSEED=1.
-    ("koch_island", False): "5f665567a85a6e23325cb77d5c58431ffb1112499d54317c54a60c10ddbb3442",
-    ("koch_island", True): "81735781d8fe5db7dc2dad90f8372dd0ab08689040adce27b1b8999abab4317b",
-    ("koch_snowflake", False): "a1d9eea35b8b1002d407250d28b4f234abcf3cd424f9937009e9bc41eef56439",
-    ("koch_snowflake", True): "83ce7abf36893a3fa8b6a808d4fcb97f4f0a158de8c2d422d9ce448c6ae7e825",
+    ("koch_island", False): "ab6a6ee1f5cd666ed192c999ed6a3ac15c08e1e9a7ea784ab58b87cd8d2bc207",
+    ("koch_island", True): "84a9599d6a5e75e3596acdc408e98851a822fe1c122ce29027493009f0a63a3b",
+    ("koch_snowflake", False): "e10145db1c7a37f671891ba4a7b6e1eb26e4adf884695e47ed82416212a953e0",
+    ("koch_snowflake", True): "b739f1158ee67101e50cf798cee96c36ce1822678adc90672acdcfa335842fc1",
     # E5 (2026-07-19). gereh: 4.8.8 with every octagon split into 16 kites
     # (8-point khatam star, r_in=0.60*apothem); the gap square is the DIAMOND
     # with vertices on the axes — the scheme's axis-aligned square (phase
@@ -216,10 +223,10 @@ GOLDEN = {
     # analytically at lattice-triangle centroids (the filtered-centre trap
     # cannot occur). Both pure trig, no RNG; verified across two
     # interpreters, one with PYTHONHASHSEED=1.
-    ("gereh", False): "6aa90a7ce86be7cab5ed15a2f94e678aa878e31e50191efba43aeaa963908ae6",
-    ("gereh", True): "e35cf3a98363541bc808963b38a2ee2a75a6c703fe1912726e6782c7f41e3ebe",
-    ("rosette", False): "79566de37822130179642527ed067573af28ccc6fa8c4bad35c51624d2e7a5c4",
-    ("rosette", True): "9f279666088fa1df78d0a29842a7eda47f10f2745ab0f5a4cff4c36095594d72",
+    ("gereh", False): "549c91dbed7ac30cf880c5fa2dd69cd24ca7084752ac7a6491457aaa526fe473",
+    ("gereh", True): "cef33eaacefa744b890ea11e29fc6686166a26b68d057ad674f63ff0982eb34c",
+    ("rosette", False): "deedd63d1617d4a51b3bc91805790891b2be978fd52aff08859803288100c660",
+    ("rosette", True): "4462c94a26ac7c699a69447657e0959c7a83862996566fdc049d4b5336c66e84",
     # E6 (2026-07-20). scales: circles of r=base_s/sqrt(2) on the checkerboard
     # lattice (dx=2r, dy=r); each cell = its disk minus the two disks of the
     # row below, which cut it exactly at (+-r, 0) and (0, r). The boundary is
@@ -228,8 +235,8 @@ GOLDEN = {
     # Pitch from _arc_pitch (the scale radius does not grow with the frame —
     # the truchet_hex faceting trap). Pure trig, no RNG; verified across two
     # interpreters, one with PYTHONHASHSEED=1.
-    ("scales", False): "400f430b60ebbb176506e09f8b8b68546a277adffe525c00baa933d62407d084",
-    ("scales", True): "de4a239d4e444e68f30a6ab3dc050ddb86b4fa42face787dd72e37dcadd2f34e",
+    ("scales", False): "d4b4e273afff174ec4ce9ad33aa1da2b4961aebf9a7951ee6b9077af6a9d8cdb",
+    ("scales", True): "383a1db024c11d539e7d9368f313e9116cf074c5bb501aae00f2f36f4e5aa037",
     # nautilus: log-polar chambers about a pole OUTSIDE the frame
     # (-0.55*cx, -0.30*cy — the scheme's (-1.55, -1.30) in half-frame units),
     # constant nsec + g = 1 + 2*pi/nsec so chambers stay square as they grow.
@@ -238,8 +245,8 @@ GOLDEN = {
     # swirl makes ring arcs T-junction (voderberg precedent) — coverage is
     # gated in FLOAT, not by a formal partition. Verified across two
     # interpreters, one with PYTHONHASHSEED=1.
-    ("nautilus", False): "384d829b93e441f460c70d691f77e5cf0a1e6e9976fed43561fe544e199bf514",
-    ("nautilus", True): "249bd49993a4f37efc547628490c367fc86c3e19c1e2383ba9305c1fa1ae404a",
+    ("nautilus", False): "f3b9a18480ca1354cfad79a20cdebaaf6a39f0abff15ca35e1f75c6696bbdada",
+    ("nautilus", True): "aa2b88225c34f744aeb0f15376c996f4a33d82264bd7086492160624f06a8caa",
     # rosette_fractal: triangulated log-polar aloe whose sector count doubles
     # outward (the pole fix). The rings-per-doubling is DERIVED, m =
     # round(ln2/ln(1+2pi/N)), not the scheme's fixed 3 — a fixed m doubles the
@@ -248,8 +255,8 @@ GOLDEN = {
     # m=3 at N=24. Seams are _edge polylines addressed by (ring, vertex), so
     # both sides sample identically -> formally verified exact partition.
     # Verified across two interpreters, one with PYTHONHASHSEED=1.
-    ("rosette_fractal", False): "fe32fdc187f5544e3e9ac1596f31d062a260115e10bd3b27a6437dccd4225d0f",
-    ("rosette_fractal", True): "d794018172c7f4c23319dd196c8c27fe90c9415cc3ec5c93a087da668fffe1bf",
+    ("rosette_fractal", False): "0747a8d5439d8e37c2404d4bbabc0829a1ef4c311a2c11b91ec77f7ec135a69f",
+    ("rosette_fractal", True): "8b3813ca2c62b4bd14d1a57f52e155cd23251ced8d9d01cfcbd18421659a40e5",
     # E7 (2026-07-20). The Sierpinski family emits EVERY triangle/square as a
     # cell, gasket and hole alike — the fractal reads through photo SCALE
     # (holes become progressively larger single photos), not empty space.
@@ -263,8 +270,8 @@ GOLDEN = {
     # the background cell; recursion pruned against the frame (42k -> 167
     # cells at 800x600). Pure integer/midpoint arithmetic, no RNG; verified
     # across two interpreters, one with PYTHONHASHSEED=1.
-    ("sierpinski", False): "2077d0b94a11d64eb5eaebec1b51ddeeef24151978f1f0561c88042cbfb41122",
-    ("sierpinski", True): "98d2601095731c9f246ac3545de0efa78f10e2bf860633d0bc2b8b064faacfe7",
+    ("sierpinski", False): "30d1f503fc36c6b9bbf4b7feed596e56eb4183c2ce5168106b8658c1137fc0f1",
+    ("sierpinski", True): "0e30f5051aa9e1fd906061b77bd926927beb69cc5ed7554f15a7e3c548ae416d",
 }
 
 
@@ -302,7 +309,12 @@ def golden_engine(tmp_path_factory):
     e = SmartEngine(index_path="__none__.pkl")
     e.paths = paths
     e.features = feats
-    e.settings = {"allow_mirror": True, "edge_aware": False, "freq_penalty": 30.0}
+    # freq_tolerance_de is pinned to a literal rather than left to the engine
+    # default on purpose: these hashes lock the *matcher*, so re-tuning the
+    # shipped default must not silently invalidate 90 goldens (and a golden run
+    # must not quietly start testing a different band than the one it locked).
+    e.settings = {"allow_mirror": True, "edge_aware": False,
+                  "freq_penalty": 30.0, "freq_tolerance_de": 2.0}
     return e
 
 
